@@ -47,3 +47,26 @@ bench/slice5b.py          5b: AUG index, chunked pair batteries
 docs/DESIGN.md            design ledger (brainstorm trace, design laws)
 docs/EVAL-SLICE1.md       slice-one methodology, results, diagnosis
 ```
+
+## Install / run
+
+```bash
+pi install /path/to/pi-majordome        # or: pi --extension ./index.ts for dev
+npx tsx ext/selfcheck.ts --parity       # offline assertions + bench replay parity
+npx tsx tools/backfill.ts               # seed the index from bench artifacts (real vectors)
+```
+
+Judges: TypeLLM key → `~/.config/pi-majordome/typellm.key` (or `TYPELLM_API_KEY`);
+Jev rides pi's classifier registry (`TYPESAFE_API_KEY` or `/login`), with guarded
+TypeLLM numbers as automatic fallback.
+
+## Status
+
+- **v1 (this build)**: `turn_end` EMA indexer (tau 0.07 / min 4, the measured
+  params), two-judge seam at block close, intent-specialist router (DAG →
+  time-travel → federated top-3 → dims/lex arm), tail-only cache-safe
+  injection, `/majordome` governance, decision log for calibration.
+  Self-check: 23/23; live smoke: definition_recall → dims arm → 0.707 cosine,
+  correct cross-session winner.
+- **v1.x**: ADR export polish, gist backfill on reindex, mid-slot promotion.
+- **v2**: orchestrator (firstmate-style) + memory consolidation; see OVERVIEW.

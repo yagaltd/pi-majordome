@@ -1,0 +1,12 @@
+{
+	"name": "pi-majordome",
+	"version": "0.1.0",
+	"description": "Topic memory for the pi coding agent: block index over session JSONLs, intent-specialist cross-session recall, cache-safe tail injection",
+	"license": "MIT",
+	"keywords": ["pi-package"],
+	"private": true,
+	"type": "module",
+	"pi": {
+		"extensions": ["./index.ts"]
+	}
+}
