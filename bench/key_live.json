@@ -1,0 +1,26 @@
+{
+  "note": "Live-hardening bench. Probes mined from real sessions (tools/mine_probes.ts); gold = hand-curated against the backfilled index. Classes: past (gold fully formed in same session), cross (gold in another session), continuation (expect no retrieval), current (gold = in-context block, expect abstention; winner = noise), future (gold not yet formed), abstain (no gold in index; winner = noise, informs threshold).",
+  "sessions": {
+    "A": "~/.pi/agent/sessions/--home-aurel-Documents-current-code-parser--/2026-09-28T07-30-31-842Z_01a0e6ec-2921-733b-9736-2b6ea32df080.jsonl",
+    "B": "~/.pi/agent/sessions/--home-aurel-Documents-current-MorphFam-MorphEditor--/2026-09-06T15-48-04-240Z_01a07767-c40e-763a-bb21-3e7b5ab074ab.jsonl"
+  },
+  "probes": [
+    {"id": "past-codemap-mess", "class": "past", "sess": "A", "turn": 52, "gold": ":1", "query": "pi-codemap repo is still a mess we have folder with the different version, why? the latest is v12 and we should have"},
+    {"id": "past-judge-seam", "class": "past", "sess": "A", "turn": 99, "gold": ":61", "query": "i don't really understand why you stack all jev + typellm, once or the other no need both"},
+    {"id": "past-cleanup", "class": "past", "sess": "B", "turn": 84, "gold": ":1", "query": "playwright-report are useless to keep in MorphEditor - docs to be cleaned up"},
+    {"id": "past-herdr-dep", "class": "past", "sess": "B", "turn": 155, "gold": ":61", "query": "i forgot to ask Herdr is now a dependency or our dispatching works also without herdr?"},
+    {"id": "past-export-bug", "class": "past", "sess": "B", "turn": 234, "gold": ":1", "query": "not sure what you did but export to md is empty, txt as well, html still does not work"},
+    {"id": "cross-boundaries", "class": "cross", "sess": null, "turn": null, "gold": "A:97", "query": "remind me how we detect topic boundaries between turns in a session"},
+    {"id": "cross-two-judges", "class": "cross", "sess": null, "turn": null, "gold": "A:97", "query": "what did we decide about using two judges in the majordome router"},
+    {"id": "cross-toc", "class": "cross", "sess": null, "turn": null, "gold": "A:97", "query": "where were we on the topic memory table of contents for pi sessions"},
+    {"id": "cont-slice3", "class": "continuation", "sess": "A", "turn": 200, "gold": null, "query": "ok then execute slice-three"},
+    {"id": "cont-watcher", "class": "continuation", "sess": "A", "turn": 201, "gold": null, "query": "ok continue with the watcher"},
+    {"id": "cont-go", "class": "continuation", "sess": null, "turn": null, "gold": null, "query": "go"},
+    {"id": "cur-toc-levels", "class": "current", "sess": "A", "turn": 110, "gold": ":97", "query": "so we have 3 level classification for the messages/turns our ToC can you list each level and what are the scoring"},
+    {"id": "cur-registry", "class": "current", "sess": "A", "turn": 115, "gold": ":97", "query": "I don't know these extensions pi classifier register what is that? for production?"},
+    {"id": "cur-what-now", "class": "current", "sess": "B", "turn": 539, "gold": ":361", "query": "remind me what we were implementing?"},
+    {"id": "future-calendar", "class": "future", "sess": "B", "turn": 684, "gold": ":691", "query": "i forgot the deadline for tasks, in google agenda, you can set a date/time for due dates"},
+    {"id": "abstain-mindmap", "class": "abstain", "sess": null, "turn": null, "gold": null, "query": "remind me .mindmap.md is the markmap format?"},
+    {"id": "abstain-orchestrator", "class": "abstain", "sess": null, "turn": null, "gold": null, "query": "before i approve, let's confirm the orchestrator will build the map for me"}
+  ]
+}

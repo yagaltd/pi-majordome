@@ -80,5 +80,11 @@ npx tsx ext/judges.ts verify    # one typed call proving key + transport
   injection, `/majordome` governance, decision log for calibration.
   Self-check: 23/23; live smoke: definition_recall → dims arm → 0.707 cosine,
   correct cross-session winner.
+- **Live hardening** (bench/key_live.json, tools/livebench.ts — real probes
+  mined from our own sessions): confident-gold recall 4/4 @1 (past + cross),
+  continuation gate 3/3, noise gate dims<0.6 / lex==0 measured from the
+  score distribution (true positive 0.707 vs noise ≤0.63). Fixed en route:
+  continuation over-gating on mid-work phrasing (strict gate + recent-assistant
+  context), abstention evidence for v1.x.
 - **v1.x**: ADR export polish, gist backfill on reindex, mid-slot promotion.
 - **v2**: orchestrator (firstmate-style) + memory consolidation; see OVERVIEW.

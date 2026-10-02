@@ -38,6 +38,7 @@ export function loadKey(): string | null {
 async function generate(
 	context: string,
 	questions: Record<string, unknown>,
+	recent?: string,
 ): Promise<{ result: Record<string, unknown> } | null> {
 	const key = loadKey();
 	if (!key) return null;
@@ -132,20 +133,27 @@ export interface RoutingIntent {
 	searchTerms: string;
 }
 
-export async function routingIntent(userMessage: string): Promise<RoutingIntent | null> {
-	const r = await generate(userMessage, {
+export async function routingIntent(userMessage: string, recentAssistant?: string): Promise<RoutingIntent | null> {
+	const context = recentAssistant?.trim()
+		? `[recent assistant message]\n${recentAssistant.trim().slice(-400)}\n\n[user message]\n${userMessage}`
+		: userMessage;
+	const r = await generate(context, {
 		intent: {
 			type: "string",
 			enum: ["definition_recall", "incident_specific", "continuation"],
 			instructions:
-				"Classify this user message in a coding-agent chat: definition_recall = asks what something is / summarize / remind me; incident_specific = refers to a concrete event (a crash, a bug, a specific run); continuation = continues the current topic.",
+				"Classify the USER MESSAGE in this coding-agent chat (the recent assistant message, when present, shows what was just happening). " +
+				"continuation: ONLY a pure proceed-order or short acknowledgment with no question and no new information (go, ok, continue, yes do it, execute the plan). " +
+				"definition_recall: asks what something is, how something works, or asks to summarize/remind/recall past work or decisions — even casually phrased, mid-work, or as a complaint. " +
+				"incident_specific: refers to a concrete event (a crash, a bug, a specific run, something broken). " +
+				"When unsure between continuation and a recall class, choose the recall class.",
 		},
 		search_terms: {
 			type: "string",
 			depends_on: ["intent"],
 			instructions: "5-12 terse content keywords for retrieving the relevant past work. Strip meta framing.",
 		},
-	});
+	}, recentAssistant);
 	const res = r?.result ?? {};
 	if (typeof res.intent !== "string") return null;
 	return {

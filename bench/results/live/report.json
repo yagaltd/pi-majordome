@@ -1,0 +1,171 @@
+{
+ "judge_config": "typellm-only (jev n/a outside pi)",
+ "rows": [
+  {
+   "id": "past-codemap-mess",
+   "class": "past",
+   "intent": "definition_recall",
+   "arm": "dims",
+   "winner": ":1",
+   "score": 0.86,
+   "goldRank": 1
+  },
+  {
+   "id": "past-judge-seam",
+   "class": "past",
+   "intent": "definition_recall",
+   "arm": "dims",
+   "winner": ":93",
+   "score": 0.33,
+   "goldRank": -1
+  },
+  {
+   "id": "past-cleanup",
+   "class": "past",
+   "intent": "incident_specific",
+   "arm": "lex",
+   "winner": ":46",
+   "score": 1.97,
+   "goldRank": 2
+  },
+  {
+   "id": "past-herdr-dep",
+   "class": "past",
+   "intent": "definition_recall",
+   "arm": "dims",
+   "winner": ":93",
+   "score": 0.33,
+   "goldRank": 5
+  },
+  {
+   "id": "past-export-bug",
+   "class": "past",
+   "intent": "incident_specific",
+   "arm": "lex",
+   "winner": ":61",
+   "score": 2.29,
+   "goldRank": 3
+  },
+  {
+   "id": "cross-boundaries",
+   "class": "cross",
+   "intent": "definition_recall",
+   "arm": "dims",
+   "winner": ":97",
+   "score": 0.71,
+   "goldRank": 1
+  },
+  {
+   "id": "cross-two-judges",
+   "class": "cross",
+   "intent": "definition_recall",
+   "arm": "dims",
+   "winner": ":97",
+   "score": 4.26,
+   "goldRank": 1
+  },
+  {
+   "id": "cross-toc",
+   "class": "cross",
+   "intent": "definition_recall",
+   "arm": "dims",
+   "winner": ":97",
+   "score": 0.5,
+   "goldRank": 1
+  },
+  {
+   "id": "cont-slice3",
+   "class": "continuation",
+   "intent": "continuation",
+   "arm": "-",
+   "winner": null,
+   "score": null,
+   "goldRank": null
+  },
+  {
+   "id": "cont-watcher",
+   "class": "continuation",
+   "intent": "continuation",
+   "arm": "-",
+   "winner": null,
+   "score": null,
+   "goldRank": null
+  },
+  {
+   "id": "cont-go",
+   "class": "continuation",
+   "intent": "continuation",
+   "arm": "-",
+   "winner": null,
+   "score": null,
+   "goldRank": null
+  },
+  {
+   "id": "cur-toc-levels",
+   "class": "current",
+   "intent": "definition_recall",
+   "arm": "dims",
+   "winner": ":93",
+   "score": 0.58,
+   "goldRank": -1
+  },
+  {
+   "id": "cur-registry",
+   "class": "current",
+   "intent": "definition_recall",
+   "arm": "dims",
+   "winner": ":46",
+   "score": 0.63,
+   "goldRank": -1
+  },
+  {
+   "id": "cur-what-now",
+   "class": "current",
+   "intent": "definition_recall",
+   "arm": "dims",
+   "winner": ":1",
+   "score": 0.11,
+   "goldRank": -1
+  },
+  {
+   "id": "future-calendar",
+   "class": "future",
+   "intent": "definition_recall",
+   "arm": "dims",
+   "winner": ":1",
+   "score": 0,
+   "goldRank": -1
+  },
+  {
+   "id": "abstain-mindmap",
+   "class": "abstain",
+   "intent": "definition_recall",
+   "arm": "dims",
+   "winner": ":97",
+   "score": 0.41,
+   "goldRank": null
+  },
+  {
+   "id": "abstain-orchestrator",
+   "class": "abstain",
+   "intent": "definition_recall",
+   "arm": "dims",
+   "winner": ":691",
+   "score": 0.58,
+   "goldRank": null
+  }
+ ],
+ "summary": {
+  "hard_r1": "4/8",
+  "continuation": "3/3",
+  "soft_abstain": "0/6",
+  "noise_scores": [
+   0.58,
+   0.63,
+   0.11,
+   0,
+   0.41,
+   0.58
+  ]
+ }
+}

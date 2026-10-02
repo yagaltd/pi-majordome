@@ -156,7 +156,8 @@ export default function majordome(pi: ExtensionAPI): void {
 		if (!st.on || process.env.MAJORDOME_INJECT === "0") return;
 		try {
 			const msgs = event.messages as any[];
-			const lastUser = [...msgs].reverse().find((m) => m?.role === "user");
+			const lastUserIdx = msgs.findLastIndex?.((m) => m?.role === "user") ?? -1;
+			const lastUser = lastUserIdx >= 0 ? msgs[lastUserIdx] : undefined;
 			const query = lastUser ? textof(lastUser.content).trim() : "";
 			if (!query || query.startsWith("/") || query.startsWith("<")) return;
 			if (!st.sessionFile || !loadKey()) return;
@@ -164,19 +165,25 @@ export default function majordome(pi: ExtensionAPI): void {
 			// one DAG route per user turn (tool loops re-fire context with the same message)
 			if (!st.routeCache || st.routeCache.query !== query) {
 				const turnCount = currentTurnCount();
+				const recent = [...msgs.slice(0, lastUserIdx)].reverse().find((m) => m?.role === "assistant");
 				const result = await route({
 					userMessage: query,
 					blocks: st.blocks,
 					currentSession: sessionSlug(st.sessionFile),
 					currentTurn: turnCount,
-					routingIntent,
+					routingIntent: (m) => routingIntent(m, recent ? textof(recent.content) : ""),
 					queryDims: (q) => (st.vocab.length ? dimVector(q, st.vocab, "message") : Promise.resolve(null)),
 					tokens,
 				});
 				st.routeCache = { query, result };
 			}
 			const r = st.routeCache.result;
-			if (!r?.winner?.gist) {
+			// measured noise gate (bench/results/live): true positive 0.707, all
+			// noise ≤ 0.58 — suppress weak dims matches and empty lex matches
+			const suppressed = !r?.winner?.gist
+				|| (r.arm === "dims" && r.score < 0.6)
+				|| (r.arm === "lex" && r.score === 0);
+			if (suppressed) {
 				appendDecision({
 					ts: new Date().toISOString(), query, intent: r?.intent ?? "continuation",
 					arm: r?.arm ?? "-", winner: null, score: null, injected: false,
