@@ -131,7 +131,19 @@ extension custom entries). majordome adds the classified layer on top.
   appear in full. Verbatim replay of deeply nested tool *results* is a
   detail-recall limitation (vcc layer), not an index gap.
 
-### v2 — orchestrator (firstmate-style) + memory consolidation
+### v2 — orchestrator + memory consolidation
+
+**Architecture fork (decided at study phase):** Pi 1.0 shipped Pi Durable
+(earendil.com/posts/pi-durable) — a durable harness: tasks with ownership
+trees (subagent = conversation owned by a tool call), pluggable SQLite/JSONL
+storage, compaction-as-task with hooks that can write summaries themselves
+(= pi-vcc logic transfer path), request-rewrite hooks (= majordome
+router/injection/one-pager), multiplayer steering. Fork: **Path A** =
+firstmate-style worker pi processes (stable, Herdr-visible) vs **Path B** =
+Durable-native orchestrator (cleaner, crash-safe, experimental API). Study
+phase starts with the Durable README + coding-agent example + a
+vacation-planner-sized throwaway prototype BEFORE choosing. Herdr remains the
+surface layer either way (panes can watch Durable threads).
 
 - **Orchestrator**: one chat dispatching per-project worker pi sessions,
   referencing `~/Documents/vibe/firstmate` (visible panes, worktree
@@ -183,3 +195,6 @@ extension custom entries). majordome adds the classified layer on top.
   - `~/Documents/vibe/context-language-models` (paper + SCR + harness)
   - `~/Documents/vibe/Self-Index` (label-free key evolution)
   - `~/Documents/vibe/pi-vcc` (composition method reference)
+  - Pi Durable FIRST: earendil.com/posts/pi-durable + packages/durable README
+    + packages/coding-agent/src/experimental/durable + /vacation examples
+    (https://github.com/earendil-works/pi) — decide Path A vs B
