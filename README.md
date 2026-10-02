@@ -103,6 +103,14 @@ memory fires, the recall line also shows how the judge read the request
 (`Read your request as: …`), so the agent can self-correct misreadings.
 Majordome never talks to the user — the agent stays the interface.
 
+## Personality
+
+Majordome never talks to the user — the agent does. Your `AGENTS.md` (per
+project, or the orchestrator session's in v2) is where tone/verbosity/relay
+preferences live. Majordome's own injected lines are fixed templates in code;
+if they ever need user tuning, that becomes a small config file — not AGENTS.md
+(prose there, machine templates here).
+
 ## Commands
 
 ```
