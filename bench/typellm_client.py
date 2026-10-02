@@ -7,6 +7,7 @@ Key: ~/.config/pi-codemap/typellm.key (chmod 600) or TYPELLM_API_KEY env.
 """
 import json
 import os
+import re
 import urllib.request
 from pathlib import Path
 
@@ -130,6 +131,54 @@ def query_vector(text: str, dims: list[str] | None = None, attempts: int = 3) ->
         if out is not None:
             return out
     raise SystemExit(f"query dims null after {attempts} attempts: {text[:60]}")
+
+
+def rewrite_query(text: str, attempts: int = 3) -> str:
+    """Rewrite a (possibly meta-phrased) recall query into terse content terms.
+    Attacks the all-zero-dim finding: 'make a summary of what X does' scores
+    zero on content dims; strip the meta framing before any scoring."""
+    questions = {
+        "search_terms": {
+            "type": "string",
+            "instructions": (
+                "Rewrite this user query as 5-12 terse search keywords describing "
+                "the topic CONTENT the user wants recalled. Strip meta framing "
+                "(make a summary of, remind me, tell me about, can you explain) "
+                "and output only the content terms, comma-separated."
+            ),
+        }
+    }
+    for _ in range(attempts):
+        r = generate(text, questions)
+        v = (r.get("result") or {}).get("search_terms")
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    raise SystemExit(f"query rewrite empty after {attempts} attempts: {text[:60]}")
+
+
+def induce_dims(text: str, max_chars: int = 3000, attempts: int = 3) -> list[str]:
+    """Auto-derive discriminating feature names from a segment (slice-three:
+    replace hand-designed dims with community-keyword induction)."""
+    questions = {
+        "dims": {
+            "type": "string",
+            "instructions": (
+                "Name 4-6 short snake_case feature dimensions that discriminate what "
+                "this conversation segment is about AND what was done in it. Output "
+                "comma-separated names only, no explanations."
+            ),
+        }
+    }
+    for _ in range(attempts):
+        r = generate(text[:max_chars], questions)
+        v = (r.get("result") or {}).get("dims")
+        if isinstance(v, str) and v.strip():
+            names = [re.sub(r"[^a-z0-9_]+", "_", n.strip().lower()).strip("_")
+                     for n in v.split(",")]
+            names = [n for n in names if len(n) >= 3][:6]
+            if names:
+                return names
+    raise SystemExit(f"dim induction empty after {attempts} attempts")
 
 
 def cosine(a: dict, b: dict) -> float:

@@ -192,6 +192,10 @@ def main() -> None:
                     help="v1=session topics; v2=artifact/activity dims (slice-two)")
     ap.add_argument("--recency", type=float, default=0.0,
                     help="recency tiebreak weight: score += w * (block_pos / n)")
+    ap.add_argument("--rewrite", action="store_true",
+                    help="TypeLLM meta-query rewrite before lexical scoring (slice-three)")
+    ap.add_argument("--induce", action="store_true",
+                    help="with --classify: induce dim vocabulary from blocks instead of fixed dims")
     ap.add_argument("--out", default=str(Path(__file__).parent / "results"))
     args = ap.parse_args()
 
@@ -241,39 +245,65 @@ def main() -> None:
         import typellm_client as tc
 
         dims = tc.DIMS_V2 if args.dimset == "v2" else tc.DIMS
-        print(f"classifying {len(gold_blocks)} blocks via TypeLLM ({args.dimset} dims)...")
+        if args.induce:
+            seen: set = set()
+            for b in gold_blocks:
+                for d in tc.induce_dims(b["text"]):
+                    seen.add(d)
+            dims = sorted(seen)[:24]
+            report["induced_dims"] = dims
+            print(f"induced dim vocabulary ({len(dims)}): {', '.join(dims)}")
+        print(f"classifying {len(gold_blocks)} blocks via TypeLLM...")
         for b in gold_blocks:
             r = tc.block_vector(b["text"], dims=dims)
             b["vec"] = {d: float(r.get(d, 0.0) or 0.0) for d in dims}
             b["gist"] = r.get("gist", "")
-            # gist tokens join the hybrid field (dense, clean summary)
             b["tokens_hybrid"] |= tokens(b["gist"])
-            print(f"  {b['label'][:44]:46s} intent={r.get('intent'):14s} gist={b['gist'][:60]}")
+            print(f"  {b['label'][:44]:46s} intent={r.get('intent')} gist={b['gist'][:60]}")
+
+    def rrf(orders: list[list[int]], k: int = 60) -> list[int]:
+        """Reciprocal-rank fusion over method orders."""
+        s: dict = {}
+        for order in orders:
+            for pos, bi in enumerate(order):
+                s[bi] = s.get(bi, 0.0) + 1.0 / (k + pos + 1)
+        return sorted(range(len(s)), key=lambda i: -s.get(i, 0.0))
 
     rows = []
-    for pi, p in enumerate(probes):
-        qtok = tokens(p["query"])
+    for p in probes:
         expect = p["expect"]
         exp_idx = next(i for i, b in enumerate(gold_blocks) if b["label"] == expect)
         n = len(gold_blocks)
-        row: dict = {"probe": p["id"], "expect": expect}
+        row: dict = {"probe": p["id"], "expect": expect, "rewrite": None}
 
         def rank_of(order: list[int]) -> int:
             return order.index(exp_idx) + 1
 
-        jac_u = sorted(range(n), key=lambda i: -jaccard(qtok, gold_blocks[i]["tokens"]))
-        bm_u = sorted(range(n), key=lambda i: -bm25_rank(gold_blocks, qtok, "tokens")[i])
-        jac_h = sorted(range(n), key=lambda i: -jaccard(qtok, gold_blocks[i]["tokens_hybrid"]))
-        base_h = bm25_rank(gold_blocks, qtok, "tokens_hybrid")
-        if args.recency > 0:
-            base_h = [s + args.recency * ((i + 1) / n) for i, s in enumerate(base_h)]
-        bm_h = sorted(range(n), key=lambda i: -base_h[i])
-        row["jac_union"] = rank_of(jac_u)
-        row["bm25_union"] = rank_of(bm_u)
-        row["jac_hybrid"] = rank_of(jac_h)
-        row["bm25_hybrid"] = rank_of(bm_h)
-        row["bm25_hyb_recency"] = rank_of(bm_h) if args.recency > 0 else None
+        def lex_orders(q: set) -> dict:
+            jac_u = sorted(range(n), key=lambda i: -jaccard(q, gold_blocks[i]["tokens"]))
+            bm_u = sorted(range(n), key=lambda i: -bm25_rank(gold_blocks, q, "tokens")[i])
+            jac_h = sorted(range(n), key=lambda i: -jaccard(q, gold_blocks[i]["tokens_hybrid"]))
+            base_h = bm25_rank(gold_blocks, q, "tokens_hybrid")
+            if args.recency > 0:
+                base_h = [sc + args.recency * ((i + 1) / n) for i, sc in enumerate(base_h)]
+            bm_h = sorted(range(n), key=lambda i: -base_h[i])
+            return {"jac_union": jac_u, "bm25_union": bm_u, "jac_hybrid": jac_h, "bm25_hybrid": bm_h}
+
+        o = lex_orders(tokens(p["query"]))
+        for name, order in o.items():
+            row[name] = rank_of(order)
+        row["rrf_lex"] = rank_of(rrf(list(o.values())))
+        if args.rewrite:
+            import typellm_client as tc
+
+            rw = tc.rewrite_query(p["query"])
+            row["rewrite"] = rw
+            o2 = lex_orders(tokens(rw))
+            row["bm25_rw"] = rank_of(o2["bm25_hybrid"])
+            row["rrf_rw"] = rank_of(rrf(list(o2.values())))
         if args.classify:
+            import typellm_client as tc
+
             qv = tc.query_vector(p["query"], dims=dims)
             cos = sorted(range(n), key=lambda i: -tc.cosine(qv, gold_blocks[i]["vec"]))
             row["cosine"] = rank_of(cos)
@@ -290,7 +320,8 @@ def main() -> None:
         vals = [r[field] for r in rows if r.get(field)]
         return f"{sum(1 for v in vals if v <= 2)}/{len(vals)}" if vals else "-"
 
-    fields = ["jac_union", "bm25_union", "jac_hybrid", "bm25_hybrid", "bm25_hyb_recency", "cosine"]
+    fields = ["jac_union", "bm25_union", "jac_hybrid", "bm25_hybrid",
+              "rrf_lex", "bm25_rw", "rrf_rw", "cosine"]
     report["summary"] = {f: {"recall@1": r1(f), "recall@2": r2(f)} for f in fields}
     print("\nsummary:", json.dumps(report["summary"], indent=1))
 

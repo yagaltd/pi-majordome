@@ -4,12 +4,14 @@ Topic-scoped, cross-session memory for pi agents — "infinite chat": keep
 chatting across projects and weeks; the right past context loads when the
 query calls for it, without wrecking the provider's prompt cache.
 
-Status: **slice-two eval done**. Read [docs/DESIGN.md](docs/DESIGN.md) for the
-architecture, [docs/EVAL-SLICE1.md](docs/EVAL-SLICE1.md) and
-[docs/EVAL-SLICE2.md](docs/EVAL-SLICE2.md) for results. Headline: hybrid BM25
-over user-turns + tail + gist wins retrieval (recall@1 0/5 -> 2/5, free); EMA
-boundaries double clustering accuracy (0.757 -> 0.903); the named-vector tier
-failed honest measurement and is demoted to filter — ranking is lexical.
+Status: **slice-three eval done — router spec converged.** Read
+[docs/DESIGN.md](docs/DESIGN.md) and docs/EVAL-SLICE{1,2,3}.md. Headline:
+ranking = hybrid BM25 (user turns + tail + gist) fused RRF with jaccard,
+after a TypeLLM rewrite that strips meta framing from recall queries;
+EMA boundaries double clustering accuracy (0.757 -> 0.903); the
+judgment-probability vector tier is dead across three feature designs
+(hand topics, hand artifacts, induced) — dims are ToC metadata and
+filters, never ranking vectors.
 
 ## Quick start
 
@@ -34,6 +36,7 @@ bench/typellm_client.py   /v1/generate client (dims + intent + gist, one batched
 bench/key.json            ground truth for the reference session
 bench/results/            reports (v1-clean, v2, ema)
 docs/EVAL-SLICE2.md       slice-two: hybrid retrieval, EMA, v2 dims
+docs/EVAL-SLICE3.md       slice-three: RRF, rewrites, dim induction, router spec
 docs/DESIGN.md            design ledger (brainstorm trace, design laws)
 docs/EVAL-SLICE1.md       slice-one methodology, results, diagnosis
 ```
