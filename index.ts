@@ -301,7 +301,9 @@ export default function majordome(pi: ExtensionAPI): void {
 			// tail injection: request-local mutation of the final user message —
 			// pi restores canonical state afterward; the tail is cache-free anyway
 			const winner = r.winner;
-			const resume = r.intent === "definition_recall" && r.score >= 0.7;
+			// resume hint only when resuming actually applies: an incident/redo
+			// situation — a how-to-use question on existing work gets no hint
+			const resume = r.intent === "incident_specific" && r.score >= 0.7;
 			lastUser.content = `${textof(lastUser.content)}\n\n${injectionText(winner, r.terms, resume)}${st.routeCache.contraLine ? `\n\n${st.routeCache.contraLine}` : ""}${judge ? `\n\n${judge}` : ""}`;
 			emitDocsNudge(lastUser);
 			return;

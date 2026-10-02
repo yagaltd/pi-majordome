@@ -120,6 +120,13 @@ stays the interface.
 - **chatty sessions trip the noise gate differently** than coding sessions —
   `/majordome stats` shows the injected-vs-suppressed gap; tune
   `MAJORDOME_MIN_SCORE` from it.
+- **judge modes**: `/majordome judge off|soft|strict` — soft (default) informs
+  the agent, strict orders clarify-first, off silences.
+- **`[object Object]` sightings are NOT lost messages**: verified across all
+  session history — user text is always persisted intact. The string appears
+  only in what the MODEL receives (request-transform layer: majordome /
+  pi-clm / vcc context transforms). If an agent claims your message was
+  destroyed, `grep '"role":"user"' <session>.jsonl` — the truth is on disk.
 - `reindex all` sweeps every session on disk — expect judge calls per block.
 
 ## Docs nudge (v1.x — never remind manually again)
