@@ -1,0 +1,39 @@
+{
+  "session": "2026-09-28T07-30-31-842Z_01a0e6ec-2921-733b-9736-2b6ea32df080.jsonl",
+  "source_dir": "~/.pi/agent/sessions/--home-aurel-Documents-current-code-parser--/",
+  "blocks": [
+    { "label": "code-parser watcher + v11/v12 bench", "first_turn": 1, "last_turn": 45 },
+    { "label": "pi-codemap jev + consolidation + decider", "first_turn": 46, "last_turn": 60 },
+    { "label": "typellm research + per-repo keys", "first_turn": 61, "last_turn": 76 },
+    { "label": "routing phase 1/2 + virtual model", "first_turn": 77, "last_turn": 92 },
+    { "label": "docs + PII audit", "first_turn": 93, "last_turn": 96 },
+    { "label": "infinite-chat brainstorm", "first_turn": 97, "last_turn": 101 }
+  ],
+  "probes": [
+    {
+      "id": "verbatim-94",
+      "expect": "routing phase 1/2 + virtual model",
+      "query": "can you make a short summary of what codemap does for routing to models and reasoning effort?"
+    },
+    {
+      "id": "verbatim-52",
+      "expect": "pi-codemap jev + consolidation + decider",
+      "query": "pi-codemap repo is still a mess we have folder with the different versions"
+    },
+    {
+      "id": "para-routing",
+      "expect": "routing phase 1/2 + virtual model",
+      "query": "how does the virtual model decide between the cheap flash tier and the big model, and how does it pick reasoning effort?"
+    },
+    {
+      "id": "para-typellm-key",
+      "expect": "typellm research + per-repo keys",
+      "query": "where did we end up storing the typellm key and why did we want separate keys per repository?"
+    },
+    {
+      "id": "para-crash",
+      "expect": "code-parser watcher + v11/v12 bench",
+      "query": "the benchmark run crashed at some point mid-sweep, which part of the watcher work was that during?"
+    }
+  ]
+}
