@@ -16,7 +16,7 @@
  * is plain JSONL under ~/.pi/majordome/ — inspectable, purgeable, exportable.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
@@ -108,8 +108,16 @@ async function indexSession(): Promise<number> {
 			}
 		}
 
-		const meta = await blockMeta(core.text);
-		const vec = st.vocab.length ? await dimVector(core.text, st.vocab, "segment") : null;
+		let meta; let vec;
+		try {
+			meta = await blockMeta(core.text);
+			vec = st.vocab.length ? await dimVector(core.text, st.vocab, "segment") : null;
+		} catch (e) {
+			try {
+				appendFileSync(join(majordomeDir(), "errors.log"), `${new Date().toISOString()} ${id} judge: ${(e as Error)?.stack ?? e}\n`);
+			} catch { /* ignore */ }
+			meta = undefined; vec = null;
+		}
 		const block: Block = {
 			id,
 			session: slug,
@@ -123,7 +131,14 @@ async function indexSession(): Promise<number> {
 			head: turns[core.firstTurn - 1].user.slice(0, 200),
 			closedAt: new Date().toISOString(),
 		};
-		appendBlock(block);
+		try {
+			appendBlock(block);
+		} catch (e) {
+			try {
+				appendFileSync(join(majordomeDir(), "errors.log"), `${new Date().toISOString()} ${id} append: ${(e as Error)?.stack ?? e}\n`);
+			} catch { /* ignore */ }
+			continue;
+		}
 		st.blocks.push(block);
 		closed++;
 	}
@@ -184,6 +199,9 @@ export default function majordome(pi: ExtensionAPI): void {
 			await indexSession();
 		} catch (e) {
 			st.reason = `index error: ${String((e as Error).message ?? e).slice(0, 60)}`;
+			try {
+				appendFileSync(join(majordomeDir(), "errors.log"), `${new Date().toISOString()} session: ${(e as Error)?.stack ?? e}\n`);
+			} catch { /* ignore */ }
 		}
 	});
 
