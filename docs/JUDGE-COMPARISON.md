@@ -102,3 +102,21 @@ of the jaccard/leiden/keyword logic:
   signals, not evidence.** Steals for slice-five: weighted RRF (lexical vs
   Jev-vector arms), PPR-style graph boost over communities, per-domain
   jaccard modules.
+
+## Addendum (2026-09-28, post-hoc): non-determinism + thinking mode
+
+Re-running the *identical* verbatim-94 battery that produced the all-zero
+vector in slice-3 now returns `routing=0.95, rest 0.0` — correct
+discrimination, same query, same dims, same params. So non-thinking TypeLLM
+number judgments are **non-deterministic**, not systematically wrong.
+For a router this is arguably worse than a stable bias: a judgment that
+cannot be reproduced cannot be thresholded.
+
+All study calls ran without a thinking request (client sends
+`{context, questions}` only; response `thinking` came back empty).
+Thinking-mode A/B is pending the exact request parameter — candidate flag
+names rejected with HTTP 400: `thinking`, `thinking_effort`,
+`thinking:{effort}`, `effort`, `reasoning`, `thinking_mode`,
+`model_options.thinking_effort`. If thinking stabilizes *and* sharpens the
+numbers, the Jev seam can be re-benchmarked; until then numbers route to
+Jev, whose battery was deterministic-clean across all 17 + 77 judgments.
