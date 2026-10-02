@@ -4,7 +4,7 @@ Topic-scoped, cross-session memory for pi agents — "infinite chat": keep
 chatting across projects and weeks; the right past context loads when the
 query calls for it, without wrecking the provider's prompt cache.
 
-Status: **slice-five eval done — specialist routing breaks the ceiling.**
+Status: **offline study complete (slices 1-5b) — next: the live pi extension.**
 Read [docs/DESIGN.md](docs/DESIGN.md) and docs/EVAL-SLICE{1..5}.md +
 docs/JUDGE-COMPARISON.md. Headline: TypeLLM DAG intent -> specialist arm
 (Jev-vector vs lexical) reaches 3/7 recall@1 over the cross-session suite —
@@ -42,6 +42,8 @@ bench/key_cross.json      cross-session ground truth (A gold + B ranges + 7 prob
 docs/EVAL-SLICE4.md       slice-four: cross-session recall, communities
 bench/slice5.py           slice-five: pair cells, DAG intents, specialist arms
 docs/EVAL-SLICE5.md       slice-five: specialist routing, router spec v4
+docs/EVAL-SLICE5B.md      5b: pair-cell positive case, confidence arms rejected
+bench/slice5b.py          5b: AUG index, chunked pair batteries
 docs/DESIGN.md            design ledger (brainstorm trace, design laws)
 docs/EVAL-SLICE1.md       slice-one methodology, results, diagnosis
 ```

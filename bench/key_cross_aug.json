@@ -1,0 +1,66 @@
+{
+  "sessions": {
+    "AUG": {
+      "path": "~/.pi/agent/sessions/--home-aurel-Documents-current-MorphFam-MorphEditor--/2026-08-23T08-46-03-588Z_01a02dcc-5f44-74ef-8893-af97852c83dc.jsonl",
+      "gold": [
+        {
+          "label": "morph-aug research + deno + subagent fake-work discipline",
+          "first_turn": 1,
+          "last_turn": 180
+        },
+        {
+          "label": "morph-aug worker runs + sidebar outline residue + media captions",
+          "first_turn": 181,
+          "last_turn": 360
+        },
+        {
+          "label": "morph-aug columns editor + dist organisation + diff in editor",
+          "first_turn": 361,
+          "last_turn": 540
+        },
+        {
+          "label": "morph-aug diff UX + one-liner ship + plan 031",
+          "first_turn": 541,
+          "last_turn": 720
+        },
+        {
+          "label": "morph-aug live-client task + @-calendar chatbar",
+          "first_turn": 721,
+          "last_turn": 900
+        },
+        {
+          "label": "morph-aug research bookmarks + orchestrator dispatch",
+          "first_turn": 901,
+          "last_turn": 1020
+        },
+        {
+          "label": "morph-aug ratio frontmatter + deck-embed review",
+          "first_turn": 1021,
+          "last_turn": 1140
+        },
+        {
+          "label": "morph-aug editor vs export renderer + sync toast",
+          "first_turn": 1141,
+          "last_turn": 1208
+        }
+      ]
+    }
+  },
+  "probes_extra": [
+    {
+      "id": "P-diff-editor",
+      "expect": "AUG:morph-aug columns editor + dist organisation + diff in editor",
+      "query": "we wanted to show the diff inside the editor itself instead of a separate view, how far did we get on that?"
+    },
+    {
+      "id": "P-fake-work",
+      "expect": "AUG:morph-aug research + deno + subagent fake-work discipline",
+      "query": "the subagent workers kept doing fake work with empty diffs, how did we detect and handle that?"
+    },
+    {
+      "id": "P-sync-toast",
+      "expect": "AUG:morph-aug editor vs export renderer + sync toast",
+      "query": "sometimes there is a toast saying no active document to sync when starting up, what was that about?"
+    }
+  ]
+}
