@@ -413,6 +413,62 @@ export default function majordome(pi: ExtensionAPI): void {
 				status();
 				return;
 			}
+			if (cmd === "docs") {
+				const kinds = listKinds();
+				if (!a || a === "kinds") {
+					notify([
+						"/majordome docs <kind> [tag|all] [show]",
+						`kinds: ${kinds.join(" · ")}`,
+						"  readme/changelog: grounded digest since that doc's cursor, sent to the agent to write it",
+						"  custom: drop a template in ~/.pi/majordome/templates/<name>.md — instruction text with a {{digest}} placeholder (HTML explanation, release email, …)",
+						"  add 'show' to preview without triggering the agent",
+					].join("\n"));
+					return;
+				}
+				if (a === "adr") {
+					const targets = !b || b === "all" ? st.blocks : st.blocks.filter((x) => x === resolveId(b) || shortTag(x.session).toLowerCase().includes(b.toLowerCase()));
+					if (!targets.length) return notify("nothing to export");
+					const dir = join(majordomeDir(), "exports");
+					mkdirSync(dir, { recursive: true });
+					for (const x of targets) {
+						const dims = Object.entries(x.dims).filter(([, v]) => v > 0);
+						const md = ["---", `id: ${x.id}`, `project: ${shortTag(x.session)}`, `turns: ${x.firstTurn}-${x.lastTurn}`, `intent: ${x.intent ?? ""}`, `closed_at: ${x.closedAt}`, dims.length ? `dims: ${dims.map(([d, v]) => `${d}=${v}`).join(", ")}` : "dims: []", "---", "", `# ${x.gist ?? x.head}`, "", x.gist ?? "(gist pending — run /majordome reindex)", "", `First ask: "${x.head}"`, "", `Full transcript: \`${x.sessionFile}\` (turns ${x.firstTurn}–${x.lastTurn})`, ""].join("\n");
+						writeFileSync(join(dir, x.id.replace(/[^a-z0-9_-]+/gi, "_") + ".md"), md);
+					}
+					notify(`exported ${targets.length} ADR(s) → ${dir}`);
+					return;
+				}
+				const kind = a;
+				const scopeArg = b && !["show"].includes(b) ? b : undefined;
+				const showOnly = b === "show" || parts[3] === "show";
+				const meta = loadMeta();
+				const spec = kind === "readme" || kind === "changelog" ? { since: meta.docsCursor[kind === "readme" ? "README" : "CHANGELOG"] ?? "" } : {};
+				const slug = st.sessionFile ? sessionSlug(st.sessionFile) : undefined;
+				const scoped = filterBlocks(st.blocks, {
+					tag: scopeArg === "all" ? undefined : scopeArg,
+					slug: scopeArg ? undefined : slug,
+					all: scopeArg === "all",
+					since: (spec as any).since,
+				});
+				const composed = composeKind(kind, scoped);
+				if (!composed) return notify(`unknown kind "${kind}" — kinds: ${kinds.join(" · ")}`);
+				const dir = join(majordomeDir(), "exports");
+				mkdirSync(dir, { recursive: true });
+				const outFile = join(dir, `${kind}-${new Date().toISOString().slice(0, 10)}.md`);
+				writeFileSync(outFile, `# majordome docs digest — ${kind}\n\n${composed.digest}\n`);
+				if (showOnly) return notify(`digest (${scoped.length} blocks) → ${outFile}\n\n${composed.digest}`);
+				// trigger the agent: instruction + digest as a message
+				const msg = composed.instruction;
+				const send = (pi as any).sendUserMessage ?? (pi as any).sendMessage;
+				if (typeof send !== "function") return notify(`digest saved → ${outFile}\n(could not send to agent — hand it over manually)\n\n${msg}`);
+				try {
+					await send(msg);
+					notify(`digest (${scoped.length} blocks) sent to the agent — it will write the ${kind} update. saved → ${outFile}`);
+				} catch (e) {
+					notify(`digest saved → ${outFile}\n(send failed: ${String((e as Error).message ?? e).slice(0, 60)})\n\n${msg}`);
+				}
+				return;
+			}
 			if (cmd === "export") {
 				const targets = !a || a === "all"
 					? st.blocks

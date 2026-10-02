@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { parseSession, tokens, jaccard, detectBoundaries, blockCores, bm25Rank, federatedOrder, cosineVec } from "./core.ts";
 import { parseDims, routingIntent, setClassifyFn, resetClassifyFn } from "./judges.ts";
 import { timeTravel, rankArm, injectionText, judgeLine, docsNudge, scanDocsTouched, armFor } from "./router.ts";
+import { composeKind, digest, filterBlocks } from "./docs.ts";
 import type { Block } from "./store.ts";
 
 let failures = 0;
@@ -133,6 +134,22 @@ check("judgeLine strict: imperative", judgeLine("ok", "strict").includes("Ask ON
 	check("docsNudge: cursor suppresses covered work", docsNudge(impl, "/x/s.jsonl", { README: "2026-10-02T23:59:59Z" }) === null);
 	check("docsNudge: ignores non-implementation", docsNudge([mkB("discussion", "chat")].concat(impl.slice(0, 2)), "/x/s.jsonl", {}) === null);
 	check("scanDocs: readme+changelog+docs dir", JSON.stringify(scanDocsTouched('"path":"docs/README.md" "path":"CHANGELOG.md" "path":"docs/api.md"')) === JSON.stringify(["README", "CHANGELOG", "docs/"]));
+}
+
+// ── docs digest ──
+{
+	const mk = (session: string, intent: string, gist: string, closedAt: string): any => ({
+		id: `${session}:1`, session, sessionFile: `/x/${session}/s.jsonl`, firstTurn: 1, lastTurn: 2,
+		gist, intent, dims: {}, tokensHybrid: [], head: `ask ${gist}`, closedAt,
+	});
+	const bs = [mk("projA", "implementation", "built the thing", "2026-10-01T10:00:00Z"), mk("projB", "discussion", "chatted", "2026-10-01T11:00:00Z"), mk("projB", "documentation", "wrote docs", "2026-10-02T09:00:00Z")];
+	check("filter: scope slug keeps own doc-worthy only", filterBlocks(bs, { slug: "projA" }).length === 1 && filterBlocks(bs, { slug: "projB" }).length === 1);
+	check("filter: since cursor cuts old blocks", filterBlocks(bs, { all: true, since: "2026-10-01T12:00:00Z" }).length === 1);
+	const d = digest(filterBlocks(bs, { slug: "projB" }));
+	check("digest: short id + gist + first ask", d.includes("projB:1") && d.includes("wrote docs") && d.includes("first ask"));
+	const c = composeKind("changelog", filterBlocks(bs, { slug: "projB" }));
+	check("composeKind: builtin fills {{digest}}", !!c && c!.instruction.includes("CHANGELOG.md") && c!.instruction.includes("wrote docs"));
+	check("composeKind: unknown kind null", composeKind("nope", bs) === null);
 }
 
 // ── cosine ──

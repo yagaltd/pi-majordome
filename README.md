@@ -140,6 +140,24 @@ preferences live. Majordome's own injected lines are fixed templates in code;
 if they ever need user tuning, that becomes a small config file — not AGENTS.md
 (prose there, machine templates here).
 
+## Docs generation — `/majordome docs`
+
+```
+/majordome docs                          kinds + usage
+/majordome docs readme [tag|all] [show]  digest since README cursor → agent updates README
+/majordome docs changelog …              same for CHANGELOG
+/majordome docs adr [tag|all]            per-block ADR files (same as /majordome export)
+/majordome docs <custom> …               your template from ~/.pi/majordome/templates/<name>.md
+```
+
+A kind is an instruction template with a `{{digest}}` placeholder; the digest is
+the doc-worthy blocks (implementation/documentation) **since that doc's cursor**
+— the exact undocumented work, every line traceable to a block. Without `show`,
+the composed instruction+digest is **sent to the agent** (`pi.sendUserMessage`),
+which writes the doc; the cursor advances next time the session touches it.
+Ships an example custom template (`html-explanation`) — see
+`~/.pi/majordome/templates/`.
+
 ## Commands
 
 ```
