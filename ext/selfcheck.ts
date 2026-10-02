@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSession, tokens, jaccard, detectBoundaries, blockCores, bm25Rank, federatedOrder, cosineVec } from "./core.ts";
 import { parseDims, routingIntent, setClassifyFn, resetClassifyFn } from "./judges.ts";
-import { timeTravel, rankArm, injectionText, armFor } from "./router.ts";
+import { timeTravel, rankArm, injectionText, judgeLine, armFor } from "./router.ts";
 import type { Block } from "./store.ts";
 
 let failures = 0;
@@ -119,6 +119,9 @@ check("dims arm cosine prefers vector match", dimRank[0].block.id === "A:1");
 // ── injection text ──
 const inj = injectionText(mkBlock("--home-aurel-Documents-current-code-parser--", 4, 9, ["x"]));
 check("injection: slug + turns + gist", inj.includes("code-parser") && inj.includes("turns 4–9") && inj.startsWith("[majordome recall"));
+
+// ── judge line ──
+check("judgeLine: why included", judgeLine("which module?").includes("which module?") && judgeLine("ok").includes("underspecified"));
 
 // ── cosine ──
 check("cosine: identical = 1", Math.abs(cosineVec(new Map([["a", 1]]), new Map([["a", 1]])) - 1) < 1e-9);

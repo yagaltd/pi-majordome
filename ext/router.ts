@@ -13,6 +13,7 @@
  * Pure decision logic here; judges injected so tests run offline.
  */
 import { bm25Rank, federatedOrder, cosineVec, tokens } from "./core.ts";
+import type { RoutingIntent } from "./judges.ts";
 import type { Block } from "./store.ts";
 
 export type Arm = "dims" | "lex";
@@ -64,6 +65,8 @@ export interface RouteResult {
 	score: number;
 	ranked: Scored[];
 	nCands: number;
+	needClarification: boolean;
+	clarifyWhy: string;
 }
 
 /** Full route. judges injected: dag intent + query dims. Null dag or
@@ -74,7 +77,7 @@ export async function route(opts: {
 	currentSession: string;
 	currentTurn: number;
 	currentSessionFile?: string;
-	routingIntent: (m: string) => Promise<{ intent: string; searchTerms: string } | null>;
+	routingIntent: (m: string) => Promise<Pick<RoutingIntent, "intent" | "searchTerms" | "needClarification" | "clarifyWhy"> | null>;
 	queryDims: (q: string) => Promise<Map<string, number> | null>;
 	tokens: (s: string) => Set<string>;
 }): Promise<RouteResult | null> {
@@ -83,7 +86,8 @@ export async function route(opts: {
 
 	const terms = dag.searchTerms || opts.userMessage;
 	const cands = timeTravel(opts.blocks, opts.currentSession, opts.currentTurn, opts.currentSessionFile);
-	if (!cands.length) return { intent: dag.intent, arm: armFor(dag.intent), terms, winner: null, score: 0, ranked: [], nCands: 0 };
+	if (!cands.length)
+		return { intent: dag.intent, arm: armFor(dag.intent), terms, winner: null, score: 0, ranked: [], nCands: 0, needClarification: dag.needClarification, clarifyWhy: dag.clarifyWhy };
 
 	// federate: per-session top-3 pools, round-robin; scoring per arm on full pool
 	const arm = armFor(dag.intent);
@@ -103,15 +107,30 @@ export async function route(opts: {
 		score: ranked[0]?.score ?? 0,
 		ranked,
 		nCands: cands.length,
+		needClarification: dag.needClarification,
+		clarifyWhy: dag.clarifyWhy,
 	};
 }
 
 /** Injection entry (the ToC tail line). Short, tail-only, cache-free zone. */
-export function injectionText(w: Block): string {
+export function judgeLine(why: string): string {
+	return `[majordome judge] Your request looks underspecified${why && why !== "ok" ? ` (${why})` : ""}. Ask ONE clarifying question before starting long work.`;
+}
+
+export function injectionText(w: Block, terms?: string): string {
 	const slug = w.session.replace(/^-+|-+$/g, "").split("/").pop() ?? w.session;
 	const bits = [`[majordome recall · ${slug} turns ${w.firstTurn}–${w.lastTurn}]`];
 	if (w.gist) bits.push(w.gist);
 	if (w.intent) bits.push(`(intent: ${w.intent})`);
+	if (terms && terms.trim()) bits.push(`Read your request as: ${terms.trim().slice(0, 80)}.`);
 	bits.push("If relevant, continue that thread; otherwise ignore.");
 	return bits.join(" ");
+}
+
+/** Judge-line gate: ambiguity verdict, debounced — skip when the agent's last
+ * message already ends with a question (the user is likely answering it),
+ * otherwise a brief answer re-triggers and clarification ping-pongs. */
+export function shouldJudgeLine(r: RouteResult | null, recentAssistant?: string): boolean {
+	if (!r || r.intent === "continuation" || !r.needClarification) return false;
+	return !(recentAssistant ?? "").trimEnd().endsWith("?");
 }

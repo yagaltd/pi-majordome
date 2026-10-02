@@ -21,7 +21,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, parseSession, sessionSlug, textof, tokens } from "./ext/core.ts";
 import { blockMeta, dimVector, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev } from "./ext/judges.ts";
-import { injectionText, route } from "./ext/router.ts";
+import { injectionText, judgeLine, route } from "./ext/router.ts";
 import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadVocab, majordomeDir, rewriteBlocks, saveVocab, type Block } from "./ext/store.ts";
 
 interface St {
@@ -222,6 +222,9 @@ export default function majordome(pi: ExtensionAPI): void {
 				st.routeCache = { query, result };
 			}
 			const r = st.routeCache.result;
+			// judge line: ambiguity verdict surfaces to the AGENT even when memory
+			// is suppressed — the agent asks, majordome never talks to the user
+			const judge = r && r.intent !== "continuation" && r.needClarification ? judgeLine(r.clarifyWhy) : null;
 			// measured noise gate (bench/results/live): true positive 0.707, all
 			// noise ≤ 0.63 — suppress weak dims matches and empty lex matches
 			const minScore = Number(process.env.MAJORDOME_MIN_SCORE ?? 0.6);
@@ -234,12 +237,13 @@ export default function majordome(pi: ExtensionAPI): void {
 					arm: r?.arm ?? "-", winner: r?.winner ? shortId(r.winner) : null,
 					score: r?.winner ? Math.round(r.score * 100) / 100 : null, injected: false,
 				});
+				if (judge) lastUser.content += `\n\n${judge}`;
 				return;
 			}
 			// tail injection: request-local mutation of the final user message —
 			// pi restores canonical state afterward; the tail is cache-free anyway
 			const winner = r.winner;
-			lastUser.content = `${textof(lastUser.content)}\n\n${injectionText(winner)}`;
+			lastUser.content = `${textof(lastUser.content)}\n\n${injectionText(winner, r.terms)}${judge ? `\n\n${judge}` : ""}`;
 			st.injects++;
 			if (fresh) appendDecision({
 				ts: new Date().toISOString(), query, intent: r.intent, arm: r.arm,

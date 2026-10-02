@@ -149,6 +149,8 @@ export async function rewriteQuery(text: string): Promise<string | null> {
 export interface RoutingIntent {
 	intent: "definition_recall" | "incident_specific" | "continuation";
 	searchTerms: string;
+	needClarification: boolean;
+	clarifyWhy: string;
 }
 
 export async function routingIntent(userMessage: string, recentAssistant?: string): Promise<RoutingIntent | null> {
@@ -169,12 +171,23 @@ export async function routingIntent(userMessage: string, recentAssistant?: strin
 							continuation: "pure proceed-order or acknowledgment, no question, no new information",
 						},
 					},
+					need_clarification: {
+						type: "noul",
+						instructions:
+							"State has 'msg' (the new user message) and 'recent' (the assistant's last message). Is msg too vague to act on well — a reference ('the thing', 'it', 'that issue') that NEITHER msg NOR recent resolves, or a missing subject/goal — such that ONE clarifying question would materially change what the agent does? References resolved by recent are NOT vague. Answer yes/no.",
+					},
 				},
 			);
 			const a = res?.answers?.intent as string | { choice?: string } | undefined;
 			const label = typeof a === "string" ? a : (a as any)?.choice;
-			if (label && label !== "continuation") return { intent: label, searchTerms: "" };
-			return null;
+			if (!label || label === "continuation") return null;
+			const nc = res?.answers?.need_clarification as { noul?: boolean } | boolean | undefined;
+			return {
+				intent: label,
+				searchTerms: "",
+				needClarification: nc === true || (nc as any)?.noul === true,
+				clarifyWhy: "",
+			};
 		} catch {
 			return null;
 		}
@@ -198,12 +211,26 @@ export async function routingIntent(userMessage: string, recentAssistant?: strin
 			depends_on: ["intent"],
 			instructions: "5-12 terse content keywords for retrieving the relevant past work. Strip meta framing.",
 		},
+		need_clarification: {
+			type: "string",
+			enum: ["yes", "no"],
+			depends_on: ["intent"],
+			instructions:
+				"yes if the USER MESSAGE is too vague to act on well — a reference ('the thing', 'it', 'that issue') that neither the user message nor the recent assistant message resolves, or a missing subject/goal — and ONE clarifying question would materially change what the agent does. no if the request is clear enough to proceed, including references the recent assistant message resolves.",
+		},
+		clarify_why: {
+			type: "string",
+			depends_on: ["need_clarification"],
+			instructions: "If need_clarification is yes: the single missing piece, max 12 words. Otherwise: exactly 'ok'.",
+		},
 	}, recentAssistant);
 	const res = r?.result ?? {};
 	if (typeof res.intent !== "string") return null;
 	return {
 		intent: res.intent as RoutingIntent["intent"],
 		searchTerms: typeof res.search_terms === "string" ? res.search_terms : "",
+		needClarification: res.need_clarification === "yes",
+		clarifyWhy: typeof res.clarify_why === "string" ? res.clarify_why : "",
 	};
 }
 
