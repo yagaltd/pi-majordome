@@ -54,7 +54,7 @@ function currentTurnCount(): number {
 function status(): void {
 	if (!st.uiCtx?.hasUI) return;
 	if (!st.on) st.uiCtx.ui.setStatus("majordome", `majordome off (${st.reason.slice(0, 40)})`);
-	else if (!loadKey()) st.uiCtx.ui.setStatus("majordome", "majordome index-only (no TypeLLM key)");
+	else if (!loadKey()) st.uiCtx.ui.setStatus("majordome", "majordome: recall off — run npx tsx ext/judges.ts setup");
 	else {
 		const n = st.blocks.length;
 		st.uiCtx.ui.setStatus("majordome", `🧭 ${n}b · ${st.vocab.length}d${hasJev() ? "" : " ·lex"}`);

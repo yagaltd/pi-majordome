@@ -56,9 +56,21 @@ npx tsx ext/selfcheck.ts --parity       # offline assertions + bench replay pari
 npx tsx tools/backfill.ts               # seed the index from bench artifacts (real vectors)
 ```
 
-Judges: TypeLLM key → `~/.config/pi-majordome/typellm.key` (or `TYPELLM_API_KEY`);
-Jev rides pi's classifier registry (`TYPESAFE_API_KEY` or `/login`), with guarded
-TypeLLM numbers as automatic fallback.
+## Setup (majordome-only users; pi-codemap NOT required)
+
+```bash
+npx tsx ext/judges.ts setup     # paste TypeLLM key → ~/.config/pi-majordome/typellm.key
+npx tsx ext/judges.ts verify    # one typed call proving key + transport
+```
+
+- **TypeLLM key: required for recall** (the intent DAG is the router's trigger).
+  Without it majordome still indexes (turn_end) but gists stay empty and no
+  injection ever fires; the status line says `recall off — run npx tsx ext/judges.ts setup`.
+- **Jev: optional.** Rides pi's classifier registry (`TYPESAFE_API_KEY` or
+  `/login`); guarded TypeLLM numbers take over automatically when absent.
+- **Per session: nothing.** New and resumed sessions self-bootstrap
+  (session_start reloads index + wiring; interrupted open tails are closed on
+  the next turn_end). One-time history ingest, optional: `npx tsx tools/backfill.ts`.
 
 ## Status
 

@@ -13,9 +13,10 @@
  * failures → retried (the slice-3 flake mode; silent zero-fill poisons
  * retrieval). Fail-open: callers get null and skip, never throw into pi.
  */
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { createInterface } from "node:readline";
+import { dirname, join } from "node:path";
 
 export const HOSTED_URL = "https://api.typellm.ai";
 const TIMEOUT_MS = 30_000;
@@ -151,6 +152,62 @@ export async function routingIntent(userMessage: string): Promise<RoutingIntent 
 		intent: res.intent as RoutingIntent["intent"],
 		searchTerms: typeof res.search_terms === "string" ? res.search_terms : "",
 	};
+}
+
+// ── CLI: setup | verify (same shape as pi-codemap's typellm.ts) ─────────
+
+export function writeKeyFile(path: string, key: string): void {
+	const k = key.trim();
+	if (!k) throw new Error("empty API key");
+	mkdirSync(dirname(path), { recursive: true });
+	writeFileSync(path, k);
+	chmodSync(path, 0o600);
+}
+
+export async function verify(): Promise<void> {
+	if (!loadKey()) throw new Error("no key: npx tsx ext/judges.ts setup (or TYPELLM_API_KEY env)");
+	const r = await generate(
+		"Receipt from Cafe Aurora\nFlat white £3.20\nTotal: £12.40\nPaid by card.",
+		{
+			merchant: { type: "string", instructions: "Return only the merchant name." },
+			total: { type: "number", instructions: "Extract the total amount as a number." },
+		},
+	);
+	if (!r) throw new Error("call failed (network or auth)");
+	console.log(JSON.stringify({ result: r.result }, null, 2));
+	console.error(`key OK (${defaultKeyFile()})`);
+}
+
+async function readStdinAll(): Promise<string> {
+	const chunks: string[] = [];
+	for await (const chunk of process.stdin) chunks.push(chunk.toString());
+	return chunks.join("");
+}
+
+async function setup(): Promise<void> {
+	let key: string;
+	if (process.stdin.isTTY) {
+		const rl = createInterface({ input: process.stdin, output: process.stderr });
+		key = await new Promise<string>((resolve) =>
+			rl.question(`Paste the TypeLLM API key (piped works too: echo $KEY | npx tsx ext/judges.ts setup): `, resolve),
+		);
+		rl.close();
+	} else {
+		key = (await readStdinAll()).split("\n")[0] ?? "";
+	}
+	writeKeyFile(defaultKeyFile(), key);
+	const k = key.trim();
+	console.error(`key written to ${defaultKeyFile()} (${k.length >= 8 ? `${k.slice(0, 4)}…${k.slice(-4)}` : "***"}, chmod 600)`);
+}
+
+const isMain = process.argv[1]?.replace(/\\/g, "/").endsWith("judges.ts");
+if (isMain) {
+	(process.argv[2] === "setup" ? setup() : process.argv[2] === "verify" ? verify() : Promise.reject(new Error("usage: judges.ts setup|verify")))
+		.then(() => process.exit(0))
+		.catch((e: Error) => {
+			console.error(String(e.message ?? e));
+			process.exit(1);
+		});
 }
 
 // ── Jev via pi's classifier registry (wired from index.ts on session_start) ─
