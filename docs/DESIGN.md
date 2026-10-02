@@ -83,3 +83,25 @@ new query → 1 TypeLLM call: intent (continue / switch / recall)
 - `~/Documents/vibe/operator-memory` — markdown memory school
 - `pi-codemap` — the judgment-battery, side-car, tail-injection, status-glyph
   patterns this project reuses
+
+## Decisions (post-slice-4, recorded 2026-09-28)
+
+1. **pi-vcc stays a dependency, not integrated.** Different layers, compose
+   by construction: vcc transforms requests (cache-stable masking of old
+   tool results); majordome indexes the session file (ground truth) and
+   injects ToC entries at the tail — context-role entries vcc never masks.
+   Majordome fails open without vcc (pi compaction partially covers).
+2. **Two judges, one seam.** TypeLLM: strings, choices, DAG chains,
+   multimodal state (router pipeline = one chained DAG call: intent ->
+   rewrite/target-hint). Jev (typesafe.ai): all calibrated numbers — dims,
+   pair-cell edges, confidence. Number-typed leaves inside a TypeLLM DAG
+   route to Jev or are taken as strings and binned; never trusted as
+   probabilities. Evidence: docs/JUDGE-COMPARISON.md.
+3. **Specialists, not averages.** Intent class selects the ranking arm
+   (definition/recall -> Jev vector; incident/token-specific -> lexical
+   hybrid). Naive RRF of both scored 1/5 vs 2/5 for either specialist;
+   CognitiveOS's weighted RRF is the merge mechanism once intent picks arms.
+4. **Jev transport in the product** = pi's classifier registry
+   (ctx.modelRegistry.classify(), TYPESAFE_API_KEY or /login) — same as
+   pi-codemap. No /typesafe enable needed by end users; that bridge is
+   study-session-only.
