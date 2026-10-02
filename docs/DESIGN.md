@@ -44,7 +44,7 @@ tools: pi-vcc (per-session tool-result masking, pull-only recall), operator-memo
    job); rustlm's mechanical layer-1 formula (recency/reference/overlap) slots
    in later only if replay shows need.
 7. **Fail-open, visible, governable.** No confident match → inject nothing.
-   Status-line glyph for the active topic; `/memory` inspect/purge. Probability
+   Status-line glyph for the active topic; `/majordome` inspect/purge. Probability
    thresholds on every injection.
 
 ## Architecture

@@ -97,6 +97,24 @@ session file never rewritten · one judge per data type (TypeLLM strings/DAG,
 Jev numbers) · three index levels, messages unindexed · specialists not
 averages · fail-open + visible + purgeable.
 
+## v1 command surface — `/majordome`
+
+One `pi.registerCommand()`; deterministic, zero model calls, never touches
+the session JSONL.
+
+| command | does |
+|---|---|
+| `/majordome` | dashboard: sessions, blocks, communities, current topic, last N routing decisions (query -> intent -> arm -> winner + score) |
+| `/majordome list [session]` | ToC view: blocks as `gist - turns X-Y - intent` |
+| `/majordome show <id>` | full block record: gist, dims, range, provenance, closing boundary |
+| `/majordome forget <id\|session\|all>` | purge from the index (vector + pair cells gone); JSONL untouched |
+| `/majordome export <id\|session> [path]` | ADR/markdown export (v1.x traceability) |
+| `/majordome reindex` | rebuild side-car from session files |
+| `/majordome on\|off` | kill switch: routing/injection off |
+
+Not in v1: `merge` (needs real Leiden communities), any chat surface
+(`/majordome` governs; recall is the router's job in conversation).
+
 ## Roadmap
 
 ### v1.x — traceability & export (independent of git)
