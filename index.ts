@@ -8,7 +8,8 @@
  *            specialist arm) and inject the winning block's ToC entry at the
  *            tail — request-local, so the transcript stays canonical and the
  *            provider cache stays intact (tail is the cache-free zone).
- * /majordome: governance surface (dashboard/list/show/forget/export/reindex/on/off).
+ * /majordome: governance surface — human-readable dashboard, table ToC,
+ *            short ids (code-parser:1), show/forget/export/reindex/on/off.
  *
  * Fail-open everywhere: no key, no classifier, judge error → skip that step,
  * log the reason, never throw into pi. MAJORDOME_OFF=1 disables; the index
@@ -46,6 +47,33 @@ const st: St = {
 	uiCtx: null,
 	injects: 0,
 };
+
+/** Human-readable session tag: pi slugs dash-join the cwd, so strip the
+ * personal prefix and known path roots: --home-USER-Documents-current-X-- → X. */
+function shortTag(slug: string): string {
+	const t = slug.replace(/^-+|-+$/g, "")
+		.replace(/^home-[^-]+-/, "")
+		.replace(/^(Documents-)?(current-|vibe-|github-)/, "");
+	return t || slug;
+}
+function shortId(b: Block): string {
+	return `${shortTag(b.session)}:${b.firstTurn}`;
+}
+/** Resolve a full id or a short id (tag:n — first tag-contains + firstTurn match). */
+function resolveId(input: string): Block | undefined {
+	const exact = st.blocks.find((b) => b.id === input || b.id.endsWith(`:${input}`));
+	if (exact) return exact;
+	const m = input.match(/^(.+):(\d+)$/);
+	if (m) {
+		const tag = m[1].toLowerCase();
+		return st.blocks.find((b) => shortTag(b.session).toLowerCase() === tag && b.firstTurn === Number(m[2]))
+			?? st.blocks.find((b) => shortTag(b.session).toLowerCase().includes(tag) && b.firstTurn === Number(m[2]));
+	}
+	return undefined;
+}
+function pad(s: string, n: number): string {
+	return s.length >= n ? s.slice(0, n) : s + " ".repeat(n - s.length);
+}
 
 function currentTurnCount(): number {
 	return st.sessionFile ? parseSession(st.sessionFile).length : 0;
@@ -122,7 +150,7 @@ export default function majordome(pi: ExtensionAPI): void {
 		st.indexedKeys = new Set(st.blocks.map((b) => b.id));
 		st.vocab = loadVocab();
 		if (!st.on) st.reason = st.reason || "MAJORDOME_OFF";
-		if (!loadKey()) st.reason = "no TypeLLM key (npx tsx ext/judges.ts writes one; TYPELLM_API_KEY env works too)";
+		if (!loadKey()) st.reason = "no TypeLLM key (npx tsx ext/judges.ts setup; TYPELLM_API_KEY env works too)";
 
 		// wire Jev through pi's classifier registry when available (seam default)
 		const reg = (ctx as any)?.modelRegistry;
@@ -163,7 +191,8 @@ export default function majordome(pi: ExtensionAPI): void {
 			if (!st.sessionFile || !loadKey()) return;
 
 			// one DAG route per user turn (tool loops re-fire context with the same message)
-			if (!st.routeCache || st.routeCache.query !== query) {
+			const fresh = !st.routeCache || st.routeCache.query !== query;
+			if (fresh) {
 				const turnCount = currentTurnCount();
 				const recent = [...msgs.slice(0, lastUserIdx)].reverse().find((m) => m?.role === "assistant");
 				const result = await route({
@@ -171,6 +200,7 @@ export default function majordome(pi: ExtensionAPI): void {
 					blocks: st.blocks,
 					currentSession: sessionSlug(st.sessionFile),
 					currentTurn: turnCount,
+					currentSessionFile: st.sessionFile,
 					routingIntent: (m) => routingIntent(m, recent ? textof(recent.content) : ""),
 					queryDims: (q) => (st.vocab.length ? dimVector(q, st.vocab, "message") : Promise.resolve(null)),
 					tokens,
@@ -179,24 +209,26 @@ export default function majordome(pi: ExtensionAPI): void {
 			}
 			const r = st.routeCache.result;
 			// measured noise gate (bench/results/live): true positive 0.707, all
-			// noise ≤ 0.58 — suppress weak dims matches and empty lex matches
+			// noise ≤ 0.63 — suppress weak dims matches and empty lex matches
 			const suppressed = !r?.winner?.gist
 				|| (r.arm === "dims" && r.score < 0.6)
 				|| (r.arm === "lex" && r.score === 0);
 			if (suppressed) {
-				appendDecision({
+				if (fresh) appendDecision({
 					ts: new Date().toISOString(), query, intent: r?.intent ?? "continuation",
-					arm: r?.arm ?? "-", winner: null, score: null, injected: false,
+					arm: r?.arm ?? "-", winner: r?.winner ? shortId(r.winner) : null,
+					score: r?.winner ? Math.round(r.score * 100) / 100 : null, injected: false,
 				});
 				return;
 			}
 			// tail injection: request-local mutation of the final user message —
 			// pi restores canonical state afterward; the tail is cache-free anyway
-			lastUser.content = `${textof(lastUser.content)}\n\n${injectionText(r.winner)}`;
+			const winner = r.winner;
+			lastUser.content = `${textof(lastUser.content)}\n\n${injectionText(winner)}`;
 			st.injects++;
-			appendDecision({
+			if (fresh) appendDecision({
 				ts: new Date().toISOString(), query, intent: r.intent, arm: r.arm,
-				winner: r.winner.id, score: Math.round(r.score * 1000) / 1000, injected: true,
+				winner: shortId(winner), score: Math.round(r.score * 1000) / 1000, injected: true,
 			});
 			status();
 		} catch {
@@ -209,72 +241,120 @@ export default function majordome(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("majordome", {
-		description: "Topic memory: dashboard, list, show, forget, export, reindex, on/off",
+		description: "Topic memory dashboard (bare) · list · show <id> · forget · export · reindex · on/off",
 		handler: async (args, ctx) => {
-			const [cmd, a, b] = (args ?? "").trim().split(/\s+/);
+			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
+			const cmd = parts[0];
+			const a = parts[1];
+			const b = parts.slice(2).join(" ");
 			const notify = (m: string) => ctx.ui.notify(m, "info");
 			st.blocks = loadBlocks();
 
 			if (!cmd) {
-				const bySess = new Map<string, number>();
-				for (const bl of st.blocks) bySess.set(bl.session, (bySess.get(bl.session) ?? 0) + 1);
+				const byTag = new Map<string, number>();
+				for (const bl of st.blocks) {
+					const t = shortTag(bl.session);
+					byTag.set(t, (byTag.get(t) ?? 0) + 1);
+				}
+				const decisions = lastDecisions(5);
 				const lines = [
-					`pi-majordome — topic memory  [${st.on ? "on" : `off (${st.reason})`}]`,
-					`index: ${st.blocks.length} blocks · ${bySess.size} sessions · ${st.vocab.length} dims · judges: ${hasJev() ? "jev+typellm" : loadKey() ? "typellm" : "none"}`,
-					...[...bySess].map(([s, n]) => `  ${s}  ${n}b`),
-					`routing log (last 3):`,
-					...lastDecisions(3).map((d) => `  ${d.ts.slice(11, 16)} "${d.query.slice(0, 40)}" ${d.intent} → ${d.arm} ${d.winner ?? "-"} ${d.score ?? ""}${d.injected ? " ✓" : ""}`),
-					`/majordome list · show <id> · forget <id|session|all> · export <id> [path] · reindex · on · off`,
+					"╭─ pi-majordome · topic memory",
+					`│ state    ${st.on ? "on" : `off (${st.reason})`} · judges ${hasJev() ? "jev+typellm" : loadKey() ? "typellm" : "none (recall off)"} · injected this session: ${st.injects}`,
+					`│ index    ${st.blocks.length} blocks · ${byTag.size} projects · ${st.vocab.length} dims · ~/.pi/majordome/`,
+					`│ projects ${[...byTag].map(([t, n]) => `${t} (${n})`).join(" · ") || "(empty — blocks close as topics move)"}`,
+					"├─ routing log (latest first)",
+					...(decisions.length
+						? decisions.reverse().map((d) => {
+							const mark = d.injected ? "✓" : d.winner ? "✗" : "—";
+							const w = d.winner ? `${d.winner} ${d.score ?? ""}` : d.intent;
+							return `│ ${mark} ${d.ts.slice(11, 16)} "${d.query.slice(0, 42)}" → ${w}`;
+						})
+						: ["│ (no routing decisions yet)"]),
+					"├─ commands",
+					"│ /majordome list · show <id> · forget <id|tag|all>",
+					"│ /majordome export <id|tag|all> [dir] · reindex [all] · on · off",
+					"│ ids are short: code-parser:1 (full ids also accepted)",
+					"╰─",
 				];
 				notify(lines.join("\n"));
 				return;
 			}
 			if (cmd === "list") {
-				const sel = a ? st.blocks.filter((x) => x.session.includes(a)) : st.blocks;
-				notify(sel.length
-					? sel.map((x) => `${x.id}\n  turns ${x.firstTurn}–${x.lastTurn} · ${x.intent ?? "?"} · ${x.gist ?? "(no gist — reindex to backfill)"}`).join("\n")
-					: "no blocks indexed yet");
+				const sel = a ? st.blocks.filter((x) => shortTag(x.session).toLowerCase().includes(a.toLowerCase())) : st.blocks;
+				if (!sel.length) return notify(a ? `no blocks matching "${a}"` : "no blocks indexed yet");
+				const rows = sel.map((x) => ({
+					id: shortId(x),
+					turns: `${x.firstTurn}–${x.lastTurn}`,
+					intent: x.intent ?? "?",
+					gist: x.gist ?? "(no gist — /majordome reindex to backfill)",
+				}));
+				const w = [Math.max(...rows.map((r) => r.id.length)), 9, 14, 60];
+				notify(
+					["ID".padEnd(w[0]) + "  TURNS     INTENT         GIST", ...rows.map((r) => pad(r.id, w[0]) + "  " + pad(r.turns, w[1]) + " " + pad(r.intent, w[2]) + " " + r.gist)].join("\n"),
+				);
 				return;
 			}
 			if (cmd === "show") {
-				const blk = st.blocks.find((x) => x.id === a || x.id.endsWith(`:${a}`));
-				if (!blk) return notify(`no block ${a ?? "(id?)"}`);
-				notify(JSON.stringify(blk, null, 1));
+				const blk = a ? resolveId(a) : undefined;
+				if (!blk) return notify(`no block ${a ?? "(id? — try /majordome list)"}`);
+				const dims = Object.entries(blk.dims).filter(([, v]) => v > 0);
+				notify([
+					`block   ${shortId(blk)}`,
+					`file    ${blk.sessionFile.split("/").slice(-2).join("/")}`,
+					`turns   ${blk.firstTurn}–${blk.lastTurn} · closed ${blk.closedAt.slice(0, 16).replace("T", " ")}`,
+					`intent  ${blk.intent ?? "?"}`,
+					`gist    ${blk.gist ?? "(none)"}`,
+					`first   "${blk.head}"`,
+					`dims    ${dims.length ? dims.map(([d, v]) => `${d}=${v}`).join(" · ") : "(none)"}`,
+					`recall  /majordome export ${shortId(blk)} for a markdown ADR`,
+				].join("\n"));
 				return;
 			}
 			if (cmd === "forget") {
 				if (a === "all") {
+					const n = st.blocks.length;
 					rewriteBlocks([]);
-					notify(`forgot everything (${st.blocks.length} blocks)`);
+					st.blocks = [];
+					st.indexedKeys = new Set();
+					notify(`forgot everything (${n} blocks)`);
 				} else {
-					const keep = st.blocks.filter((x) => !(x.id === a || x.session === a));
+					const one = a ? resolveId(a) : undefined;
+					const keep = st.blocks.filter((x) => {
+						if (one) return x.id !== one.id;
+						if (a) return !shortTag(x.session).toLowerCase().includes(a.toLowerCase());
+						return true;
+					});
+					const n = st.blocks.length - keep.length;
 					rewriteBlocks(keep);
-					notify(`forgot ${st.blocks.length - keep.length} block(s); session JSONLs untouched`);
+					st.blocks = keep;
+					st.indexedKeys = new Set(keep.map((x) => x.id));
+					notify(n ? `forgot ${n} block(s); session JSONLs untouched` : `nothing matched "${a}"`);
 				}
-				st.blocks = loadBlocks();
-				st.indexedKeys = new Set(st.blocks.map((x) => x.id));
 				status();
 				return;
 			}
 			if (cmd === "export") {
-				const targets = a === "all" || !a ? st.blocks : st.blocks.filter((x) => x.id === a || x.session.includes(a));
+				const targets = !a || a === "all"
+					? st.blocks
+					: st.blocks.filter((x) => x === resolveId(a) || shortTag(x.session).toLowerCase().includes(a.toLowerCase()));
 				if (!targets.length) return notify("nothing to export");
-				const dir = b ?? join(majordomeDir(), "exports");
+				const dir = b || join(majordomeDir(), "exports");
 				mkdirSync(dir, { recursive: true });
 				for (const x of targets) {
+					const dims = Object.entries(x.dims).filter(([, v]) => v > 0);
 					const md = [
 						"---",
 						`id: ${x.id}`,
-						`session: ${x.session}`,
+						`project: ${shortTag(x.session)}`,
 						`turns: ${x.firstTurn}-${x.lastTurn}`,
 						`intent: ${x.intent ?? ""}`,
 						`closed_at: ${x.closedAt}`,
-						`dims: ${JSON.stringify(x.dims)}`,
+						dims.length ? `dims: ${dims.map(([d, v]) => `${d}=${v}`).join(", ")}` : "dims: []",
 						"---",
 						"",
 						`# ${x.gist ?? x.head}`,
 						"",
-						x.gist ? x.gist : "(gist pending — run /majordome reindex)",
+						x.gist ?? "(gist pending — run /majordome reindex)",
 						"",
 						`First ask: "${x.head}"`,
 						"",
@@ -289,15 +369,14 @@ export default function majordome(pi: ExtensionAPI): void {
 			if (cmd === "reindex") {
 				if (a === "all") {
 					const dir = join(homedir(), ".pi", "agent", "sessions");
-					let files: string[] = [];
+					const files: string[] = [];
 					try {
-						const { readdirSync, statSync } = await import("node:fs");
+						const { readdirSync } = await import("node:fs");
 						for (const d of readdirSync(dir)) {
 							const sub = join(dir, d);
 							try {
 								for (const f of readdirSync(sub)) if (f.endsWith(".jsonl")) files.push(join(sub, f));
 							} catch { /* not a dir */ }
-							void statSync;
 						}
 					} catch { /* no sessions dir */ }
 					rewriteBlocks([]);
@@ -314,7 +393,7 @@ export default function majordome(pi: ExtensionAPI): void {
 					return;
 				}
 				if (!st.sessionFile) return notify("no session file");
-				rewriteBlocks(loadBlocks().filter((x) => x.session !== sessionSlug(st.sessionFile!)));
+				rewriteBlocks(loadBlocks().filter((x) => x.sessionFile !== st.sessionFile));
 				st.blocks = loadBlocks();
 				st.indexedKeys = new Set(st.blocks.map((x) => x.id));
 				const n = await indexSession();
@@ -331,7 +410,7 @@ export default function majordome(pi: ExtensionAPI): void {
 				notify(`majordome ${st.on ? "on" : "off"}`);
 				return;
 			}
-			notify(`unknown subcommand "${cmd}" — try bare /majordome`);
+			notify(`unknown subcommand "${cmd}" — bare /majordome shows the dashboard`);
 		},
 	});
 }

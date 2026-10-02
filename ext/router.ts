@@ -26,8 +26,8 @@ export function armFor(intent: string): Arm {
 /** Time-travel: candidates are fully-formed past blocks. Blocks from OTHER
  * sessions are always past; the current session contributes only closed
  * blocks (the open tail / current block is already in context). */
-export function timeTravel(blocks: Block[], currentSession: string, currentTurn: number): Block[] {
-	return blocks.filter((b) => b.session !== currentSession || b.lastTurn < currentTurn);
+export function timeTravel(blocks: Block[], currentSession: string, currentTurn: number, currentSessionFile?: string): Block[] {
+	return blocks.filter((b) => b.sessionFile !== currentSessionFile || b.lastTurn < currentTurn);
 }
 
 export interface Scored {
@@ -73,6 +73,7 @@ export async function route(opts: {
 	blocks: Block[];
 	currentSession: string;
 	currentTurn: number;
+	currentSessionFile?: string;
 	routingIntent: (m: string) => Promise<{ intent: string; searchTerms: string } | null>;
 	queryDims: (q: string) => Promise<Map<string, number> | null>;
 	tokens: (s: string) => Set<string>;
@@ -81,7 +82,7 @@ export async function route(opts: {
 	if (!dag || dag.intent === "continuation") return null;
 
 	const terms = dag.searchTerms || opts.userMessage;
-	const cands = timeTravel(opts.blocks, opts.currentSession, opts.currentTurn);
+	const cands = timeTravel(opts.blocks, opts.currentSession, opts.currentTurn, opts.currentSessionFile);
 	if (!cands.length) return { intent: dag.intent, arm: armFor(dag.intent), terms, winner: null, score: 0, ranked: [], nCands: 0 };
 
 	// federate: per-session top-3 pools, round-robin; scoring per arm on full pool

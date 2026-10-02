@@ -95,10 +95,12 @@ const mkBlock = (session: string, firstTurn: number, lastTurn: number, terms: st
 	closedAt: "2026-01-01T00:00:00Z",
 });
 const indexBlocks = [mkBlock("A", 1, 3, ["watcher"]), mkBlock("A", 4, 9, ["pricing"]), mkBlock("B", 1, 5, ["calendar", "watcher"])];
-const cur = timeTravel(indexBlocks, "A", 12);
+const cur = timeTravel(indexBlocks, "A", 12, "/x/A/s.jsonl");
 check("time-travel: all past + other sessions", cur.length === 3);
-const curOpen = timeTravel(indexBlocks, "A", 9);
+const curOpen = timeTravel(indexBlocks, "A", 9, "/x/A/s.jsonl");
 check("time-travel: current open block excluded", curOpen.length === 2 && !curOpen.some((b) => b.id === "A:4"));
+const otherFile = timeTravel(indexBlocks.map((b) => ({ ...b, lastTurn: 100 })), "A", 9, "/x/A/OTHER.jsonl");
+check("time-travel: same slug, different file = always candidate", otherFile.length === 3);
 
 // ── federated pools: both sessions survive a lex-dominant session ──
 const A1 = mkBlock("A", 1, 2, ["calendar", "reminders", "events"]);
