@@ -117,12 +117,13 @@ export function judgeLine(why: string): string {
 	return `[majordome judge] Your request looks underspecified${why && why !== "ok" ? ` (${why})` : ""}. Ask ONE clarifying question before starting long work.`;
 }
 
-export function injectionText(w: Block, terms?: string): string {
+export function injectionText(w: Block, terms?: string, resume = false): string {
 	const slug = w.session.replace(/^-+|-+$/g, "").split("/").pop() ?? w.session;
 	const bits = [`[majordome recall · ${slug} turns ${w.firstTurn}–${w.lastTurn}]`];
 	if (w.gist) bits.push(w.gist);
 	if (w.intent) bits.push(`(intent: ${w.intent})`);
 	if (terms && terms.trim()) bits.push(`Read your request as: ${terms.trim().slice(0, 80)}.`);
+	if (resume) bits.push("This looks like work already done — resume it rather than redoing it.");
 	bits.push("If relevant, continue that thread; otherwise ignore.");
 	return bits.join(" ");
 }

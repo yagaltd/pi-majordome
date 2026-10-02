@@ -234,6 +234,45 @@ export async function routingIntent(userMessage: string, recentAssistant?: strin
 	};
 }
 
+/** Post-retrieval single-pair check: does the user's message REVERSE a
+ * decision recorded in the recalled block? One judge call, only on strong
+ * hits (score ≥ 0.7) — fail-open false. */
+export async function contradicts(query: string, gist: string): Promise<boolean> {
+	if (loadKey()) {
+		const r = await generate(
+			`User message: ${query.slice(0, 400)}\n\nExisting work summary: ${gist.slice(0, 400)}`,
+			{
+				contradiction: {
+					type: "string",
+					enum: ["yes", "no", "unsure"],
+					instructions:
+						"Does the user message contradict or reverse a decision or outcome in the existing work summary? yes ONLY on a real conflict (opposite choice, reversal) — a new aspect or extension is no.",
+				},
+			},
+		);
+		return r?.result?.contradiction === "yes";
+	}
+	if (classifyFn) {
+		try {
+			const res = await classifyFn(
+				{ msg: query.slice(0, 300), gist: gist.slice(0, 300) },
+				{
+					contradiction: {
+						type: "noul",
+						instructions:
+							"Does the user message contradict or reverse a decision or outcome described in the gist (opposite choice, reversal — not merely a new aspect)? Answer yes/no.",
+					},
+				},
+			);
+			const a = res?.answers?.contradiction;
+			return a === true || (a as any)?.noul === true;
+		} catch {
+			return false;
+		}
+	}
+	return false;
+}
+
 // ── CLI: setup | verify (same shape as pi-codemap's typellm.ts) ─────────
 
 export function writeKeyFile(path: string, key: string): void {

@@ -82,6 +82,17 @@ npx tsx ext/judges.ts verify    # one typed call proving key + transport
   (session_start reloads index + wiring; interrupted open tails are closed on
   the next turn_end). One-time history ingest, optional: `npx tsx tools/backfill.ts`.
 
+## Composition & smart hints
+
+- **pi-clm compatible** (installed alongside; `pi install npm:@lolipopshock/pi-clm`):
+  pi-clm curates the window (learned compaction), majordome supplies recalled
+  memory — different layers, verified co-loading.
+- **Resume hint**: strong recall (score ≥ 0.7) on a definition_recall adds
+  "looks like work already done — resume rather than redoing it".
+- **Contradiction check**: on the same strong hits, one judge call asks whether
+  the message REVERSES a decision in the recalled block — if yes, the agent is
+  told to confirm before acting.
+
 ## Turn judge (per-turn annotation)
 
 Every non-continuation turn is judged for ambiguity in the same DAG call.

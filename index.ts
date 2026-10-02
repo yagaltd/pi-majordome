@@ -20,7 +20,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, parseSession, sessionSlug, textof, tokens } from "./ext/core.ts";
-import { blockMeta, dimVector, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev } from "./ext/judges.ts";
+import { blockMeta, contradicts, dimVector, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev } from "./ext/judges.ts";
 import { injectionText, judgeLine, shouldJudgeLine, route } from "./ext/router.ts";
 import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadVocab, majordomeDir, rewriteBlocks, saveVocab, type Block } from "./ext/store.ts";
 
@@ -31,7 +31,7 @@ interface St {
 	blocks: Block[];
 	vocab: string[];
 	indexedKeys: Set<string>;
-	routeCache: { query: string; result: Awaited<ReturnType<typeof route>> } | null;
+	routeCache: { query: string; result: Awaited<ReturnType<typeof route>>; contraLine: string | null } | null;
 	uiCtx: { hasUI: boolean; ui: { setStatus(k: string, v: string): void } } | null;
 	injects: number;
 }
@@ -219,7 +219,17 @@ export default function majordome(pi: ExtensionAPI): void {
 					queryDims: (q) => (st.vocab.length ? dimVector(q, st.vocab, "message") : Promise.resolve(null)),
 					tokens,
 				});
-				st.routeCache = { query, result };
+				// strong-hit post-checks (once per query): duplicate-work hint +
+				// single-pair contradiction judgment on the winner
+				let contraLine: string | null = null;
+				if (result?.winner?.gist && result.score >= 0.7) {
+					try {
+						if (await contradicts(query, result.winner.gist)) {
+							contraLine = "[majordome judge] This seems to REVERSE a decision recorded in the recalled block — confirm before acting.";
+						}
+					} catch { /* fail open */ }
+				}
+				st.routeCache = { query, result, contraLine };
 			}
 			const r = st.routeCache.result;
 			// judge line: ambiguity verdict surfaces to the AGENT even when memory
@@ -242,13 +252,15 @@ export default function majordome(pi: ExtensionAPI): void {
 					arm: r?.arm ?? "-", winner: r?.winner ? shortId(r.winner) : null,
 					score: r?.winner ? Math.round(r.score * 100) / 100 : null, injected: false,
 				});
+				if (st.routeCache.contraLine) lastUser.content += `\n\n${st.routeCache.contraLine}`;
 				if (judge) lastUser.content += `\n\n${judge}`;
 				return;
 			}
 			// tail injection: request-local mutation of the final user message —
 			// pi restores canonical state afterward; the tail is cache-free anyway
 			const winner = r.winner;
-			lastUser.content = `${textof(lastUser.content)}\n\n${injectionText(winner, r.terms)}${judge ? `\n\n${judge}` : ""}`;
+			const resume = r.intent === "definition_recall" && r.score >= 0.7;
+			lastUser.content = `${textof(lastUser.content)}\n\n${injectionText(winner, r.terms, resume)}${st.routeCache.contraLine ? `\n\n${st.routeCache.contraLine}` : ""}${judge ? `\n\n${judge}` : ""}`;
 			st.injects++;
 			if (fresh) appendDecision({
 				ts: new Date().toISOString(), query, intent: r.intent, arm: r.arm,
