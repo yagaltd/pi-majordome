@@ -220,3 +220,12 @@ export function cosineVec(a: Map<string, number>, b: Map<string, number>): numbe
 	for (const v of b.values()) db += v * v;
 	return da && db ? num / (Math.sqrt(da) * Math.sqrt(db)) : 0;
 }
+
+/** Human-readable session tag: pi slugs dash-join the cwd, so strip the
+ * personal prefix and known path roots: --home-USER-Documents-current-X-- → X. */
+export function shortTag(slug: string): string {
+	const t = slug.replace(/^-+|-+$/g, "")
+		.replace(/^home-[^-]+-/, "")
+		.replace(/^(Documents-)?(current-|vibe-|github-)/, "");
+	return t || slug;
+}

@@ -157,9 +157,29 @@ extension custom entries). majordome adds the classified layer on top.
   24h agent-swarm) + ContextBench (coming soon) for end-to-end
   majordome vs pi-clm (`npm:@lolipopshock/pi-clm`) vs both-together —
   the swarm task is the v2 orchestrator scenario.
+  - **One-pager decision**: composed first, vcc-style (~/Documents/vibe/pi-vcc
+    proves algorithmic extraction: deterministic, zero-cost, 5 semantic
+    sections) — but over GIST atoms (already semantic from block close), so
+    vcc's weakness (no meaning extraction) is pre-solved. TypeLLM/agent
+    "judge and expand" only if the bench shows gaps. The one-pager doubles
+    as the SCOPE PRIOR source: query-vs-page similarity weights federated
+    pools (fixes cross-project vocabulary collisions; works from block zero,
+    unlike log-learned priors which need hundreds of decisions).
+  - **Self-Index** (~/Documents/vibe/Self-Index): label-free index evolution —
+    documents gain generated keys, refined by diagnosing wrong retrievals
+    with simulated queries (faithfulness/specificity/separation gates).
+    Direct transfer: our blocks' keys (tokensHybrid + gist + dims) gain
+    generated search-phrases revised against livebench MISSES (the diagnosed
+    set already exists: past-judge-seam, herdr-dep, export-bug). Also
+    LongMemEval-V2 benchmark = our category.
+  - **snifftest** (~/Documents/vibe/snifftest): output-register linting —
+    deliberately NOT majordome (different layer); candidate pi skill.
+    Their 0.4-0.6 "no judgment" dead band validates our abstention gate.
   References for the study phase (do not read until v2):
   - `~/Documents/vibe/supermemory`
   - `~/Documents/vibe/memorybench`
   - `/home/aurel/Documents/current/CognitiveOS/v3` (ingest_formats,
     retrieval_bench prior art)
   - `~/Documents/vibe/context-language-models` (paper + SCR + harness)
+  - `~/Documents/vibe/Self-Index` (label-free key evolution)
+  - `~/Documents/vibe/pi-vcc` (composition method reference)

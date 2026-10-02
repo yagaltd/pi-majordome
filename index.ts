@@ -19,7 +19,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { blockCores, detectBoundaries, parseSession, sessionSlug, textof, tokens } from "./ext/core.ts";
+import { blockCores, detectBoundaries, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
 import { blockMeta, contradicts, dimVector, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev } from "./ext/judges.ts";
 import { injectionText, judgeLine, shouldJudgeLine, route } from "./ext/router.ts";
 import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadVocab, majordomeDir, rewriteBlocks, saveVocab, type Block } from "./ext/store.ts";
@@ -48,14 +48,7 @@ const st: St = {
 	injects: 0,
 };
 
-/** Human-readable session tag: pi slugs dash-join the cwd, so strip the
- * personal prefix and known path roots: --home-USER-Documents-current-X-- → X. */
-function shortTag(slug: string): string {
-	const t = slug.replace(/^-+|-+$/g, "")
-		.replace(/^home-[^-]+-/, "")
-		.replace(/^(Documents-)?(current-|vibe-|github-)/, "");
-	return t || slug;
-}
+
 function shortId(b: Block): string {
 	return `${shortTag(b.session)}:${b.firstTurn}`;
 }

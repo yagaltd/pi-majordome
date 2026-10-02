@@ -12,7 +12,7 @@
  *
  * Pure decision logic here; judges injected so tests run offline.
  */
-import { bm25Rank, federatedOrder, cosineVec, tokens } from "./core.ts";
+import { bm25Rank, federatedOrder, cosineVec, shortTag, tokens } from "./core.ts";
 import type { RoutingIntent } from "./judges.ts";
 import type { Block } from "./store.ts";
 
@@ -118,7 +118,7 @@ export function judgeLine(why: string): string {
 }
 
 export function injectionText(w: Block, terms?: string, resume = false): string {
-	const slug = w.session.replace(/^-+|-+$/g, "").split("/").pop() ?? w.session;
+	const slug = shortTag(w.session);
 	const bits = [`[majordome recall · ${slug} turns ${w.firstTurn}–${w.lastTurn}]`];
 	if (w.gist) bits.push(w.gist);
 	if (w.intent) bits.push(`(intent: ${w.intent})`);
