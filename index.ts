@@ -34,6 +34,7 @@ interface St {
 	routeCache: { query: string; result: Awaited<ReturnType<typeof route>>; contraLine: string | null } | null;
 	uiCtx: { hasUI: boolean; ui: { setStatus(k: string, v: string): void } } | null;
 	injects: number;
+	judgeMode: "off" | "soft" | "strict";
 }
 
 const st: St = {
@@ -46,6 +47,7 @@ const st: St = {
 	routeCache: null,
 	uiCtx: null,
 	injects: 0,
+	judgeMode: (process.env.MAJORDOME_JUDGE as St["judgeMode"]) || "soft",
 };
 
 
@@ -248,8 +250,8 @@ export default function majordome(pi: ExtensionAPI): void {
 			// Debounced: skip when the agent's last message already ends in a
 			// question (the user is probably answering it — no ping-pong).
 			const recentAssistant = [...msgs.slice(0, lastUserIdx)].reverse().find((m) => m?.role === "assistant");
-			const judge = shouldJudgeLine(r, recentAssistant ? textof(recentAssistant.content) : "")
-				? judgeLine(r!.clarifyWhy)
+			const judge = st.judgeMode !== "off" && shouldJudgeLine(r, recentAssistant ? textof(recentAssistant.content) : "")
+				? judgeLine(r!.clarifyWhy, st.judgeMode === "strict" ? "strict" : "soft")
 				: null;
 			// measured noise gate (bench/results/live): true positive 0.707, all
 			// noise ≤ 0.63 — suppress weak dims matches and empty lex matches
@@ -306,7 +308,7 @@ export default function majordome(pi: ExtensionAPI): void {
 				const decisions = lastDecisions(5);
 				const lines = [
 					"╭─ pi-majordome · topic memory",
-					`│ state    ${st.on ? "on" : `off (${st.reason})`} · judges ${hasJev() ? "jev+typellm" : loadKey() ? "typellm" : "none (recall off)"} · injected this session: ${st.injects}`,
+					`│ state    ${st.on ? `on · judge ${st.judgeMode}` : `off (${st.reason})`} · judges ${hasJev() ? "jev+typellm" : loadKey() ? "typellm" : "none (recall off)"} · injected this session: ${st.injects}`,
 					`│ index    ${st.blocks.length} blocks · ${byTag.size} projects · ${st.vocab.length} dims · ~/.pi/majordome/`,
 					`│ projects ${[...byTag].map(([t, n]) => `${t} (${n})`).join(" · ") || "(empty — blocks close as topics move)"}`,
 					"├─ routing log (latest first)",
@@ -481,6 +483,12 @@ export default function majordome(pi: ExtensionAPI): void {
 					return `${mark} ${d.ts.slice(5, 16).replace("T", " ")} ${pad(d.arm, 5)} ${pad(d.winner ?? d.intent, 22)} ${pad(d.score != null ? String(d.score) : "", 5)} ${d.query.slice(0, 44)}`;
 				});
 				notify(["✓ injected  ✗ suppressed  — no retrieval", ...lines].join("\n"));
+				return;
+			}
+			if (cmd === "judge") {
+				if (a !== "off" && a !== "soft" && a !== "strict") return notify(`judge mode: ${st.judgeMode} (off | soft | strict — soft informs the agent, strict orders clarify-first)`);
+				st.judgeMode = a;
+				notify(`judge mode: ${st.judgeMode}`);
 				return;
 			}
 			if (cmd === "on" || cmd === "off") {

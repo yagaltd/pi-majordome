@@ -121,7 +121,8 @@ const inj = injectionText(mkBlock("--home-aurel-Documents-current-code-parser--"
 check("injection: slug + turns + gist", inj.includes("code-parser") && inj.includes("turns 4–9") && inj.startsWith("[majordome recall"));
 
 // ── judge line ──
-check("judgeLine: why included", judgeLine("which module?").includes("which module?") && judgeLine("ok").includes("underspecified"));
+check("judgeLine soft: why + informed tone", judgeLine("which module?").includes("which module?") && judgeLine("ok").includes("Possible ambiguity") && !judgeLine("ok").includes("Ask ONE"));
+check("judgeLine strict: imperative", judgeLine("ok", "strict").includes("Ask ONE"));
 
 // ── cosine ──
 check("cosine: identical = 1", Math.abs(cosineVec(new Map([["a", 1]]), new Map([["a", 1]])) - 1) < 1e-9);

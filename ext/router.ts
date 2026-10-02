@@ -113,8 +113,12 @@ export async function route(opts: {
 }
 
 /** Injection entry (the ToC tail line). Short, tail-only, cache-free zone. */
-export function judgeLine(why: string): string {
-	return `[majordome judge] Your request looks underspecified${why && why !== "ok" ? ` (${why})` : ""}. Ask ONE clarifying question before starting long work.`;
+/** mode soft (default): inform the agent, it decides — it has context and
+ * tools the judge lacks. mode strict: imperative clarify-first. */
+export function judgeLine(why: string, mode: "soft" | "strict" = "soft"): string {
+	const whyTxt = why && why !== "ok" ? ` (${why})` : "";
+	if (mode === "strict") return `[majordome judge] Your request looks underspecified${whyTxt}. Ask ONE clarifying question before starting long work.`;
+	return `[majordome judge] Possible ambiguity${whyTxt}. If your tools or the conversation don't resolve it, ask one clarifying question before long work.`;
 }
 
 export function injectionText(w: Block, terms?: string, resume = false): string {

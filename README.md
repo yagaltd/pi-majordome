@@ -96,12 +96,18 @@ npx tsx ext/judges.ts verify    # one typed call proving key + transport
 ## Turn judge (per-turn annotation)
 
 Every non-continuation turn is judged for ambiguity in the same DAG call.
-When the judge says the request is too vague to act on well, a one-line
-`[majordome judge]` note is appended at the tail telling the AGENT to ask one
-clarifying question before long work (debounced: never back-to-back). When
-memory fires, the recall line also shows how the judge read the request
-(`Read your request as: …`), so the agent can self-correct misreadings.
-Majordome never talks to the user — the agent stays the interface.
+The judge is deliberately **context-blind** (it sees your message + a sliver
+of the last assistant turn — not the conversation), so its verdict is advice
+to the agent, never an order: **soft** mode (default) appends
+`Possible ambiguity (…) — if your tools or the conversation don't resolve it,
+ask one clarifying question` and the agent decides; **strict** mode commands
+clarify-first. Messages pointing at inspectable artifacts (URL, path, repo,
+error output) are never ambiguous — that IS the specification. Debounced so
+it never ping-pongs. Tune with `/majordome judge off|soft|strict` or
+`MAJORDOME_JUDGE` env; `/majordome` dashboard shows the mode. When memory
+fires, the recall line shows how the judge read the request
+(`Read your request as: …`). Majordome never talks to the user — the agent
+stays the interface.
 
 ## Known behaviors (v1, measured)
 
