@@ -91,12 +91,17 @@ new query → 1 TypeLLM call: intent (continue / switch / recall)
    tool results); majordome indexes the session file (ground truth) and
    injects ToC entries at the tail — context-role entries vcc never masks.
    Majordome fails open without vcc (pi compaction partially covers).
-2. **Two judges, one seam.** TypeLLM: strings, choices, DAG chains,
-   multimodal state (router pipeline = one chained DAG call: intent ->
-   rewrite/target-hint). Jev (typesafe.ai): all calibrated numbers — dims,
+2. **Two judges, one seam (configurable).** TypeLLM: strings, choices, DAG
+   chains, multimodal state (router pipeline = one chained DAG call: intent
+   -> rewrite/target-hint). Jev (typesafe.ai): calibrated numbers — dims,
    pair-cell edges, confidence. Number-typed leaves inside a TypeLLM DAG
-   route to Jev or are taken as strings and binned; never trusted as
-   probabilities. Evidence: docs/JUDGE-COMPARISON.md.
+   route to Jev or are taken as strings and binned. Evidence:
+   docs/JUDGE-COMPARISON.md. 100%-TypeLLM deployments are a config flip:
+   non-thinking numbers proved stable (0.95x4, 0.6s) once the degenerate-
+   vector guard is in — the client retries nulls AND all-0.0/all-1.0
+   vectors (the observed flake: valid floats, zero discrimination; retried
+   clean 4/4). Thinking stays per-field for hard reasoning fields; off for
+   dim batteries (adds variance + 15x latency, A/B in JUDGE-COMPARISON).
 3. **Specialists, not averages.** Intent class selects the ranking arm
    (definition/recall -> Jev vector; incident/token-specific -> lexical
    hybrid). Naive RRF of both scored 1/5 vs 2/5 for either specialist;

@@ -90,9 +90,9 @@ _BLOCK_EXTRA = {
 
 
 def _parse_dims(r: dict, dims: list[str]) -> dict | None:
-    """Extract float dims; None if the call returned nulls. Silently zero-filling
-    poisons retrieval — TypeLLM intermittently nulls number-typed questions
-    while string questions in the same call succeed."""
+    """Extract float dims; None on nulls OR degenerate vectors (all-0.0/all-1.0
+    with valid floats — the observed flake mode; retried clean 4/4 in the
+    thinking A/B). Silent zero-fill poisons retrieval."""
     res = r.get("result")
     if not isinstance(res, dict):
         return None
@@ -105,6 +105,9 @@ def _parse_dims(r: dict, dims: list[str]) -> dict | None:
             out[d] = float(v)
         except (TypeError, ValueError):
             return None
+    vals = list(out.values())
+    if all(v == 0.0 for v in vals) or all(v == 1.0 for v in vals):
+        return None  # degenerate: valid floats but zero discrimination (observed flake, retried clean 4/4)
     return out
 
 
