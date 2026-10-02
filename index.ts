@@ -20,7 +20,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, parseSession, sessionSlug, textof, tokens } from "./ext/core.ts";
-import { blockMeta, dimVector, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, hasJev } from "./ext/judges.ts";
+import { blockMeta, dimVector, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev } from "./ext/judges.ts";
 import { injectionText, route } from "./ext/router.ts";
 import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadVocab, majordomeDir, rewriteBlocks, saveVocab, type Block } from "./ext/store.ts";
 
@@ -154,6 +154,20 @@ export default function majordome(pi: ExtensionAPI): void {
 
 		// wire Jev through pi's classifier registry when available (seam default)
 		const reg = (ctx as any)?.modelRegistry;
+		// wire the agent's own chat model as string-extraction fallback
+		// (no TypeLLM key? gists still happen — on the user's tokens)
+		if (reg?.complete) {
+			const chatModel = (ctx as any)?.model ?? null;
+			if (chatModel) {
+				setStreamFn(async (prompt: string) => {
+					const res = await reg.complete(chatModel, {
+						systemPrompt: "You are a terse session archivist. Follow the output format exactly.",
+						messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
+					});
+					return textof((res as any)?.content);
+				});
+			}
+		}
 		if (reg && typeof reg.getAvailableOfType === "function" && typeof reg.classify === "function") {
 			try {
 				const models = (await reg.getAvailableOfType("classifier")) as any[];
@@ -210,8 +224,9 @@ export default function majordome(pi: ExtensionAPI): void {
 			const r = st.routeCache.result;
 			// measured noise gate (bench/results/live): true positive 0.707, all
 			// noise ≤ 0.63 — suppress weak dims matches and empty lex matches
+			const minScore = Number(process.env.MAJORDOME_MIN_SCORE ?? 0.6);
 			const suppressed = !r?.winner?.gist
-				|| (r.arm === "dims" && r.score < 0.6)
+				|| (r.arm === "dims" && r.score < minScore)
 				|| (r.arm === "lex" && r.score === 0);
 			if (suppressed) {
 				if (fresh) appendDecision({
@@ -241,7 +256,7 @@ export default function majordome(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("majordome", {
-		description: "Topic memory dashboard (bare) · list · show <id> · forget · export · reindex · on/off",
+		description: "Topic memory dashboard (bare) · list · show · forget · export · reindex · stats · log · on/off",
 		handler: async (args, ctx) => {
 			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
 			const cmd = parts[0];
@@ -399,6 +414,41 @@ export default function majordome(pi: ExtensionAPI): void {
 				const n = await indexSession();
 				notify(`reindexed current session: ${n} block(s) closed (judges: ${loadKey() ? "live" : "absent — gistless"})`);
 				status();
+				return;
+			}
+			if (cmd === "stats") {
+				const all = lastDecisions(100000).reverse(); // oldest → newest
+				if (!all.length) return notify("no routing decisions logged yet");
+				const inj = all.filter((d) => d.injected);
+				const sup = all.filter((d) => !d.injected && d.winner);
+				const none = all.filter((d) => !d.injected && !d.winner);
+				const cont = none.filter((d) => d.intent === "continuation");
+				const avg = (arr: typeof all) => (arr.length ? Math.round((arr.reduce((s2, d) => s2 + (d.score ?? 0), 0) / arr.length) * 100) / 100 : 0);
+				const arms = new Map<string, number>();
+				for (const d of inj) arms.set(d.arm, (arms.get(d.arm) ?? 0) + 1);
+				notify([
+					"╭─ /majordome stats (decision log)",
+					`│ turns seen      ${all.length}`,
+					`│ no retrieval    ${none.length}  (continuation gate: ${cont.length})`,
+					`│ injected        ${inj.length}  (avg score ${avg(inj)})`,
+					`│ suppressed      ${sup.length}  (avg score ${avg(sup)} — gate rejects below it)`,
+					`│ arms (injected) ${[...arms].map(([a2, n]) => `${a2} ${n}`).join(" · ") || "-"}`,
+					"├─ reading the gate",
+					`│ recall precision proxy: injected avg (${avg(inj)}) vs suppressed avg (${avg(sup)})`,
+					`│ gate keeps injecting when the gap stays wide; if it narrows, raise MAJORDOME_MIN_SCORE`,
+					"╰─",
+				].join("\n"));
+				return;
+			}
+			if (cmd === "log") {
+				const n = Math.min(Number(a) || 15, 100);
+				const rows = lastDecisions(100000).reverse().slice(0, n);
+				if (!rows.length) return notify("no routing decisions logged yet");
+				const lines = rows.map((d) => {
+					const mark = d.injected ? "✓" : d.winner ? "✗" : "—";
+					return `${mark} ${d.ts.slice(5, 16).replace("T", " ")} ${pad(d.arm, 5)} ${pad(d.winner ?? d.intent, 22)} ${pad(d.score != null ? String(d.score) : "", 5)} ${d.query.slice(0, 44)}`;
+				});
+				notify(["✓ injected  ✗ suppressed  — no retrieval", ...lines].join("\n"));
 				return;
 			}
 			if (cmd === "on" || cmd === "off") {

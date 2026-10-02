@@ -11,7 +11,7 @@ import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSession, tokens, jaccard, detectBoundaries, blockCores, bm25Rank, federatedOrder, cosineVec } from "./core.ts";
-import { parseDims } from "./judges.ts";
+import { parseDims, routingIntent, setClassifyFn, resetClassifyFn } from "./judges.ts";
 import { timeTravel, rankArm, injectionText, armFor } from "./router.ts";
 import type { Block } from "./store.ts";
 
@@ -147,6 +147,19 @@ if (process.argv.includes("--parity")) {
 	const acc = Math.round((correct / rt.length) * 1000) / 1000;
 	console.log(`parity: ${rt.length} turns -> ${firsts.length} blocks, clustering accuracy ${acc} (bench EMA: 0.903)`);
 	check("parity within 0.05 of bench 0.903", Math.abs(acc - 0.903) <= 0.05);
+}
+
+// ── Jev-only config: intent via classifier choice, no TypeLLM key ──
+{
+	process.env.MAJORDOME_KEY_FILE = "/tmp/definitely-missing-majordome-key";
+	setClassifyFn(async () => ({ model: "fake-jev", answers: { intent: { choice: "definition_recall" } } }));
+	const r = await routingIntent("remind me how the watcher works");
+	check("jev-only: recall routes via classifier", r?.intent === "definition_recall");
+	setClassifyFn(async () => ({ model: "fake-jev", answers: { intent: { choice: "continuation" } } }));
+	const r2 = await routingIntent("go");
+	check("jev-only: continuation gated", r2 === null);
+	resetClassifyFn();
+	delete process.env.MAJORDOME_KEY_FILE;
 }
 
 if (failures) {

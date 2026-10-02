@@ -22,7 +22,7 @@ export const HOSTED_URL = "https://api.typellm.ai";
 const TIMEOUT_MS = 30_000;
 
 export function defaultKeyFile(): string {
-	return join(homedir(), ".config", "pi-majordome", "typellm.key");
+	return process.env.MAJORDOME_KEY_FILE?.trim() || join(homedir(), ".config", "pi-majordome", "typellm.key");
 }
 
 export function loadKey(): string | null {
@@ -74,6 +74,8 @@ export function parseDims(vals: (number | boolean | null | undefined)[], n: numb
 
 // ── block-close meta (TypeLLM strings) ──────────────────────────────────────
 
+const INTENTS = new Set(["implementation", "investigation", "evaluation", "documentation", "discussion"]);
+
 export interface BlockMeta {
 	intent: string | null;
 	gist: string | null;
@@ -82,6 +84,22 @@ export interface BlockMeta {
 /** intent + gist, one batched call. Null on any failure — block indexes
  * without meta and the next reindex can backfill. */
 export async function blockMeta(text: string): Promise<BlockMeta | null> {
+	if (!loadKey() && streamFn) {
+		// divert to the agent's own model: extraction without TypeLLM
+		try {
+			const out = await streamFn(
+				`You will be given a segment of a coding-agent session. Reply with EXACTLY two lines and nothing else:\nintent: <one of implementation, investigation, evaluation, documentation, discussion>\ngist: <one sentence: what was done or decided>\n\nSegment:\n${text.slice(0, 6000)}`,
+			);
+			if (out) {
+				const intent = out.match(/intent:\s*([a-z]+)/i)?.[1]?.toLowerCase() ?? null;
+				const gist = out.match(/gist:\s*(.+)/i)?.[1]?.trim();
+				if (gist) return { intent: intent && INTENTS.has(intent) ? intent : null, gist };
+			}
+		} catch {
+			// fall through to null
+		}
+		return null;
+	}
 	const r = await generate(text.slice(0, 6000), {
 		intent: {
 			type: "string",
@@ -134,6 +152,33 @@ export interface RoutingIntent {
 }
 
 export async function routingIntent(userMessage: string, recentAssistant?: string): Promise<RoutingIntent | null> {
+	// Jev-only config: intent is a plain choice question (no DAG, no rewrite —
+	// the raw query serves as search terms; dims come from Jev noul batteries)
+	if (!loadKey() && classifyFn) {
+		try {
+			const res = await classifyFn(
+				{ msg: userMessage.slice(0, 500), recent: (recentAssistant ?? "").slice(-300) },
+				{
+					intent: {
+						type: "choice",
+						instructions:
+							"Classify the user message in a coding-agent chat. continuation: ONLY a pure proceed-order with no question and no new information (go, ok, continue). definition_recall: asks what something is, how it works, or to recall past work — even casually phrased. incident_specific: refers to a concrete event (a crash, a bug, a run). When unsure between continuation and a recall class, choose the recall class.",
+						criteria: {
+							definition_recall: "asks what something is / how it works / remind me / summarize past work",
+							incident_specific: "refers to a concrete event: a crash, a bug, a specific run, something broken",
+							continuation: "pure proceed-order or acknowledgment, no question, no new information",
+						},
+					},
+				},
+			);
+			const a = res?.answers?.intent as string | { choice?: string } | undefined;
+			const label = typeof a === "string" ? a : (a as any)?.choice;
+			if (label && label !== "continuation") return { intent: label, searchTerms: "" };
+			return null;
+		} catch {
+			return null;
+		}
+	}
 	const context = recentAssistant?.trim()
 		? `[recent assistant message]\n${recentAssistant.trim().slice(-400)}\n\n[user message]\n${userMessage}`
 		: userMessage;
@@ -227,6 +272,15 @@ export interface ClassifyResult {
 export type ClassifyFn = (state: Record<string, unknown>, questions: Record<string, unknown>) => Promise<ClassifyResult | null>;
 
 let classifyFn: ClassifyFn | null = null;
+/** Optional diversion transport: the user's own chat model (reg.complete).
+ * Used for string extraction (gists) when no TypeLLM key exists. */
+let streamFn: ((prompt: string) => Promise<string | null>) | null = null;
+export function setStreamFn(fn: (prompt: string) => Promise<string | null>): void {
+	streamFn = fn;
+}
+export function hasStreamFn(): boolean {
+	return streamFn !== null;
+}
 /** Called by the extension factory once a context exposes modelRegistry. */
 export function setClassifyFn(fn: ClassifyFn): void {
 	classifyFn = fn;

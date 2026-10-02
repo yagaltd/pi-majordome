@@ -63,11 +63,21 @@ npx tsx ext/judges.ts setup     # paste TypeLLM key → ~/.config/pi-majordome/t
 npx tsx ext/judges.ts verify    # one typed call proving key + transport
 ```
 
-- **TypeLLM key: required for recall** (the intent DAG is the router's trigger).
-  Without it majordome still indexes (turn_end) but gists stay empty and no
-  injection ever fires; the status line says `recall off — run npx tsx ext/judges.ts setup`.
-- **Jev: optional.** Rides pi's classifier registry (`TYPESAFE_API_KEY` or
-  `/login`); guarded TypeLLM numbers take over automatically when absent.
+## Judge configs (all automatic, detected per session)
+
+| you have | strings/gists | routing intent | dims numbers | behavior |
+|---|---|---|---|---|
+| both keys (recommended) | TypeLLM | TypeLLM DAG | Jev | full measured behavior |
+| TypeLLM only | TypeLLM | TypeLLM DAG | guarded TypeLLM numbers | identical quality (A/B-proven config) |
+| Jev only (no setup CLI needed) | **your chat model** (`reg.complete` — no extra key) | **Jev choice** | Jev | no query rewrite (raw terms); otherwise full router |
+| neither | your chat model | — | — | indexing + gists only, recall off (status says so) |
+
+- **TypeLLM key: enables the measured DAG path** (intent + search-term rewrite).
+- **Jev: rides pi's classifier registry** (`TYPESAFE_API_KEY` or `/login`).
+- Gist fallback uses **your own chat model** — gists cost a few hundred tokens
+  at block close, zero extra API keys.
+- `MAJORDOME_MIN_SCORE` (default 0.6) tunes the injection noise gate — see
+  `/majordome stats` for the injected-vs-suppressed score gap.
 - **Per session: nothing.** New and resumed sessions self-bootstrap
   (session_start reloads index + wiring; interrupted open tails are closed on
   the next turn_end). One-time history ingest, optional: `npx tsx tools/backfill.ts`.
