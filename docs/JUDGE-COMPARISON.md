@@ -120,3 +120,27 @@ names rejected with HTTP 400: `thinking`, `thinking_effort`,
 `model_options.thinking_effort`. If thinking stabilizes *and* sharpens the
 numbers, the Jev seam can be re-benchmarked; until then numbers route to
 Jev, whose battery was deterministic-clean across all 17 + 77 judgments.
+
+## Addendum 2 (2026-09-28): thinking_effort A/B — thinking does not help dims
+
+Per the docs, `thinking_effort` is a per-question field property
+(`"low"`=512, `"medium"`=2048, `"high"`=4096; `"thinking": "auto"` lets the
+service choose). A/B on the formerly all-zero battery (verbatim-94, 7 dims,
+4 repeats per setting, raw in `bench/results/thinking_ab.json`):
+
+| setting | routing across repeats | spread | tok/call | s/call |
+|---|---|---|---|---|
+| none | 0.95 0.95 0.95 0.95 | **stable** | 0 | 0.6 |
+| low | 0.8 0.8 0.95 0.7 | ±0.125 | ~2144 | 11.6 |
+| medium | 0.7 0.8 0.7 0.85 | ±0.075 | ~2354 | 14.2 |
+| high | 0.75 0.85 0.8 0.85 | ±0.05 | ~2006 | 9.1 |
+| auto | 0.9 0.8 0.8 0.85 | ±0.05 | ~1700 | 9.2 |
+
+Verdict: for constrained probability dims, **thinking adds variance and
+latency, not precision** — non-thinking is dead-stable here, and `auto`
+itself classifies most dims as none/low. The slice-3 all-zero incident is
+therefore a *rare transient flake* (2 occurrences in ~150 study calls), not
+mode behavior: the null-guard's retry-on-degenerate covers it. Thinking
+stays available per-field for hard reasoning fields (DAG verifier), off for
+dim batteries. Jev seam unchanged: it remains deterministic-clean, and the
+dims batteries are its native shape.
