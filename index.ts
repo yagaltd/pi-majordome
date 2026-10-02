@@ -21,7 +21,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, parseSession, sessionSlug, textof, tokens } from "./ext/core.ts";
 import { blockMeta, dimVector, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev } from "./ext/judges.ts";
-import { injectionText, judgeLine, route } from "./ext/router.ts";
+import { injectionText, judgeLine, shouldJudgeLine, route } from "./ext/router.ts";
 import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadVocab, majordomeDir, rewriteBlocks, saveVocab, type Block } from "./ext/store.ts";
 
 interface St {
@@ -223,8 +223,13 @@ export default function majordome(pi: ExtensionAPI): void {
 			}
 			const r = st.routeCache.result;
 			// judge line: ambiguity verdict surfaces to the AGENT even when memory
-			// is suppressed — the agent asks, majordome never talks to the user
-			const judge = r && r.intent !== "continuation" && r.needClarification ? judgeLine(r.clarifyWhy) : null;
+			// is suppressed — the agent asks, majordome never talks to the user.
+			// Debounced: skip when the agent's last message already ends in a
+			// question (the user is probably answering it — no ping-pong).
+			const recentAssistant = [...msgs.slice(0, lastUserIdx)].reverse().find((m) => m?.role === "assistant");
+			const judge = shouldJudgeLine(r, recentAssistant ? textof(recentAssistant.content) : "")
+				? judgeLine(r!.clarifyWhy)
+				: null;
 			// measured noise gate (bench/results/live): true positive 0.707, all
 			// noise ≤ 0.63 — suppress weak dims matches and empty lex matches
 			const minScore = Number(process.env.MAJORDOME_MIN_SCORE ?? 0.6);

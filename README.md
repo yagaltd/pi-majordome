@@ -82,6 +82,16 @@ npx tsx ext/judges.ts verify    # one typed call proving key + transport
   (session_start reloads index + wiring; interrupted open tails are closed on
   the next turn_end). One-time history ingest, optional: `npx tsx tools/backfill.ts`.
 
+## Turn judge (per-turn annotation)
+
+Every non-continuation turn is judged for ambiguity in the same DAG call.
+When the judge says the request is too vague to act on well, a one-line
+`[majordome judge]` note is appended at the tail telling the AGENT to ask one
+clarifying question before long work (debounced: never back-to-back). When
+memory fires, the recall line also shows how the judge read the request
+(`Read your request as: …`), so the agent can self-correct misreadings.
+Majordome never talks to the user — the agent stays the interface.
+
 ## Commands
 
 ```
