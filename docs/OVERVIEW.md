@@ -96,3 +96,37 @@ Design laws: place invalidation (tail free, switches are natural resets) ·
 session file never rewritten · one judge per data type (TypeLLM strings/DAG,
 Jev numbers) · three index levels, messages unindexed · specialists not
 averages · fail-open + visible + purgeable.
+
+## Roadmap
+
+### v1.x — traceability & export (independent of git)
+
+Source of truth stays the pi session JSONL (append-only, full fidelity:
+every user/assistant message, tool call + result, compaction records,
+extension custom entries). majordome adds the classified layer on top.
+
+- **Block -> ADR export**: pure function over the index (frontmatter:
+  session id, turn range, intent, dims; body: gist + decisions).
+  Exported `.md` files can round-trip back in as ingest.
+- **Nested-call note**: majordome's index is unaffected by pi's bounded
+  `nestedCalls` records — it indexes user + assistant text, which always
+  appear in full. Verbatim replay of deeply nested tool *results* is a
+  detail-recall limitation (vcc layer), not an index gap.
+
+### v2 — orchestrator (firstmate-style) + memory consolidation
+
+- **Orchestrator**: one chat dispatching per-project worker pi sessions,
+  referencing `~/Documents/vibe/firstmate` (visible panes, worktree
+  isolation, zero-token supervision, restart-proof state); majordome is the
+  shared brain — every spawned session indexed the same way.
+- **Memory consolidation & external documents** (Instinct/supermemory
+  inspired: git-tracked markdown memory, daily consolidation, one-pager):
+  md+frontmatter ingest adapter (frontmatter -> metadata/dims, body ->
+  block text) so retrieval spans chats AND curated docs (ADRs, specs,
+  operator-memory-style notes); per-project rolling "one-pager" from top
+  community gists; consolidation/forgetting policy.
+  References for the study phase (do not read until v2):
+  - `~/Documents/vibe/supermemory`
+  - `~/Documents/vibe/memorybench`
+  - `/home/aurel/Documents/current/CognitiveOS/v3` (ingest_formats,
+    retrieval_bench prior art)

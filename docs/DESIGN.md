@@ -31,7 +31,9 @@ tools: pi-vcc (per-session tool-result masking, pull-only recall), operator-memo
    free prefilter. (Named probability-vectors + cosine are validated by
    jevbeddings: 83.67% vs BM25 80.10% on BANKING77 — but slice-one shows the
    feature set matters more than the mechanism; see EVAL-SLICE1.)
-4. **Three index levels, messages unindexed.** Turn (mechanical: token set,
+4. **Three index levels, messages unindexed.** (Nested-call records do not
+   touch the index: majordome reads user + assistant text, always present in
+   full; bounded `nestedCalls` affect only detail recall — vcc's layer.) Turn (mechanical: token set,
    codemap effort verdict reused) → block (semantic: one TypeLLM call at
    block-close) → session (derived: dominant community; provenance only).
 5. **Leiden forms the group layer mechanically.** Edges = Jaccard + sampled pair
