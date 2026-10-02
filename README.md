@@ -103,6 +103,19 @@ memory fires, the recall line also shows how the judge read the request
 (`Read your request as: …`), so the agent can self-correct misreadings.
 Majordome never talks to the user — the agent stays the interface.
 
+## Known behaviors (v1, measured)
+
+- **min-size guard**: a topic switch needs 4+ turns since the last boundary
+  before a block can close — closes may lag a few turns; nothing is lost, the
+  next boundary picks it up. Chatty one-liner sessions over-segment (EMA on
+  tiny turns); coding sessions are the tuned distribution.
+- **dims can fail open empty** (degenerate-vector guard) — the block still
+  indexes with gist + lex retrieval; dims backfill on `reindex`.
+- **chatty sessions trip the noise gate differently** than coding sessions —
+  `/majordome stats` shows the injected-vs-suppressed gap; tune
+  `MAJORDOME_MIN_SCORE` from it.
+- `reindex all` sweeps every session on disk — expect judge calls per block.
+
 ## Personality
 
 Majordome never talks to the user — the agent does. Your `AGENTS.md` (per
