@@ -21,17 +21,17 @@
     },
     {
       "tau": 0.04,
-      "n_blocks": 8,
-      "precision": 0.375,
+      "n_blocks": 7,
+      "precision": 0.429,
       "recall": 0.5,
-      "f1": 0.429
+      "f1": 0.462
     },
     {
       "tau": 0.055,
-      "n_blocks": 10,
-      "precision": 0.2,
+      "n_blocks": 9,
+      "precision": 0.222,
       "recall": 0.333,
-      "f1": 0.25
+      "f1": 0.267
     },
     {
       "tau": 0.07,
@@ -190,12 +190,12 @@
   ],
   "best": {
     "tau": 0.04,
-    "n_blocks": 8,
-    "precision": 0.375,
+    "n_blocks": 7,
+    "precision": 0.429,
     "recall": 0.5,
-    "f1": 0.429
+    "f1": 0.462
   },
-  "cluster_accuracy": 0.757,
+  "cluster_accuracy": 0.748,
   "retrieval": [
     {
       "probe": "verbatim-94",
@@ -257,13 +257,13 @@
       "jac_union": 3,
       "bm25_union": 2,
       "jac_hybrid": 3,
-      "bm25_hybrid": 4,
-      "bm25_hyb_recency": 4,
+      "bm25_hybrid": 3,
+      "bm25_hyb_recency": 3,
       "cosine": 2,
       "query_vec": {
         "watcher_bench_infra": 0.0,
         "edit_override_decider": 0.0,
-        "classifier_key_setup": 0.95,
+        "classifier_key_setup": 0.9,
         "model_routing_evals": 0.0,
         "docs_pii_audit": 0.0,
         "context_memory_design": 0.0
@@ -277,7 +277,7 @@
       "jac_hybrid": 1,
       "bm25_hybrid": 1,
       "bm25_hyb_recency": 1,
-      "cosine": 3,
+      "cosine": 2,
       "query_vec": {
         "watcher_bench_infra": 1.0,
         "edit_override_decider": 0.0,
@@ -311,7 +311,7 @@
     },
     "cosine": {
       "recall@1": "0/5",
-      "recall@2": "2/5"
+      "recall@2": "3/5"
     }
   },
   "block_gists": [
@@ -321,7 +321,7 @@
         1,
         45
       ],
-      "gist": "Inspected the code-parser repository to confirm that the watcher performs incremental, file-level re-parsing via hash caching rather than updating a static JSON file in place.",
+      "gist": "The code-parser CLI generates a full JSONL snapshot of the codebase, and the watcher incrementally re-parses only changed files to stream updates, rather than modifying a static JSON file in place.",
       "vec": {
         "watcher_bench_infra": 0.0,
         "edit_override_decider": 0.0,
@@ -339,7 +339,7 @@
       ],
       "gist": "Refactored v12.1 to replace custom Jev transport and credential logic with pi's official registry and codemode, deleting 250 lines of code and verifying all behaviors via local installation.",
       "vec": {
-        "watcher_bench_infra": 0.1,
+        "watcher_bench_infra": 0.0,
         "edit_override_decider": 0.0,
         "classifier_key_setup": 0.85,
         "model_routing_evals": 0.0,
@@ -353,12 +353,12 @@
         61,
         76
       ],
-      "gist": "Established TypeLLM as a first-class provider alongside Jev, leveraging its DAG capabilities for efficient decision trees and extended features like free-text and thinking traces.",
+      "gist": "Established TypeLLM as a first-class provider alongside Jev, leveraging its DAG capabilities for decision trees and extended features like free-text and thinking traces.",
       "vec": {
         "watcher_bench_infra": 0.0,
         "edit_override_decider": 0.0,
         "classifier_key_setup": 0.95,
-        "model_routing_evals": 0.95,
+        "model_routing_evals": 0.0,
         "docs_pii_audit": 0.0,
         "context_memory_design": 0.0
       }
@@ -369,7 +369,7 @@
         77,
         92
       ],
-      "gist": "Discovered and fixed a critical contract bug where codemap tools returned strings instead of arrays, causing 100% tool execution failures and opaque errors to the model, then re-ran a clean 18-run evaluation to establish accurate baseline metrics for pi-alone versus codemap+jev/typellm configurations.",
+      "gist": "Discovered and fixed a critical contract bug where codemap tools returned strings instead of arrays, causing 100% tool execution failures and opaque errors to the model, then re-ran a clean 18-run evaluation to establish accurate baseline metrics for pi-alone versus codemap+jev and codemap+typellm.",
       "vec": {
         "watcher_bench_infra": 0.95,
         "edit_override_decider": 0.0,
@@ -401,7 +401,7 @@
         97,
         103
       ],
-      "gist": "Brainstormed and grounded a 'topic memory' extension design for pi, verifying that pi-vcc uses cache-safe masking rather than sliding windows, and proposing a three-layer architecture (L1 indexer, L2 router, L3 context injector) that leverages the `context` event for frontend-only topic switching without invalidating the KV cache.",
+      "gist": "Brainstormed and grounded a 'topic memory' extension design for pi, verifying that pi-vcc uses cache-safe masking rather than sliding windows, and proposing a three-layer architecture (L1 indexer, L2 router, L3 context injector) that uses TypeLLM for topic classification and a side-car index to manage context without invalidating the KV cache.",
       "vec": {
         "watcher_bench_infra": 0.0,
         "edit_override_decider": 0.0,

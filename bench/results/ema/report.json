@@ -1,0 +1,328 @@
+{
+  "turns": 103,
+  "gold_blocks": 6,
+  "dimset": "v1",
+  "recency": 0.0,
+  "strategy": "ema",
+  "sweep": [
+    {
+      "tau": 0.01,
+      "n_blocks": 3,
+      "precision": 0.333,
+      "recall": 0.167,
+      "f1": 0.222
+    },
+    {
+      "tau": 0.025,
+      "n_blocks": 4,
+      "precision": 0.25,
+      "recall": 0.167,
+      "f1": 0.2
+    },
+    {
+      "tau": 0.04,
+      "n_blocks": 6,
+      "precision": 0.167,
+      "recall": 0.167,
+      "f1": 0.167
+    },
+    {
+      "tau": 0.055,
+      "n_blocks": 8,
+      "precision": 0.125,
+      "recall": 0.167,
+      "f1": 0.143
+    },
+    {
+      "tau": 0.07,
+      "n_blocks": 14,
+      "precision": 0.286,
+      "recall": 0.667,
+      "f1": 0.4
+    },
+    {
+      "tau": 0.085,
+      "n_blocks": 25,
+      "precision": 0.16,
+      "recall": 0.667,
+      "f1": 0.258
+    },
+    {
+      "tau": 0.1,
+      "n_blocks": 32,
+      "precision": 0.156,
+      "recall": 0.833,
+      "f1": 0.263
+    },
+    {
+      "tau": 0.115,
+      "n_blocks": 45,
+      "precision": 0.133,
+      "recall": 1.0,
+      "f1": 0.235
+    },
+    {
+      "tau": 0.13,
+      "n_blocks": 61,
+      "precision": 0.148,
+      "recall": 1.5,
+      "f1": 0.269
+    },
+    {
+      "tau": 0.145,
+      "n_blocks": 79,
+      "precision": 0.165,
+      "recall": 2.167,
+      "f1": 0.306
+    },
+    {
+      "tau": 0.16,
+      "n_blocks": 89,
+      "precision": 0.169,
+      "recall": 2.5,
+      "f1": 0.316
+    },
+    {
+      "tau": 0.175,
+      "n_blocks": 95,
+      "precision": 0.179,
+      "recall": 2.833,
+      "f1": 0.337
+    },
+    {
+      "tau": 0.19,
+      "n_blocks": 99,
+      "precision": 0.172,
+      "recall": 2.833,
+      "f1": 0.324
+    },
+    {
+      "tau": 0.205,
+      "n_blocks": 101,
+      "precision": 0.168,
+      "recall": 2.833,
+      "f1": 0.318
+    },
+    {
+      "tau": 0.22,
+      "n_blocks": 101,
+      "precision": 0.168,
+      "recall": 2.833,
+      "f1": 0.318
+    },
+    {
+      "tau": 0.235,
+      "n_blocks": 102,
+      "precision": 0.167,
+      "recall": 2.833,
+      "f1": 0.315
+    },
+    {
+      "tau": 0.25,
+      "n_blocks": 102,
+      "precision": 0.167,
+      "recall": 2.833,
+      "f1": 0.315
+    },
+    {
+      "tau": 0.265,
+      "n_blocks": 102,
+      "precision": 0.167,
+      "recall": 2.833,
+      "f1": 0.315
+    },
+    {
+      "tau": 0.28,
+      "n_blocks": 102,
+      "precision": 0.167,
+      "recall": 2.833,
+      "f1": 0.315
+    },
+    {
+      "tau": 0.295,
+      "n_blocks": 102,
+      "precision": 0.167,
+      "recall": 2.833,
+      "f1": 0.315
+    },
+    {
+      "tau": 0.31,
+      "n_blocks": 102,
+      "precision": 0.167,
+      "recall": 2.833,
+      "f1": 0.315
+    },
+    {
+      "tau": 0.325,
+      "n_blocks": 102,
+      "precision": 0.167,
+      "recall": 2.833,
+      "f1": 0.315
+    },
+    {
+      "tau": 0.34,
+      "n_blocks": 102,
+      "precision": 0.167,
+      "recall": 2.833,
+      "f1": 0.315
+    },
+    {
+      "tau": 0.355,
+      "n_blocks": 102,
+      "precision": 0.167,
+      "recall": 2.833,
+      "f1": 0.315
+    },
+    {
+      "tau": 0.37,
+      "n_blocks": 102,
+      "precision": 0.167,
+      "recall": 2.833,
+      "f1": 0.315
+    },
+    {
+      "tau": 0.385,
+      "n_blocks": 102,
+      "precision": 0.167,
+      "recall": 2.833,
+      "f1": 0.315
+    }
+  ],
+  "best": {
+    "tau": 0.07,
+    "n_blocks": 14,
+    "precision": 0.286,
+    "recall": 0.667,
+    "f1": 0.4
+  },
+  "cluster_accuracy": 0.903,
+  "retrieval": [
+    {
+      "probe": "verbatim-94",
+      "expect": "routing phase 1/2 + virtual model",
+      "jac_union": 4,
+      "bm25_union": 3,
+      "jac_hybrid": 3,
+      "bm25_hybrid": 3,
+      "bm25_hyb_recency": null
+    },
+    {
+      "probe": "verbatim-52",
+      "expect": "pi-codemap jev + consolidation + decider",
+      "jac_union": 2,
+      "bm25_union": 2,
+      "jac_hybrid": 1,
+      "bm25_hybrid": 1,
+      "bm25_hyb_recency": null
+    },
+    {
+      "probe": "para-routing",
+      "expect": "routing phase 1/2 + virtual model",
+      "jac_union": 2,
+      "bm25_union": 2,
+      "jac_hybrid": 2,
+      "bm25_hybrid": 2,
+      "bm25_hyb_recency": null
+    },
+    {
+      "probe": "para-typellm-key",
+      "expect": "typellm research + per-repo keys",
+      "jac_union": 3,
+      "bm25_union": 2,
+      "jac_hybrid": 3,
+      "bm25_hybrid": 3,
+      "bm25_hyb_recency": null
+    },
+    {
+      "probe": "para-crash",
+      "expect": "code-parser watcher + v11/v12 bench",
+      "jac_union": 6,
+      "bm25_union": 2,
+      "jac_hybrid": 1,
+      "bm25_hybrid": 1,
+      "bm25_hyb_recency": null
+    }
+  ],
+  "summary": {
+    "jac_union": {
+      "recall@1": "0/5",
+      "recall@2": "2/5"
+    },
+    "bm25_union": {
+      "recall@1": "0/5",
+      "recall@2": "4/5"
+    },
+    "jac_hybrid": {
+      "recall@1": "2/5",
+      "recall@2": "3/5"
+    },
+    "bm25_hybrid": {
+      "recall@1": "2/5",
+      "recall@2": "3/5"
+    },
+    "bm25_hyb_recency": {
+      "recall@1": "-",
+      "recall@2": "-"
+    },
+    "cosine": {
+      "recall@1": "-",
+      "recall@2": "-"
+    }
+  },
+  "block_gists": [
+    {
+      "label": "code-parser watcher + v11/v12 bench",
+      "turns": [
+        1,
+        45
+      ],
+      "gist": "",
+      "vec": null
+    },
+    {
+      "label": "pi-codemap jev + consolidation + decider",
+      "turns": [
+        46,
+        60
+      ],
+      "gist": "",
+      "vec": null
+    },
+    {
+      "label": "typellm research + per-repo keys",
+      "turns": [
+        61,
+        76
+      ],
+      "gist": "",
+      "vec": null
+    },
+    {
+      "label": "routing phase 1/2 + virtual model",
+      "turns": [
+        77,
+        92
+      ],
+      "gist": "",
+      "vec": null
+    },
+    {
+      "label": "docs + PII audit",
+      "turns": [
+        93,
+        96
+      ],
+      "gist": "",
+      "vec": null
+    },
+    {
+      "label": "infinite-chat brainstorm",
+      "turns": [
+        97,
+        103
+      ],
+      "gist": "",
+      "vec": null
+    }
+  ]
+}

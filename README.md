@@ -4,11 +4,12 @@ Topic-scoped, cross-session memory for pi agents — "infinite chat": keep
 chatting across projects and weeks; the right past context loads when the
 query calls for it, without wrecking the provider's prompt cache.
 
-Status: **slice-one eval done** — harness + honest baseline numbers. Read
-[docs/DESIGN.md](docs/DESIGN.md) for the architecture and
-[docs/EVAL-SLICE1.md](docs/EVAL-SLICE1.md) for first results: block-close
-gists/intents are strong; retrieval needs better features than session-topic
-dims (hybrid gist-scoring is the next test).
+Status: **slice-two eval done**. Read [docs/DESIGN.md](docs/DESIGN.md) for the
+architecture, [docs/EVAL-SLICE1.md](docs/EVAL-SLICE1.md) and
+[docs/EVAL-SLICE2.md](docs/EVAL-SLICE2.md) for results. Headline: hybrid BM25
+over user-turns + tail + gist wins retrieval (recall@1 0/5 -> 2/5, free); EMA
+boundaries double clustering accuracy (0.757 -> 0.903); the named-vector tier
+failed honest measurement and is demoted to filter — ranking is lexical.
 
 ## Quick start
 
@@ -31,7 +32,8 @@ The hand-labeled answer key for the reference session is `bench/key.json`
 bench/eval.py             parser + boundary sweep + clustering + retrieval probes
 bench/typellm_client.py   /v1/generate client (dims + intent + gist, one batched call)
 bench/key.json            ground truth for the reference session
-bench/results/            reports
+bench/results/            reports (v1-clean, v2, ema)
+docs/EVAL-SLICE2.md       slice-two: hybrid retrieval, EMA, v2 dims
 docs/DESIGN.md            design ledger (brainstorm trace, design laws)
 docs/EVAL-SLICE1.md       slice-one methodology, results, diagnosis
 ```

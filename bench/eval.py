@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Slice-one eval: offline replay of a pi session through the infinite-chat indexer.
+"""Slice-one/two eval: offline replay of a pi session through the topic-memory indexer.
 
-Pipeline: session JSONL -> turns -> boundary detection (Jaccard sweep) ->
-block segmentation scored against a hand-labeled key -> retrieval probes
-(Jaccard vs BM25 vs TypeLLM named-vector cosine).
+Pipeline: session JSONL -> turns -> boundary detection (Jaccard sweep:
+chained/centroid/ema) -> block segmentation scored against a hand-labeled key ->
+retrieval probes (union vs hybrid lexical, optional TypeLLM named-vector cosine,
+optional recency tiebreak).
 
 Usage:
   python3 bench/eval.py --session <path.jsonl> --key bench/key.json
-  python3 bench/eval.py ... --classify          # adds TypeLLM vector tier
-  python3 bench/eval.py ... --strategy centroid --tau 0.08
+  python3 bench/eval.py ... --classify               # v1 dims (slice-one)
+  python3 bench/eval.py ... --classify --dimset v2   # artifact/activity dims
+  python3 bench/eval.py ... --strategy ema --recency 0.05
 """
 from __future__ import annotations
 
@@ -67,7 +69,13 @@ def parse_session(path: Path) -> list[dict]:
             norm = re.sub(r"\s+", " ", txt.lower())
             if cur and cur["user_norm"] == norm:
                 continue  # retried turn
-            cur = {"user": txt, "user_norm": norm, "text": txt, "n": len(turns) + 1}
+            cur = {
+                "user": txt,
+                "user_norm": norm,
+                "text": txt,
+                "n": len(turns) + 1,
+                "utokens": tokens(txt),
+            }
             turns.append(cur)
         elif role == "assistant" and cur is not None:
             cur["text"] += "\n" + txt
@@ -82,7 +90,8 @@ def jaccard(a: set, b: set) -> float:
     return len(a & b) / len(a | b)
 
 
-def detect_boundaries(turns: list[dict], strategy: str, tau: float, min_size: int = 2) -> list[int]:
+def detect_boundaries(turns: list[dict], strategy: str, tau: float, min_size: int = 2,
+                      decay: float = 0.85, keep: float = 0.3) -> list[int]:
     """Return first-turn indices of each predicted block (always includes turn 1)."""
     bounds = [1]
     if strategy == "chained":
@@ -91,13 +100,26 @@ def detect_boundaries(turns: list[dict], strategy: str, tau: float, min_size: in
                 continue
             if jaccard(turns[i]["tokens"], turns[i - 1]["tokens"]) < tau:
                 bounds.append(i + 1)
+    elif strategy == "ema":
+        # running token set with exponential decay: old topics fade, recent dominate
+        ema: dict[str, float] = {}
+        for i, t in enumerate(turns):
+            for k in list(ema):
+                ema[k] *= decay
+                if ema[k] < keep:
+                    del ema[k]
+            new = t["tokens"]
+            if i > 0 and len(turns) - bounds[-1] >= min_size:
+                if jaccard(set(ema), new) < tau:
+                    bounds.append(i + 1)
+            for k in new:
+                ema[k] = ema.get(k, 0.0) + 1.0
     else:  # centroid
         for i in range(1, len(turns)):
             if len(turns) - bounds[-1] < min_size:
                 continue
-            start = bounds[-1] - 1
             centroid: set = set()
-            for t in turns[start:i]:
+            for t in turns[bounds[-1] - 1 : i]:
                 centroid |= t["tokens"]
             if jaccard(turns[i]["tokens"], centroid) < tau:
                 bounds.append(i + 1)
@@ -113,42 +135,47 @@ def prf(pred: list[int], gold: list[int], tol: int = 1) -> dict:
     return {"precision": round(prec, 3), "recall": round(rec, 3), "f1": round(f1, 3)}
 
 
-def bm25_rank(blocks: list[dict], query_tokens: set, k1: float = 1.5, b: float = 0.75) -> list[float]:
-    """Tiny BM25; returns score per block."""
+def bm25_rank(blocks: list[dict], query_tokens: set, field: str = "tokens",
+              k1: float = 1.5, b: float = 0.75) -> list[float]:
+    """Tiny BM25 (binary tf: token sets); returns score per block."""
     n = len(blocks)
-    avgdl = sum(len(b["tokens"]) for b in blocks) / n
-    df = Counter()
+    avgdl = sum(len(blk[field]) for blk in blocks) / n
+    df: Counter = Counter()
     for blk in blocks:
-        df.update(blk["tokens"])
+        df.update(blk[field])
     scores = []
     for blk in blocks:
         s = 0.0
-        dl = len(blk["tokens"])
+        dl = len(blk[field])
         for term in query_tokens:
-            if term not in blk["tokens"]:
+            if term not in blk[field]:
                 continue
             idf = math.log((n - df[term] + 0.5) / (df[term] + 0.5) + 1)
-            tf = 1  # binary tf: token sets, adequate at block granularity
+            tf = 1
             s += idf * tf * (k1 + 1) / (tf + k1 * (1 - b + b * dl / avgdl))
         scores.append(s)
     return scores
 
 
-def label_of(blocks: list[dict], idx: int) -> str:
-    return blocks[idx]["label"] if 0 <= idx < len(blocks) else "?"
-
-
-def block_texts(turns: list[dict], firsts: list[int]) -> list[dict]:
-    """Materialize blocks (concatenated turn text) from boundary firsts."""
+def block_texts(turns: list[dict], firsts: list[int], tail_k: int = 3) -> list[dict]:
+    """Materialize blocks. tokens = whole-block union; tokens_hybrid = user-turn
+    tokens (dense intent statements) + last tail_k turns (recent context)."""
     blocks = []
     for j, start in enumerate(firsts):
         end = firsts[j + 1] - 1 if j + 1 < len(firsts) else len(turns)
+        seg = turns[start - 1 : end]
+        hyb: set = set()
+        for t in seg:
+            hyb |= t["utokens"]
+        for t in seg[-tail_k:]:
+            hyb |= t["tokens"]
         blocks.append({
             "label": f"block{j}",
             "first_turn": start,
             "last_turn": end,
-            "text": "\n".join(t["text"] for t in turns[start - 1 : end]),
-            "tokens": set().union(*(t["tokens"] for t in turns[start - 1 : end])),
+            "text": "\n".join(t["text"] for t in seg),
+            "tokens": set().union(*(t["tokens"] for t in seg)),
+            "tokens_hybrid": hyb,
         })
     return blocks
 
@@ -157,21 +184,26 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--session", required=True, help="path to session .jsonl")
     ap.add_argument("--key", default=str(Path(__file__).parent / "key.json"))
-    ap.add_argument("--strategy", choices=["chained", "centroid"], default="centroid")
+    ap.add_argument("--strategy", choices=["chained", "centroid", "ema"], default="centroid")
     ap.add_argument("--tau", type=float, default=None, help="fixed threshold (skips sweep)")
     ap.add_argument("--min-size", type=int, default=2)
     ap.add_argument("--classify", action="store_true", help="add TypeLLM vector tier")
+    ap.add_argument("--dimset", choices=["v1", "v2"], default="v1",
+                    help="v1=session topics; v2=artifact/activity dims (slice-two)")
+    ap.add_argument("--recency", type=float, default=0.0,
+                    help="recency tiebreak weight: score += w * (block_pos / n)")
     ap.add_argument("--out", default=str(Path(__file__).parent / "results"))
     args = ap.parse_args()
 
     key = json.loads(Path(args.key).read_text())
     gold_bounds = [b["first_turn"] for b in key["blocks"]]
     turns = parse_session(Path(args.session).expanduser())
-    print(f"parsed {len(turns)} turns from {args.session}")
+    print(f"parsed {len(turns)} turns from session")
 
     out_dir = Path(args.out).expanduser()
     out_dir.mkdir(parents=True, exist_ok=True)
-    report = {"turns": len(turns), "gold_blocks": len(key["blocks"])}
+    report: dict = {"turns": len(turns), "gold_blocks": len(key["blocks"]),
+                    "dimset": args.dimset, "recency": args.recency}
 
     # --- boundary sweep ---
     taus = [args.tau] if args.tau else [round(0.01 + 0.015 * i, 3) for i in range(26)]
@@ -180,11 +212,12 @@ def main() -> None:
         pred = detect_boundaries(turns, args.strategy, tau, args.min_size)
         sweep.append({"tau": tau, "n_blocks": len(pred), **prf(pred, gold_bounds)})
     best = max(sweep, key=lambda s: s["f1"])
+    report["strategy"] = args.strategy
     report["sweep"] = sweep
     report["best"] = best
     print(f"boundary sweep ({args.strategy}): best F1={best['f1']} at tau={best['tau']} ({best['n_blocks']} blocks)")
 
-    # --- clustering accuracy at best tau (turn -> gold label) ---
+    # --- clustering accuracy at best tau ---
     pred = detect_boundaries(turns, args.strategy, best["tau"], args.min_size)
     turn_label = []
     for i in range(1, len(turns) + 1):
@@ -201,48 +234,69 @@ def main() -> None:
     # --- retrieval over GOLD blocks (isolate retrieval from boundary quality) ---
     gold_blocks = block_texts(turns, gold_bounds)
     for b, kb in zip(gold_blocks, key["blocks"]):
-        b["label"] = kb["label"]  # restore real labels (block_texts uses placeholders)
+        b["label"] = kb["label"]
     probes = key["probes"]
-    rows = []
-    vectors: list[dict] = []
+    dims = None
     if args.classify:
-        from typellm_client import block_vector, cosine, query_vector
+        import typellm_client as tc
 
-        print(f"classifying {len(gold_blocks)} blocks via TypeLLM...")
+        dims = tc.DIMS_V2 if args.dimset == "v2" else tc.DIMS
+        print(f"classifying {len(gold_blocks)} blocks via TypeLLM ({args.dimset} dims)...")
         for b in gold_blocks:
-            r = block_vector(b["text"])
-            b["vec"] = {d: float(r.get(d, 0.0) or 0.0) for d in __import__("typellm_client").DIMS}
+            r = tc.block_vector(b["text"], dims=dims)
+            b["vec"] = {d: float(r.get(d, 0.0) or 0.0) for d in dims}
             b["gist"] = r.get("gist", "")
-            vectors.append(b["vec"])
-            print(f"  {b['label']}: intent={r.get('intent')} gist={r.get('gist', '')[:70]}")
-    for p in probes:
+            # gist tokens join the hybrid field (dense, clean summary)
+            b["tokens_hybrid"] |= tokens(b["gist"])
+            print(f"  {b['label'][:44]:46s} intent={r.get('intent'):14s} gist={b['gist'][:60]}")
+
+    rows = []
+    for pi, p in enumerate(probes):
         qtok = tokens(p["query"])
         expect = p["expect"]
-        jac = sorted(range(len(gold_blocks)), key=lambda i: -jaccard(qtok, gold_blocks[i]["tokens"]))
-        bm = sorted(range(len(gold_blocks)), key=lambda i: -bm25_rank(gold_blocks, qtok)[i])
         exp_idx = next(i for i, b in enumerate(gold_blocks) if b["label"] == expect)
-        row = {
-            "probe": p["id"],
-            "expect": expect,
-            "jaccard_rank": jac.index(exp_idx) + 1,
-            "bm25_rank": bm.index(exp_idx) + 1,
-        }
-        if args.classify:
-            from typellm_client import query_vector as qv
+        n = len(gold_blocks)
+        row: dict = {"probe": p["id"], "expect": expect}
 
-            qv_vec = qv(p["query"])
-            cos = sorted(range(len(gold_blocks)), key=lambda i: -cosine(qv_vec, gold_blocks[i]["vec"]))
-            row["cosine_rank"] = cos.index(exp_idx) + 1
+        def rank_of(order: list[int]) -> int:
+            return order.index(exp_idx) + 1
+
+        jac_u = sorted(range(n), key=lambda i: -jaccard(qtok, gold_blocks[i]["tokens"]))
+        bm_u = sorted(range(n), key=lambda i: -bm25_rank(gold_blocks, qtok, "tokens")[i])
+        jac_h = sorted(range(n), key=lambda i: -jaccard(qtok, gold_blocks[i]["tokens_hybrid"]))
+        base_h = bm25_rank(gold_blocks, qtok, "tokens_hybrid")
+        if args.recency > 0:
+            base_h = [s + args.recency * ((i + 1) / n) for i, s in enumerate(base_h)]
+        bm_h = sorted(range(n), key=lambda i: -base_h[i])
+        row["jac_union"] = rank_of(jac_u)
+        row["bm25_union"] = rank_of(bm_u)
+        row["jac_hybrid"] = rank_of(jac_h)
+        row["bm25_hybrid"] = rank_of(bm_h)
+        row["bm25_hyb_recency"] = rank_of(bm_h) if args.recency > 0 else None
+        if args.classify:
+            qv = tc.query_vector(p["query"], dims=dims)
+            cos = sorted(range(n), key=lambda i: -tc.cosine(qv, gold_blocks[i]["vec"]))
+            row["cosine"] = rank_of(cos)
+            row["query_vec"] = qv
         rows.append(row)
-        print(f"probe {p['id']}: {row}")
+        print("probe " + p["id"] + ": " + json.dumps(row))
     report["retrieval"] = rows
+
+    def r1(field: str) -> str:
+        vals = [r[field] for r in rows if r.get(field)]
+        return f"{sum(1 for v in vals if v == 1)}/{len(vals)}" if vals else "-"
+
+    def r2(field: str) -> str:
+        vals = [r[field] for r in rows if r.get(field)]
+        return f"{sum(1 for v in vals if v <= 2)}/{len(vals)}" if vals else "-"
+
+    fields = ["jac_union", "bm25_union", "jac_hybrid", "bm25_hybrid", "bm25_hyb_recency", "cosine"]
+    report["summary"] = {f: {"recall@1": r1(f), "recall@2": r2(f)} for f in fields}
+    print("\nsummary:", json.dumps(report["summary"], indent=1))
+
     report["block_gists"] = [
-        {
-            "label": b["label"],
-            "turns": [b["first_turn"], b["last_turn"]],
-            "gist": b.get("gist", ""),
-            "vec": b.get("vec"),
-        }
+        {"label": b["label"], "turns": [b["first_turn"], b["last_turn"]],
+         "gist": b.get("gist", ""), "vec": b.get("vec")}
         for b in gold_blocks
     ]
 
