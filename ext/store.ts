@@ -67,26 +67,34 @@ export function rewriteBlocks(keep: Block[]): void {
 	writeFileSync(p("blocks.jsonl"), keep.map((b) => JSON.stringify(b)).join("\n") + (keep.length ? "\n" : ""));
 }
 
-export function loadVocab(): string[] {
+export interface Meta {
+	dims: string[];
+	docsCursor: Record<string, string>; // doc name -> ISO time last touched
+}
+
+export function loadMeta(): Meta {
 	const f = p("index.json");
-	if (!existsSync(f)) return [];
 	try {
-		return (JSON.parse(readFileSync(f, "utf8")).dims ?? []) as string[];
+		const m = JSON.parse(readFileSync(f, "utf8"));
+		return { dims: m.dims ?? [], docsCursor: m.docsCursor ?? {} };
 	} catch {
-		return [];
+		return { dims: [], docsCursor: {} };
 	}
 }
 
-export function saveVocab(dims: string[]): void {
+export function saveMeta(meta: Meta): void {
 	mkdirSync(majordomeDir(), { recursive: true });
-	let meta: any = {};
-	try {
-		if (existsSync(p("index.json"))) meta = JSON.parse(readFileSync(p("index.json"), "utf8"));
-	} catch {
-		// fresh
-	}
-	meta.dims = dims;
 	writeFileSync(p("index.json"), JSON.stringify(meta, null, 1));
+}
+
+export function loadVocab(): string[] {
+	return loadMeta().dims;
+}
+
+export function saveVocab(dims: string[]): void {
+	const m = loadMeta();
+	m.dims = dims;
+	saveMeta(m);
 }
 
 export function appendDecision(d: RoutingDecision): void {

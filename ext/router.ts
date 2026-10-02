@@ -139,3 +139,27 @@ export function shouldJudgeLine(r: RouteResult | null, recentAssistant?: string)
 	if (!r || r.intent === "continuation" || !r.needClarification) return false;
 	return !(recentAssistant ?? "").trimEnd().endsWith("?");
 }
+
+/** Docs cursor: has README/CHANGELOG/docs been touched in the session file,
+ * and how many implementation blocks closed since the last touch?
+ * Pure — wired by index.ts at turn_end. */
+export function scanDocsTouched(raw: string): string[] {
+	const out: string[] = [];
+	for (const [name, re] of [["README", /[/"\\]readme\.md/i], ["CHANGELOG", /[/"\\]changelog\.md/i], ["docs/", /[/"\\]docs\//i]] as const) {
+		if (re.test(raw)) out.push(name);
+	}
+	return out;
+}
+
+export function docsNudge(
+	blocks: { sessionFile: string; intent: string | null; gist: string | null; closedAt: string }[],
+	sessionFile: string,
+	cursor: Record<string, string>,
+): string | null {
+	const scoped = blocks.filter((b) => b.sessionFile === sessionFile && b.intent === "implementation" && b.gist);
+	const oldestTouch = Object.values(cursor).sort()[0];
+	const since = oldestTouch ? scoped.filter((b) => b.closedAt > oldestTouch) : scoped;
+	if (since.length < 3) return null;
+	const list = since.slice(-3).map((b) => b.gist!.slice(0, 60)).join("; ");
+	return `[majordome docs] ${since.length} implementation blocks since ${Object.keys(cursor).join("/") || "any docs touch"} — recent: ${list}. Consider a README/CHANGELOG pass before wrapping up.`;
+}

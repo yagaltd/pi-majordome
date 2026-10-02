@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSession, tokens, jaccard, detectBoundaries, blockCores, bm25Rank, federatedOrder, cosineVec } from "./core.ts";
 import { parseDims, routingIntent, setClassifyFn, resetClassifyFn } from "./judges.ts";
-import { timeTravel, rankArm, injectionText, judgeLine, armFor } from "./router.ts";
+import { timeTravel, rankArm, injectionText, judgeLine, docsNudge, scanDocsTouched, armFor } from "./router.ts";
 import type { Block } from "./store.ts";
 
 let failures = 0;
@@ -123,6 +123,17 @@ check("injection: slug + turns + gist", inj.includes("code-parser") && inj.inclu
 // ── judge line ──
 check("judgeLine soft: why + informed tone", judgeLine("which module?").includes("which module?") && judgeLine("ok").includes("Possible ambiguity") && !judgeLine("ok").includes("Ask ONE"));
 check("judgeLine strict: imperative", judgeLine("ok", "strict").includes("Ask ONE"));
+
+// ── docs nudge ──
+{
+	const mkB = (intent: string, gist: string) => ({ sessionFile: "/x/s.jsonl", intent, gist, closedAt: "2026-10-02T12:00:00Z" });
+	const impl = ["a", "b", "c"].map((g) => mkB("implementation", `built ${g}`));
+	check("docsNudge: fires at 3 implementation blocks", (docsNudge(impl, "/x/s.jsonl", {}) ?? "").includes("3 implementation blocks"));
+	check("docsNudge: quiet under threshold", docsNudge(impl.slice(0, 2), "/x/s.jsonl", {}) === null);
+	check("docsNudge: cursor suppresses covered work", docsNudge(impl, "/x/s.jsonl", { README: "2026-10-02T23:59:59Z" }) === null);
+	check("docsNudge: ignores non-implementation", docsNudge([mkB("discussion", "chat")].concat(impl.slice(0, 2)), "/x/s.jsonl", {}) === null);
+	check("scanDocs: readme+changelog+docs dir", JSON.stringify(scanDocsTouched('"path":"docs/README.md" "path":"CHANGELOG.md" "path":"docs/api.md"')) === JSON.stringify(["README", "CHANGELOG", "docs/"]));
+}
 
 // ── cosine ──
 check("cosine: identical = 1", Math.abs(cosineVec(new Map([["a", 1]]), new Map([["a", 1]])) - 1) < 1e-9);

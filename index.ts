@@ -16,13 +16,13 @@
  * is plain JSONL under ~/.pi/majordome/ — inspectable, purgeable, exportable.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
 import { blockMeta, contradicts, dimVector, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev } from "./ext/judges.ts";
-import { injectionText, judgeLine, shouldJudgeLine, route } from "./ext/router.ts";
-import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadVocab, majordomeDir, rewriteBlocks, saveVocab, type Block } from "./ext/store.ts";
+import { docsNudge, injectionText, judgeLine, scanDocsTouched, shouldJudgeLine, route } from "./ext/router.ts";
+import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
 interface St {
 	on: boolean;
@@ -35,6 +35,9 @@ interface St {
 	uiCtx: { hasUI: boolean; ui: { setStatus(k: string, v: string): void } } | null;
 	injects: number;
 	judgeMode: "off" | "soft" | "strict";
+	docsNudge: string | null;
+	docsCursor: Record<string, string>;
+	lastNudgeCount: number;
 }
 
 const st: St = {
@@ -48,6 +51,9 @@ const st: St = {
 	uiCtx: null,
 	injects: 0,
 	judgeMode: (process.env.MAJORDOME_JUDGE as St["judgeMode"]) || "soft",
+	docsNudge: null,
+	docsCursor: {},
+	lastNudgeCount: 0,
 };
 
 
@@ -68,6 +74,13 @@ function resolveId(input: string): Block | undefined {
 }
 function pad(s: string, n: number): string {
 	return s.length >= n ? s.slice(0, n) : s + " ".repeat(n - s.length);
+}
+
+/** Emit the pending docs nudge once at the tail, then clear. */
+function emitDocsNudge(lastUser: any): void {
+	if (!st.docsNudge) return;
+	lastUser.content = `${textof(lastUser.content)}\n\n${st.docsNudge}`;
+	st.docsNudge = null;
 }
 
 function currentTurnCount(): number {
@@ -106,7 +119,7 @@ async function indexSession(): Promise<number> {
 			const fresh = induced.filter((d) => !st.vocab.includes(d));
 			if (fresh.length) {
 				st.vocab = [...st.vocab, ...fresh].slice(0, 40);
-				saveVocab(st.vocab);
+				saveMeta({ dims: st.vocab, docsCursor: st.docsCursor });
 			}
 		}
 
@@ -144,6 +157,19 @@ async function indexSession(): Promise<number> {
 		st.blocks.push(block);
 		closed++;
 	}
+	// docs cursor: advance on docs touches; nudge when implementation drifts
+	try {
+		const touched = scanDocsTouched(readFileSync(st.sessionFile, "utf8"));
+		for (const doc of touched) st.docsCursor[doc] = new Date().toISOString();
+		if (touched.length || closed) {
+			saveMeta({ dims: st.vocab, docsCursor: st.docsCursor });
+			const n = docsNudge(st.blocks, st.sessionFile, st.docsCursor);
+			if (n && st.blocks.filter((b) => b.sessionFile === st.sessionFile && b.intent === "implementation").length > st.lastNudgeCount) {
+				st.docsNudge = n;
+				st.lastNudgeCount = st.blocks.filter((b) => b.sessionFile === st.sessionFile && b.intent === "implementation").length;
+			} else if (!n) st.docsNudge = null;
+		}
+	} catch { /* docs nudge never breaks indexing */ }
 	if (closed) status();
 	return closed;
 }
@@ -158,7 +184,9 @@ export default function majordome(pi: ExtensionAPI): void {
 		}
 		st.blocks = loadBlocks();
 		st.indexedKeys = new Set(st.blocks.map((b) => b.id));
-		st.vocab = loadVocab();
+		const meta = loadMeta();
+		st.vocab = meta.dims;
+		st.docsCursor = meta.docsCursor;
 		if (!st.on) st.reason = st.reason || "MAJORDOME_OFF";
 		if (!loadKey()) st.reason = "no TypeLLM key (npx tsx ext/judges.ts setup; TYPELLM_API_KEY env works too)";
 
@@ -267,6 +295,7 @@ export default function majordome(pi: ExtensionAPI): void {
 				});
 				if (st.routeCache.contraLine) lastUser.content += `\n\n${st.routeCache.contraLine}`;
 				if (judge) lastUser.content += `\n\n${judge}`;
+				emitDocsNudge(lastUser);
 				return;
 			}
 			// tail injection: request-local mutation of the final user message —
@@ -274,6 +303,8 @@ export default function majordome(pi: ExtensionAPI): void {
 			const winner = r.winner;
 			const resume = r.intent === "definition_recall" && r.score >= 0.7;
 			lastUser.content = `${textof(lastUser.content)}\n\n${injectionText(winner, r.terms, resume)}${st.routeCache.contraLine ? `\n\n${st.routeCache.contraLine}` : ""}${judge ? `\n\n${judge}` : ""}`;
+			emitDocsNudge(lastUser);
+			return;
 			st.injects++;
 			if (fresh) appendDecision({
 				ts: new Date().toISOString(), query, intent: r.intent, arm: r.arm,

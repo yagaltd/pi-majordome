@@ -122,6 +122,16 @@ stays the interface.
   `MAJORDOME_MIN_SCORE` from it.
 - `reindex all` sweeps every session on disk — expect judge calls per block.
 
+## Docs nudge (v1.x — never remind manually again)
+
+At block close, majordome advances a per-doc **cursor** (README / CHANGELOG /
+docs/) when the session touches them, and counts implementation blocks closed
+since the last touch. At 3+, one tail line informs the agent — sourced from the
+real gists, e.g. `[majordome docs] 4 implementation blocks since README/CHANGELOG
+— recent: …` — so docs updates are grounded in what actually shipped, not
+hallucinated from a summary. `/majordome export` produces the per-block ADRs;
+the nudge is the trigger, the agent is the writer.
+
 ## Personality
 
 Majordome never talks to the user — the agent does. Your `AGENTS.md` (per
