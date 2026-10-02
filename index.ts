@@ -79,8 +79,18 @@ function pad(s: string, n: number): string {
 /** Emit the pending docs nudge once at the tail, then clear. */
 function emitDocsNudge(lastUser: any): void {
 	if (!st.docsNudge) return;
-	lastUser.content = `${textof(lastUser.content)}\n\n${st.docsNudge}`;
+	appendTail(lastUser, st.docsNudge);
 	st.docsNudge = null;
+}
+
+/** Append a tail text BLOCK, preserving the content shape — downstream
+ * context handlers may map/template-literal content; stringifying here
+ * renders as [object Object] in whatever runs after us. */
+function appendTail(lastUser: any, text: string): void {
+	const block = { type: "text", text };
+	if (Array.isArray(lastUser.content)) lastUser.content.push(block);
+	else if (typeof lastUser.content === "string") lastUser.content += `\n\n${text}`;
+	else lastUser.content = [block];
 }
 
 function currentTurnCount(): number {
@@ -293,8 +303,8 @@ export default function majordome(pi: ExtensionAPI): void {
 					arm: r?.arm ?? "-", winner: r?.winner ? shortId(r.winner) : null,
 					score: r?.winner ? Math.round(r.score * 100) / 100 : null, injected: false,
 				});
-				if (st.routeCache.contraLine) lastUser.content += `\n\n${st.routeCache.contraLine}`;
-				if (judge) lastUser.content += `\n\n${judge}`;
+				if (st.routeCache.contraLine) appendTail(lastUser, st.routeCache.contraLine);
+				if (judge) appendTail(lastUser, judge);
 				emitDocsNudge(lastUser);
 				return;
 			}
@@ -304,7 +314,9 @@ export default function majordome(pi: ExtensionAPI): void {
 			// resume hint only when resuming actually applies: an incident/redo
 			// situation — a how-to-use question on existing work gets no hint
 			const resume = r.intent === "incident_specific" && r.score >= 0.7;
-			lastUser.content = `${textof(lastUser.content)}\n\n${injectionText(winner, r.terms, resume)}${st.routeCache.contraLine ? `\n\n${st.routeCache.contraLine}` : ""}${judge ? `\n\n${judge}` : ""}`;
+			appendTail(lastUser, injectionText(winner, r.terms, resume));
+			if (st.routeCache.contraLine) appendTail(lastUser, st.routeCache.contraLine);
+			if (judge) appendTail(lastUser, judge);
 			emitDocsNudge(lastUser);
 			return;
 			st.injects++;
