@@ -142,9 +142,24 @@ extension custom entries). majordome adds the classified layer on top.
   md+frontmatter ingest adapter (frontmatter -> metadata/dims, body ->
   block text) so retrieval spans chats AND curated docs (ADRs, specs,
   operator-memory-style notes); per-project rolling "one-pager" from top
-  community gists; consolidation/forgetting policy.
+  community gists; consolidation/forgetting policy; multimodal extraction
+  (screenshots in sessions — TypeLLM-class, deferred from v1).
+- **Context Language Models integration study** (our own paper,
+  arXiv 2609.37725 — `~/Documents/vibe/context-language-models`):
+  CLM = model curates its own context as a file; complementary layer to
+  majordome (we supply WHAT to recall, CLM manages WHAT stays in-window).
+  Study items: (a) project one-pager as CLM-style model-maintained file vs
+  our composed-gists page (A/B, their data says maintained wins);
+  (b) ICL-steering loop applied to our injection preamble + DAG prompts
+  (decision log = feedback signal); (c) Suffix Cache Reuse (SCR) serving
+  makes mid-context edits cheap -> revisit deferred mid-slot promotion
+  when SCR-style serving spreads; (d) eval: Harbor tasks (BCP, EdgeBench,
+  24h agent-swarm) + ContextBench (coming soon) for end-to-end
+  majordome vs pi-clm (`npm:@lolipopshock/pi-clm`) vs both-together —
+  the swarm task is the v2 orchestrator scenario.
   References for the study phase (do not read until v2):
   - `~/Documents/vibe/supermemory`
   - `~/Documents/vibe/memorybench`
   - `/home/aurel/Documents/current/CognitiveOS/v3` (ingest_formats,
     retrieval_bench prior art)
+  - `~/Documents/vibe/context-language-models` (paper + SCR + harness)
