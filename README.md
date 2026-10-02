@@ -4,13 +4,14 @@ Topic-scoped, cross-session memory for pi agents — "infinite chat": keep
 chatting across projects and weeks; the right past context loads when the
 query calls for it, without wrecking the provider's prompt cache.
 
-Status: **slice-four eval done — cross-session index works.** Read
-[docs/DESIGN.md](docs/DESIGN.md) and docs/EVAL-SLICE{1,2,3,4}.md. Headline:
-time-travel candidates + federated per-session pooling take the stuck
-routing probe to rank 1 and cross-session calendar recall to 2/14; lexical
-communities separate sessions cleanly but never join them — cross-session
-linking needs semantic pair-cell edges (slice-five). Router spec v3 in
-docs/EVAL-SLICE4.md.
+Status: **slice-five eval done — specialist routing breaks the ceiling.**
+Read [docs/DESIGN.md](docs/DESIGN.md) and docs/EVAL-SLICE{1..5}.md +
+docs/JUDGE-COMPARISON.md. Headline: TypeLLM DAG intent -> specialist arm
+(Jev-vector vs lexical) reaches 3/7 recall@1 over the cross-session suite —
+past every single arm and naive fusion (2/7); continuation detection fires
+mid-suite; pair cells honestly refuse to join unrelated sessions (max
+same_topic 0.36). Router spec v4 in docs/EVAL-SLICE5.md; next: confidence
+arm-selection, same-product pair-cell fixture, then the live pi extension.
 
 ## Quick start
 
@@ -39,6 +40,8 @@ docs/EVAL-SLICE3.md       slice-three: RRF, rewrites, dim induction, router spec
 bench/cross_eval.py       slice-four: two-session index, time-travel, federated pooling
 bench/key_cross.json      cross-session ground truth (A gold + B ranges + 7 probes)
 docs/EVAL-SLICE4.md       slice-four: cross-session recall, communities
+bench/slice5.py           slice-five: pair cells, DAG intents, specialist arms
+docs/EVAL-SLICE5.md       slice-five: specialist routing, router spec v4
 docs/DESIGN.md            design ledger (brainstorm trace, design laws)
 docs/EVAL-SLICE1.md       slice-one methodology, results, diagnosis
 ```
