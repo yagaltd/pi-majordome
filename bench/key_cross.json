@@ -1,0 +1,67 @@
+{
+  "sessions": {
+    "A": {
+      "path": "~/.pi/agent/sessions/--home-aurel-Documents-current-code-parser--/2026-09-28T07-30-31-842Z_01a0e6ec-2921-733b-9736-2b6ea32df080.jsonl",
+      "gold": [
+        { "label": "code-parser watcher + v11/v12 bench", "first_turn": 1, "last_turn": 45 },
+        { "label": "pi-codemap jev + consolidation + decider", "first_turn": 46, "last_turn": 60 },
+        { "label": "typellm research + per-repo keys", "first_turn": 61, "last_turn": 76 },
+        { "label": "routing phase 1/2 + virtual model", "first_turn": 77, "last_turn": 92 },
+        { "label": "docs + PII audit", "first_turn": 93, "last_turn": 96 },
+        { "label": "infinite-chat brainstorm", "first_turn": 97, "last_turn": 101 }
+      ]
+    },
+    "B": {
+      "path": "~/.pi/agent/sessions/--home-aurel-Documents-current-MorphFam-MorphEditor--/2026-09-06T15-48-04-240Z_01a07767-c40e-763a-bb21-3e7b5ab074ab.jsonl",
+      "gold": [
+        { "label": "morph divergent research + product tension", "first_turn": 1, "last_turn": 60 },
+        { "label": "morph plans + settings modal", "first_turn": 61, "last_turn": 150 },
+        { "label": "morph ship 007 + design skill port + outline search", "first_turn": 151, "last_turn": 270 },
+        { "label": "morph export/android + sidebar polish", "first_turn": 271, "last_turn": 360 },
+        { "label": "morph plan reviews + subagent fleet + sync gateway", "first_turn": 361, "last_turn": 480 },
+        { "label": "morph glm subagent impl + contracts error + diff bug", "first_turn": 481, "last_turn": 600 },
+        { "label": "morph task-list comments + columns html", "first_turn": 601, "last_turn": 690 },
+        { "label": "morph calendar fix + sidebar markdown", "first_turn": 691, "last_turn": 766 }
+      ]
+    }
+  },
+  "probes": [
+    {
+      "id": "A-verbatim-94",
+      "expect": "A:routing phase 1/2 + virtual model",
+      "asked_at": 94,
+      "query": "can you make a short summary of what codemap does for routing to models and reasoning effort?"
+    },
+    {
+      "id": "A-verbatim-52",
+      "expect": "A:pi-codemap jev + consolidation + decider",
+      "asked_at": 52,
+      "query": "pi-codemap repo is still a mess we have folder with the different versions"
+    },
+    {
+      "id": "A-para-routing",
+      "expect": "A:routing phase 1/2 + virtual model",
+      "query": "how does the virtual model decide between the cheap flash tier and the big model, and how does it pick reasoning effort?"
+    },
+    {
+      "id": "X-morph-subagents",
+      "expect": "B:morph glm subagent impl + contracts error + diff bug",
+      "query": "how did we dispatch the morpheditor builders with subagents and which model did they run on?"
+    },
+    {
+      "id": "X-morph-calendar",
+      "expect": "B:morph calendar fix + sidebar markdown",
+      "query": "what was wrong with the calendar rendering in morpheditor and how did we fix it?"
+    },
+    {
+      "id": "X-typellm-key",
+      "expect": "A:typellm research + per-repo keys",
+      "query": "remind me how we set up the typellm key per repository and why"
+    },
+    {
+      "id": "X-routing",
+      "expect": "A:routing phase 1/2 + virtual model",
+      "query": "remind me what we decided about the codemap virtual model and its tiers"
+    }
+  ]
+}

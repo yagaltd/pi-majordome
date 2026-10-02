@@ -1,0 +1,308 @@
+{
+  "index": [
+    {
+      "session": "A",
+      "turns": 105,
+      "blocks": [
+        {
+          "label": "code-parser watcher + v11/v12 bench",
+          "turns": [
+            1,
+            45
+          ],
+          "gist": "The code-parser architecture was inspected to confirm that the CLI generates a full JSONL snapshot while the watcher provides incremental, stream-based updates for changed files without modifying existing data in place.",
+          "intent": "investigation"
+        },
+        {
+          "label": "pi-codemap jev + consolidation + decider",
+          "turns": [
+            46,
+            60
+          ],
+          "gist": "Refactored v12.1 to replace custom Jev transport with pi's official registry, deleting 250 lines of credential and login code while preserving custom judgment logic.",
+          "intent": "implementation"
+        },
+        {
+          "label": "typellm research + per-repo keys",
+          "turns": [
+            61,
+            76
+          ],
+          "gist": "Established TypeLLM as a first-class provider alongside Jev, leveraging its `depends_on` DAG feature to enable complex, multi-step decision trees in a single API call.",
+          "intent": "investigation"
+        },
+        {
+          "label": "routing phase 1/2 + virtual model",
+          "turns": [
+            77,
+            92
+          ],
+          "gist": "Discovered and fixed a critical contract bug where codemap tools returned strings instead of arrays, causing 100% tool call failures, then re-ran a clean 18-run evaluation to measure the true benefits of codemap+jev and codemap+typellm versus pi-alone.",
+          "intent": "evaluation"
+        },
+        {
+          "label": "docs + PII audit",
+          "turns": [
+            93,
+            96
+          ],
+          "gist": "Documented the codemap/auto routing mechanism in the README and scrubbed PII (username and local paths) from the pi-codemap repository.",
+          "intent": "investigation"
+        },
+        {
+          "label": "infinite-chat brainstorm",
+          "turns": [
+            97,
+            105
+          ],
+          "gist": "Brainstormed a 'topic memory' extension for pi that uses TypeLLM for topic classification and a side-car index to manage context without invalidating the KV cache.",
+          "intent": "investigation"
+        }
+      ]
+    },
+    {
+      "session": "B",
+      "turns": 763,
+      "blocks": [
+        {
+          "label": "morph divergent research + product tension",
+          "turns": [
+            1,
+            60
+          ],
+          "gist": "Validated that Morph's custom block architecture is superior to reveal.js's stringly-typed HTML comment approach, confirming the hypothesis that reveal.js did not solve custom blocks but rather worked around their absence with fragile regex-based DOM manipulation.",
+          "intent": "investigation"
+        },
+        {
+          "label": "morph plans + settings modal",
+          "turns": [
+            61,
+            150
+          ],
+          "gist": "Evaluated @preact/signals-core against the CSMA runtime, determining they are distinct layers where signals should be adopted for product-layer UI state while strictly excluding them from the zero-dependency Layer 0 core.",
+          "intent": "evaluation"
+        },
+        {
+          "label": "morph ship 007 + design skill port + outline search",
+          "turns": [
+            151,
+            270
+          ],
+          "gist": "Shipped MorphEditor 007 and identified the root cause of the depth-2 tool mangling as a fuzzy agent-file matcher in pi-core-subagent that incorrectly overrides explicit tool configurations with mismatched frontmatter definitions.",
+          "intent": "investigation"
+        },
+        {
+          "label": "morph export/android + sidebar polish",
+          "turns": [
+            271,
+            360
+          ],
+          "gist": "Fixed the RTL implementation by correcting the mode conflation bug where explicit direction settings were being overridden by per-block auto-detection, ensuring text direction now properly respects the document setting.",
+          "intent": "implementation"
+        },
+        {
+          "label": "morph plan reviews + subagent fleet + sync gateway",
+          "turns": [
+            361,
+            480
+          ],
+          "gist": "Item 14 completed by consolidating push sites, porting the history module to Morph, and implementing serialization with block-id remapping to ensure undo/redo survives app restarts.",
+          "intent": "discussion"
+        },
+        {
+          "label": "morph glm subagent impl + contracts error + diff bug",
+          "turns": [
+            481,
+            600
+          ],
+          "gist": "TASK 1 (re1-small-moves) was merged to main after passing all review gates, and TASK 2 (re2-documents-export) is currently in progress with the worker having completed file moves and passing initial test gates.",
+          "intent": "implementation"
+        },
+        {
+          "label": "morph task-list comments + columns html",
+          "turns": [
+            601,
+            690
+          ],
+          "gist": "Approved Plan 023 v2, adding reactions and cross-document bookmarks to the existing badge and menu tasks, and generated five corresponding specification contracts.",
+          "intent": "implementation"
+        },
+        {
+          "label": "morph calendar fix + sidebar markdown",
+          "turns": [
+            691,
+            763
+          ],
+          "gist": "Decided to reuse the existing Formbar calendar UI for the inline AtPopover to ensure visual consistency, identifying that the primary missing feature to implement is the '+ End date' range selection capability.",
+          "intent": "documentation"
+        }
+      ]
+    }
+  ],
+  "probes": [
+    {
+      "probe": "A-verbatim-94",
+      "expect": "A:routing phase 1/2 + virtual model",
+      "n_cands": 4,
+      "bm25_hybrid": 4,
+      "rrf_self": 4,
+      "rewrite": "codemap, routing, models, reasoning effort",
+      "bm25_rw": 4,
+      "rrf_rw": 4,
+      "federated": 1
+    },
+    {
+      "probe": "A-verbatim-52",
+      "expect": "A:pi-codemap jev + consolidation + decider",
+      "n_cands": 1,
+      "bm25_hybrid": -1,
+      "rrf_self": -1,
+      "rewrite": "pi-codemap, repository, folder structure, version control, cleanup, organization",
+      "bm25_rw": -1,
+      "rrf_rw": -1,
+      "federated": -1
+    },
+    {
+      "probe": "A-para-routing",
+      "expect": "A:routing phase 1/2 + virtual model",
+      "n_cands": 14,
+      "bm25_hybrid": 4,
+      "rrf_self": 4,
+      "rewrite": "virtual model routing, cheap flash tier, big model selection, reasoning effort, model decision logic",
+      "bm25_rw": 4,
+      "rrf_rw": 4,
+      "federated": 3
+    },
+    {
+      "probe": "X-morph-subagents",
+      "expect": "B:morph glm subagent impl + contracts error + diff bug",
+      "n_cands": 14,
+      "bm25_hybrid": 12,
+      "rrf_self": 12,
+      "rewrite": "morpheditor builders, subagents, dispatch, model",
+      "bm25_rw": 12,
+      "rrf_rw": 12,
+      "federated": -1
+    },
+    {
+      "probe": "X-morph-calendar",
+      "expect": "B:morph calendar fix + sidebar markdown",
+      "n_cands": 14,
+      "bm25_hybrid": 14,
+      "rrf_self": 14,
+      "rewrite": "morpheditor, calendar, rendering, bug, fix, issue, resolution",
+      "bm25_rw": 14,
+      "rrf_rw": 14,
+      "federated": 2
+    },
+    {
+      "probe": "X-typellm-key",
+      "expect": "A:typellm research + per-repo keys",
+      "n_cands": 14,
+      "bm25_hybrid": 3,
+      "rrf_self": 3,
+      "rewrite": "typellm key, per repository, setup, configuration, rationale",
+      "bm25_rw": 3,
+      "rrf_rw": 3,
+      "federated": -1
+    },
+    {
+      "probe": "X-routing",
+      "expect": "A:routing phase 1/2 + virtual model",
+      "n_cands": 14,
+      "bm25_hybrid": 4,
+      "rrf_self": 4,
+      "rewrite": "codemap, virtual model, tiers",
+      "bm25_rw": 4,
+      "rrf_rw": 4,
+      "federated": 3
+    }
+  ],
+  "communities": [
+    {
+      "tau": 0.08,
+      "n_components": 1,
+      "largest": [
+        [
+          "A:code-parser watcher + v11/v12 bench",
+          "A:pi-codemap jev + consolidation + dec",
+          "A:typellm research + per-repo keys",
+          "A:routing phase 1/2 + virtual model",
+          "A:docs + PII audit",
+          "A:infinite-chat brainstorm",
+          "B:morph divergent research + product t",
+          "B:morph plans + settings modal",
+          "B:morph ship 007 + design skill port +",
+          "B:morph export/android + sidebar polis",
+          "B:morph plan reviews + subagent fleet ",
+          "B:morph glm subagent impl + contracts ",
+          "B:morph task-list comments + columns h",
+          "B:morph calendar fix + sidebar markdow"
+        ]
+      ]
+    },
+    {
+      "tau": 0.15,
+      "n_components": 1,
+      "largest": [
+        [
+          "A:code-parser watcher + v11/v12 bench",
+          "A:pi-codemap jev + consolidation + dec",
+          "A:typellm research + per-repo keys",
+          "A:routing phase 1/2 + virtual model",
+          "A:docs + PII audit",
+          "A:infinite-chat brainstorm",
+          "B:morph divergent research + product t",
+          "B:morph plans + settings modal",
+          "B:morph ship 007 + design skill port +",
+          "B:morph export/android + sidebar polis",
+          "B:morph plan reviews + subagent fleet ",
+          "B:morph glm subagent impl + contracts ",
+          "B:morph task-list comments + columns h",
+          "B:morph calendar fix + sidebar markdow"
+        ]
+      ]
+    },
+    {
+      "tau": 0.25,
+      "n_components": 7,
+      "largest": [
+        [
+          "B:morph divergent research + product t",
+          "B:morph plans + settings modal",
+          "B:morph ship 007 + design skill port +",
+          "B:morph export/android + sidebar polis",
+          "B:morph plan reviews + subagent fleet ",
+          "B:morph glm subagent impl + contracts ",
+          "B:morph task-list comments + columns h",
+          "B:morph calendar fix + sidebar markdow"
+        ],
+        [
+          "A:code-parser watcher + v11/v12 bench"
+        ],
+        [
+          "A:pi-codemap jev + consolidation + dec"
+        ]
+      ]
+    },
+    {
+      "tau": 0.3,
+      "n_components": 10,
+      "largest": [
+        [
+          "B:morph plans + settings modal",
+          "B:morph ship 007 + design skill port +",
+          "B:morph plan reviews + subagent fleet ",
+          "B:morph glm subagent impl + contracts "
+        ],
+        [
+          "B:morph divergent research + product t",
+          "B:morph task-list comments + columns h"
+        ],
+        [
+          "A:code-parser watcher + v11/v12 bench"
+        ]
+      ]
+    }
+  ]
+}

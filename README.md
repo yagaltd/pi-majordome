@@ -4,14 +4,13 @@ Topic-scoped, cross-session memory for pi agents — "infinite chat": keep
 chatting across projects and weeks; the right past context loads when the
 query calls for it, without wrecking the provider's prompt cache.
 
-Status: **slice-three eval done — router spec converged.** Read
-[docs/DESIGN.md](docs/DESIGN.md) and docs/EVAL-SLICE{1,2,3}.md. Headline:
-ranking = hybrid BM25 (user turns + tail + gist) fused RRF with jaccard,
-after a TypeLLM rewrite that strips meta framing from recall queries;
-EMA boundaries double clustering accuracy (0.757 -> 0.903); the
-judgment-probability vector tier is dead across three feature designs
-(hand topics, hand artifacts, induced) — dims are ToC metadata and
-filters, never ranking vectors.
+Status: **slice-four eval done — cross-session index works.** Read
+[docs/DESIGN.md](docs/DESIGN.md) and docs/EVAL-SLICE{1,2,3,4}.md. Headline:
+time-travel candidates + federated per-session pooling take the stuck
+routing probe to rank 1 and cross-session calendar recall to 2/14; lexical
+communities separate sessions cleanly but never join them — cross-session
+linking needs semantic pair-cell edges (slice-five). Router spec v3 in
+docs/EVAL-SLICE4.md.
 
 ## Quick start
 
@@ -37,6 +36,9 @@ bench/key.json            ground truth for the reference session
 bench/results/            reports (v1-clean, v2, ema)
 docs/EVAL-SLICE2.md       slice-two: hybrid retrieval, EMA, v2 dims
 docs/EVAL-SLICE3.md       slice-three: RRF, rewrites, dim induction, router spec
+bench/cross_eval.py       slice-four: two-session index, time-travel, federated pooling
+bench/key_cross.json      cross-session ground truth (A gold + B ranges + 7 probes)
+docs/EVAL-SLICE4.md       slice-four: cross-session recall, communities
 docs/DESIGN.md            design ledger (brainstorm trace, design laws)
 docs/EVAL-SLICE1.md       slice-one methodology, results, diagnosis
 ```
