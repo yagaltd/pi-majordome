@@ -1,3 +1,12 @@
+## 2026-10-03 — v2 branch: points 0–4 (bench-first)
+
+- v2.0 resume bench: 8 versioned probes, immutable baseline (recall-only hit@3 1/6, gate 2/2)
+- v2.1 one-pager command — A/B 4/6 vs baseline (composed GIST sections, provenance, stamps)
+- v2.2 docs ingest adapter — frontmatter md → index blocks, idempotent, doc: sessions
+- v2.3 reasoning map — lazy compile to Mermaid mindmap + turn-pointer json (termaid in pane)
+- v2.4 Self-Index key evolution — gated judge phrases into tokensHybrid; coverage-bound at 38 blocks
+- fixed: /majordome docs ReferenceError on master (lost ext/docs.ts import)
+
 ## 2026-10-03 — governance seeds (v1.x close-out)
 
 - Added: judgment trail — append-only verdict metadata at every judge decision point

@@ -137,6 +137,22 @@ extension custom entries). majordome adds the classified layer on top.
 
 ### v2 — orchestrator + memory consolidation
 
+**Build status (branch `v2`, worktree `../pi-majordome-v2` — 2026-10-03):**
+- ✅ **0** resume bench: 8 probes, pre-registered criteria; immutable baseline `resume-baseline.json`
+  (recall-only hit@3 **1/6**, continuation gate 2/2); runs → `resume-last.json`
+- ✅ **1** one-pager: `/majordome one-pager [tag|show]` — composed over GIST atoms, provenance-cited,
+  stamped; **A/B: 4/6 vs 1/6** (res-decision-soft, res-leaveoff-onepager, res-invalidated-markmap,
+  res-decision-clarify now hit)
+- ✅ **2** ingest adapter: `/majordome ingest-docs`, sources in `~/.config/pi-majordome/docs-sources.json`
+  (smoke: 9 files → 62 blocks, idempotent)
+- ✅ **3** map: `/majordome map` → `.majordome/map.mmd` (Mermaid mindmap, ✗ invalidations) +
+  `map.json`; pane: `termaid .majordome/map.mmd`
+- ✅ **4** Self-Index: `ext/selfindex.ts` — MISSES → keyPhrases judge → gated (102) → keys folded
+  (36/9 blocks); recall unchanged (missing golds are index *coverage* at 38 blocks, not keying)
+- fixed en route: latent master bug — `/majordome docs` ReferenceError (lost ext/docs.ts import)
+- next: orchestrator scope review (Durable A/B) + AGENTS.md pointer block (artifacts now exist)
+
+
 **Architecture fork (decided at study phase):** Pi 1.0 shipped Pi Durable
 (earendil.com/posts/pi-durable) — a durable harness: tasks with ownership
 trees (subagent = conversation owned by a tool call), pluggable SQLite/JSONL
