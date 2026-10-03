@@ -1,3 +1,9 @@
+## 2026-10-03 — v2 branch: /majordome init (cold-start) + lineage triage
+
+- init: past sessions → judged index (resumable, dry-run, mtime provenance); code-parser run: +32 blocks
+- lineage tier: other-repo sessions parked map-only, explicit --lineage opt-in, purgeable
+- rejected: dims-arm lexical floor (no aggregate gain; polysemy collision documented in-code)
+
 ## 2026-10-03 — v2 branch: points 0–4 (bench-first)
 
 - v2.0 resume bench: 8 versioned probes, immutable baseline (recall-only hit@3 1/6, gate 2/2)

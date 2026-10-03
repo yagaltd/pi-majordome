@@ -26,6 +26,7 @@ import { composeOnePager } from "./ext/onepager.ts";
 import { compileMap } from "./ext/map.ts";
 import { ingestDocs } from "./ext/ingest_docs.ts";
 import { listKinds, composeKind } from "./ext/docs.ts";
+import { initRepo } from "./ext/init.ts";
 import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
 interface St {
@@ -485,6 +486,12 @@ export default function majordome(pi: ExtensionAPI): void {
 				} catch (e) {
 					notify(`digest saved → ${outFile}\n(send failed: ${String((e as Error).message ?? e).slice(0, 60)})\n\n${msg}`);
 				}
+				return;
+			}
+			if (cmd === "init") {
+				initRepo({ cwd: process.cwd(), dryRun: a === "dry-run", slug: a && a !== "dry-run" ? a : undefined })
+					.then((m) => notify(m))
+					.catch((e) => notify(`init failed: ${(e as Error).message}`));
 				return;
 			}
 			if (cmd === "one-pager") {

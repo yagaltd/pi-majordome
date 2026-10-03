@@ -150,6 +150,13 @@ extension custom entries). majordome adds the classified layer on top.
 - ✅ **4** Self-Index: `ext/selfindex.ts` — MISSES → keyPhrases judge → gated (102) → keys folded
   (36/9 blocks); recall unchanged (missing golds are index *coverage* at 38 blocks, not keying)
 - fixed en route: latent master bug — `/majordome docs` ReferenceError (lost ext/docs.ts import)
+- ✅ **2.5 `/majordome init`** — cold-start over past sessions: same-slug indexed with judges
+  (resumable cursor, dry-run cost preview, mtime provenance), other slugs **parked as lineage**
+  (map-only, `--lineage <slug>` opt-in). Run on code-parser: 38 → **70 blocks, 100% gisted**.
+  One-pager A/B after init: 4/6 (timestamp bug 3/6 caught + fixed — ingest must keep original time).
+- ❌ REJECTED: lexical floor in the dims arm (max(cos, 0.5·bm25norm)) — 1/6 → 1/6; same-topic
+  corpora collide on polysemous terms, idf can't discriminate within a project. Root cause of
+  remaining MISSes = gist compression + dims quality, not lexing. Documented in-code.
 - next: orchestrator scope review (Durable A/B) + AGENTS.md pointer block (artifacts now exist)
 
 
