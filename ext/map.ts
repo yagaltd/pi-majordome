@@ -43,3 +43,13 @@ export function compileMap(blocks: Block[], root = "work"): CompiledMap {
 	}
 	return { mmd: mmd.join("\n") + "\n", json: { generated: new Date().toISOString(), root, children } };
 }
+
+/** In-chat text render — zero dependencies, the pi-native display path. */
+export function renderText(json: { root: string; children: any[] }): string {
+	const L = [`${json.root}`];
+	for (const sess of json.children) {
+		L.push(`  ${sess.tag}`);
+		for (const n of sess.nodes) L.push(`    ${n.status === "invalidated" ? "✗ " : "· "}${(n.label ?? "").slice(0, 100)}`);
+	}
+	return L.join("\n");
+}

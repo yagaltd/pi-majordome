@@ -507,9 +507,14 @@ export default function majordome(pi: ExtensionAPI): void {
 				const mm = compileMap(st.blocks);
 				const dir = join(process.cwd(), ".majordome");
 				mkdirSync(dir, { recursive: true });
-				writeFileSync(join(dir, "map.mmd"), mm.mmd);
 				writeFileSync(join(dir, "map.json"), JSON.stringify(mm.json, null, 2));
-				notify(`map \u2192 ${dir}/map.mmd + map.json (${mm.json.children.length} sessions)\nview: termaid ${join(dir, "map.mmd")}`);
+				const { renderText } = await import("./ext/map.ts");
+				let view = renderText(mm.json);
+				if (a === "mmd" || a === "termaid") {
+					writeFileSync(join(dir, "map.mmd"), mm.mmd);
+					view += `\nmap.mmd \u2192 termaid ${join(dir, "map.mmd")}`;
+				}
+				notify(view);
 				return;
 			}
 			if (cmd === "ingest-docs") {
