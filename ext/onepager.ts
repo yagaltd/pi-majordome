@@ -20,7 +20,11 @@ export interface OnePager {
 }
 
 const cite = (b: Block) => `[${shortTag(b.session)}:${b.firstTurn}–${b.lastTurn}]`;
-const line = (b: Block) => `- ${b.gist ?? b.head} ${cite(b)}`;
+const line = (b: Block) => {
+	const g0 = b.gist ?? b.head;
+	const g = g0.length > 130 ? `${g0.slice(0, 127)}…` : g0; // 130-char bullets — terse is the point
+	return `- ${g} ${cite(b)}`;
+};
 
 export function composeOnePager(blocks: Block[], tag?: string): OnePager {
 	const scope = tag
