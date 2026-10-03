@@ -1,3 +1,9 @@
+## 2026-10-03 — v2 branch: orchestrator (Path A) + durable sidecar
+
+- durable study: Path A recommended for v2.0, sidecar pattern adopted, full Path B deferred (docs/durable-study.md)
+- parity: 4-writer concurrent appends validated (200/200, atomic single-line JSONL)
+- mjdx-sidecar: durable map-maintenance job (per-project checkpoint, unchanged-skip, watch mode)
+
 ## 2026-10-03 — v2 branch: /majordome init (cold-start) + lineage triage
 
 - init: past sessions → judged index (resumable, dry-run, mtime provenance); code-parser run: +32 blocks

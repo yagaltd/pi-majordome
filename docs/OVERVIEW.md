@@ -158,6 +158,18 @@ extension custom entries). majordome adds the classified layer on top.
   corpora collide on polysemous terms, idf can't discriminate within a project. Root cause of
   remaining MISSes = gist compression + dims quality, not lexing. Documented in-code.
 - next: orchestrator scope review (Durable A/B) + AGENTS.md pointer block (artifacts now exist)
+- ✅ **durable study** (`docs/durable-study.md`): Path A for v2.0 + durable sidecar; full Path B
+  deferred (experimental API, Harness rebuild). Verified by working crash/resume prototype.
+- ✅ **v2.0 orchestrator pieces**:
+  - shared-brain parity: 4 concurrent writers × 50 single-line appends → 200/200, 0 dupes
+    (`tools/parity.ts`) — dispatch storage assumption proven
+  - **mjdx-sidecar** (`durable-sidecar/`): map-maintenance as a durable task — refreshes
+    one-pager/map.json for registered projects (sidecars.json), checkpoint per project, fs-mtime
+    skip for unchanged inputs; crash/resume inherited from the verified proto pattern
+  - AGENTS.md pointer block live in code-parser (committed c772961)
+- open for review: worker dispatch protocol UX (Herdr panes vs headless), sidecar adoption as
+  default-on, consolidation (v2.4) still gated on the map
+
 
 
 **Architecture fork (decided at study phase):** Pi 1.0 shipped Pi Durable
