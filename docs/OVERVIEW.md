@@ -187,9 +187,38 @@ surface layer either way (panes can watch Durable threads).
   - **snifftest** (~/Documents/vibe/snifftest): output-register linting —
     deliberately NOT majordome (different layer); candidate pi skill.
     Their 0.4-0.6 "no judgment" dead band validates our abstention gate.
+- **Reasoning map** (2026-10-03 study; okf-agent-memory/OpenKB/IBIS): the session gets a
+  derived projection — IBIS-style tree (branches = questions/assumptions, leaves = results,
+  promotions, invalidations-with-reason + turn pointers). trail = append-only source; map =
+  rebuildable projection (never the truth). v1.7 candidate: lazy `/majordome map` — batch-compile
+  log → markmap-compatible md + JSON pointers, git-committed, browser-renderable (second Herdr
+  pane); ADRs = promoted leaves; one-pager = promoted-only linearization of the same tree.
+  Use: pre-query structural filter (codemap pattern) — map hit → inject branch bundle (branch +
+  leaves + why alternatives died); miss/low-confidence → fail open to vcc_recall (law: fail-open).
+  Killer feature = invalidation memory: stops post-compaction re-litigation. Live per-turn map
+  maintenance + **reconcile-on-ingest** (new evidence updates affected branches/pages — OpenKB's
+  keep-in-sync wiki is the reference) = v2 orchestrator durable jobs (judge battery rides the
+  existing routing DAG).
+- **Governance seeds** (okf-agent-memory DMAA study): (1) push codex — ~100–150-token AAG-style
+  invariants file (search-before-write as MUST, never-rewrite-sessions, soft-judge default);
+  (2) judgment trail — append-only verdicts {ts, judge, rule/dims-version, verdict, confidence}
+  (code-parser trails.jsonl pattern) = auditability + permanent calibration feed; (3) doc stamps —
+  generated/verified (human-only verified) + stale_after on `/majordome docs` output. Policy
+  pack TREE (corporate→business-unit→team, tighten-only inheritance, gates resolving version
+  chains, verdicts citing the resolved chain) = design-only until an enterprise deployment
+  lands. CrewAI ships only the platform layer (RBAC/SSO/audit + GuardrailProvider slot); the
+  content-governance seat is open — that gap is the differentiator.
+- **Dataset factory** (free-lunch note): raw-first trace is replayable → future training/distill
+  data is a batch job, never a design decision. Real costs land post-v2.4: consolidation = the
+  cleaning (promoted branches = positives, invalidated = negatives), judged axes = auto-labels,
+  PII scrub = the governance layer. Free because raw-first; easy after consolidation exists.
   References for the study phase (do not read until v2):
   - `~/Documents/vibe/supermemory`
   - `~/Documents/vibe/memorybench`
+  - `~/Documents/vibe/OpenKB` (compile-don't-rederive wiki; reconcile-on-ingest; Skill Factory;
+    PageIndex vectorless tree retrieval — same ancestor Jevbox cites)
+  - `~/Documents/vibe/okf-agent-memory` (DMAA push/pull, AAG codex, trust tiers, --for-path
+    triggers; Google OKF v0.2)
   - `/home/aurel/Documents/current/CognitiveOS/v3` (ingest_formats,
     retrieval_bench prior art)
   - `~/Documents/vibe/context-language-models` (paper + SCR + harness)
