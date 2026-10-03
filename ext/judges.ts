@@ -17,6 +17,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { homedir } from "node:os";
 import { createInterface } from "node:readline";
 import { dirname, join } from "node:path";
+import { trail } from "./trail.ts";
 
 export const HOSTED_URL = "https://api.typellm.ai";
 const TIMEOUT_MS = 30_000;
@@ -93,7 +94,10 @@ export async function blockMeta(text: string): Promise<BlockMeta | null> {
 			if (out) {
 				const intent = out.match(/intent:\s*([a-z]+)/i)?.[1]?.toLowerCase() ?? null;
 				const gist = out.match(/gist:\s*(.+)/i)?.[1]?.trim();
-				if (gist) return { intent: intent && INTENTS.has(intent) ? intent : null, gist };
+				if (gist) {
+				trail("blockMeta", { judge: "agent", ok: true, intent: intent ?? null });
+				return { intent: intent && INTENTS.has(intent) ? intent : null, gist };
+			}
 			}
 		} catch {
 			// fall through to null
@@ -109,7 +113,9 @@ export async function blockMeta(text: string): Promise<BlockMeta | null> {
 		gist: { type: "string", instructions: "One sentence: what was done or decided." },
 	});
 	const res = r?.result ?? {};
-	if (typeof res.gist !== "string" || !res.gist.trim()) return null;
+	const ok = typeof res.gist === "string" && !!res.gist.trim();
+	trail("blockMeta", { judge: "typellm", ok, intent: typeof res.intent === "string" ? res.intent : null });
+	if (!ok) return null;
 	return { intent: typeof res.intent === "string" ? res.intent : null, gist: res.gist.trim() };
 }
 
@@ -123,12 +129,17 @@ export async function induceDims(text: string): Promise<string[]> {
 		},
 	});
 	const v = r?.result?.dims;
-	if (typeof v !== "string") return [];
-	return v
-	.split(",")
-	.map((n) => n.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, ""))
-	.filter((n) => n.length >= 3)
-	.slice(0, 6);
+	if (typeof v !== "string") {
+		trail("induceDims", { ok: false });
+		return [];
+	}
+	const dims = v
+		.split(",")
+		.map((n) => n.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, ""))
+		.filter((n) => n.length >= 3)
+		.slice(0, 6);
+	trail("induceDims", { ok: dims.length > 0, n: dims.length });
+	return dims;
 }
 
 /** Recall query → terse content terms (strip meta framing; the all-zero attack). */
@@ -141,7 +152,9 @@ export async function rewriteQuery(text: string): Promise<string | null> {
 		},
 	});
 	const v = r?.result?.search_terms;
-	return typeof v === "string" && v.trim() ? v.trim() : null;
+	const ok = typeof v === "string" && !!v.trim();
+	trail("rewriteQuery", { ok });
+	return ok ? (v as string).trim() : null;
 }
 
 // ── routing intent DAG (TypeLLM-only depends_on capability) ─────────────────
@@ -182,10 +195,12 @@ export async function routingIntent(userMessage: string, recentAssistant?: strin
 			const label = typeof a === "string" ? a : (a as any)?.choice;
 			if (!label || label === "continuation") return null;
 			const nc = res?.answers?.need_clarification as { noul?: boolean } | boolean | undefined;
+			const need = nc === true || (nc as any)?.noul === true;
+			trail("routingIntent", { judge: "jev", intent: label, clarify: need });
 			return {
 				intent: label,
 				searchTerms: "",
-				needClarification: nc === true || (nc as any)?.noul === true,
+				needClarification: need,
 				clarifyWhy: "",
 			};
 		} catch {
@@ -225,7 +240,16 @@ export async function routingIntent(userMessage: string, recentAssistant?: strin
 		},
 	}, recentAssistant);
 	const res = r?.result ?? {};
-	if (typeof res.intent !== "string") return null;
+	if (typeof res.intent !== "string") {
+		trail("routingIntent", { judge: "typellm", ok: false });
+		return null;
+	}
+	trail("routingIntent", {
+		judge: "typellm",
+		intent: res.intent,
+		rewrite: typeof res.search_terms === "string" && !!res.search_terms,
+		clarify: res.need_clarification === "yes",
+	});
 	return {
 		intent: res.intent as RoutingIntent["intent"],
 		searchTerms: typeof res.search_terms === "string" ? res.search_terms : "",
@@ -250,7 +274,9 @@ export async function contradicts(query: string, gist: string): Promise<boolean>
 				},
 			},
 		);
-		return r?.result?.contradiction === "yes";
+		const verdict = r?.result?.contradiction === "yes";
+		trail("contradicts", { judge: "typellm", verdict });
+		return verdict;
 	}
 	if (classifyFn) {
 		try {
@@ -265,7 +291,9 @@ export async function contradicts(query: string, gist: string): Promise<boolean>
 				},
 			);
 			const a = res?.answers?.contradiction;
-			return a === true || (a as any)?.noul === true;
+			const verdict = a === true || (a as any)?.noul === true;
+			trail("contradicts", { judge: "jev", verdict });
+			return verdict;
 		} catch {
 			return false;
 		}

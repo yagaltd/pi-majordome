@@ -1,3 +1,15 @@
+## 2026-10-03 — governance seeds (v1.x close-out)
+
+- Added: judgment trail — append-only verdict metadata at every judge decision point
+  (blockMeta, induceDims, rewriteQuery, routingIntent, contradicts; agent-divert and
+  Jev paths included). Metadata only, never message text; fail-open writes;
+  `MAJORDOME_TRAIL_FILE` override for isolation.
+- Added: push codex — shipped invariant file at `~/.config/pi-majordome/codex.md`
+  (first-run default, never overwritten; human-editable).
+- Added: doc stamps — `/majordome docs` output instructs generated_by/generated_at/
+  stale_after frontmatter; `verified` is human-only and never agent-added.
+- Checks: `ext/selfcheck-governance.ts` (10 checks) alongside the main selfcheck suite.
+
 # Changelog
 
 Generated from the session-built history of pi-majordome. Every line traces to

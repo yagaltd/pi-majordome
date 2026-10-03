@@ -20,16 +20,21 @@ import { majordomeDir, type Block } from "./store.ts";
 
 export const DOC_INTENTS = new Set(["implementation", "documentation"]);
 
+/** Governance stamp (v1.x): generated docs carry provenance; `verified` is
+ * human-only and must never be added by the agent. */
+const STAMP =
+	"\n\nAfter writing the file, stamp it with YAML frontmatter as the FIRST block:\n---\ngenerated_by: majordome\ngenerated_at: <today, ISO date>\nstale_after: <generated_at + 30 days>\n---\nNEVER add a `verified:` field — that is human-only.";
+
 export const BUILTINS: Record<string, { instruction: string; cursorKey?: string }> = {
 	readme: {
 		cursorKey: "README",
 		instruction:
-			"[majordome docs · readme] Update README.md for this project based ONLY on the verified block digest below. Refresh features/usage sections the digest makes stale; do not invent features; keep the existing voice and structure.\n\nDigest:\n{{digest}}",
+			"[majordome docs · readme] Update README.md for this project based ONLY on the verified block digest below. Refresh features/usage sections the digest makes stale; do not invent features; keep the existing voice and structure.\n\nDigest:\n{{digest}}" + STAMP,
 	},
 	changelog: {
 		cursorKey: "CHANGELOG",
 		instruction:
-			"[majordome docs · changelog] Append a new entry to CHANGELOG.md covering ONLY the work in the digest below — Keep a Changelog style, one bullet per block gist, today's date as the heading. Do not invent entries.\n\nDigest:\n{{digest}}",
+			"[majordome docs · changelog] Append a new entry to CHANGELOG.md covering ONLY the work in the digest below — Keep a Changelog style, one bullet per block gist, today's date as the heading. Do not invent entries.\n\nDigest:\n{{digest}}" + STAMP,
 	},
 };
 

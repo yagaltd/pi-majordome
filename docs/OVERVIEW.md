@@ -119,6 +119,10 @@ Not in v1: `merge` (needs real Leiden communities), any chat surface
 
 ### v1.x — traceability & export (independent of git)
 
+Shipped (2026-10-03): governance seeds — judgment trail (trails.jsonl,
+metadata-only, fail-open), push codex (~/.config/pi-majordome/codex.md), doc stamps
+(generated_by/stale_after; verified human-only). Selfcheck: ext/selfcheck-governance.ts.
+
 Source of truth stays the pi session JSONL (append-only, full fidelity:
 every user/assistant message, tool call + result, compaction records,
 extension custom entries). majordome adds the classified layer on top.

@@ -210,3 +210,16 @@ flowchart LR
   context), abstention evidence for v1.x.
 - **v1.x**: ADR export polish, gist backfill on reindex, mid-slot promotion.
 - **v2**: orchestrator (firstmate-style) + memory consolidation; see OVERVIEW.
+
+## Governance (v1.x seeds)
+
+- **Judgment trail** — every judge verdict appends metadata to `~/.config/pi-majordome/trails.jsonl`
+  (`{t, j: judge, v, verdict fields}` — never message text). Consumed by calibration and any future
+  audit/dataset compile. Override: `MAJORDOME_TRAIL_FILE`. Writes fail open, never breaking a judge.
+- **Push codex** — `~/.config/pi-majordome/codex.md`, the invariants file (search-before-write,
+  append-only record, never index raw messages, soft judges, fail-open, `verified` is human-only).
+  Shipped default on first run; edit the file to make it yours — it is never overwritten.
+- **Doc stamps** — generated docs (`/majordome docs`) are stamped with
+  `generated_by: majordome` + `generated_at` + `stale_after` (+30d). `verified:` is human-only.
+
+See `docs/OVERVIEW.md` (v2 roadmap) and `docs/DESIGN.md` (decisions).
