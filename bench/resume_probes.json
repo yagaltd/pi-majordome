@@ -1,0 +1,10 @@
+[
+  { "id": "res-decision-soft", "class": "decision", "query": "why is the majordome judge soft mode the default?", "goldMustMatch": ["soft"] },
+  { "id": "res-decision-thinking", "class": "decision", "query": "why do dims numbers run without thinking?", "goldMustMatch": ["variance"] },
+  { "id": "res-leaveoff-onepager", "class": "leaveoff", "query": "what is the plan for the one-pager in v2?", "goldMustMatch": ["one-pager"] },
+  { "id": "res-invalidated-markmap", "class": "invalidated", "query": "should we render the session map with markmap?", "goldMustMatch": ["termaid"] },
+  { "id": "res-leaveoff-when", "class": "leaveoff", "query": "what did we change with the typellm when skip?", "goldMustMatch": ["when"] },
+  { "id": "res-decision-clarify", "class": "decision", "query": "how do we detect turns that need a clarifying question?", "goldMustMatch": ["clarify"] },
+  { "id": "res-cont-ok", "class": "continuation", "query": "ok continue from where we left" },
+  { "id": "res-cont-go", "class": "continuation", "query": "go" }
+]
