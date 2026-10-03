@@ -1,0 +1,15 @@
+{"format":1,"type":"commit","seq":1,"writes":[{"type":"conversation","value":{"id":1}},{"type":"document.create","record":{"id":2,"kind":"pi.live","scope":{"kind":"conversation","conversationId":1},"history":"latest","fork":"initial"},"ordinal":0},{"type":"document.create","record":{"id":3,"kind":"pi.inbox","scope":{"kind":"conversation","conversationId":1},"history":"latest","fork":"initial"},"ordinal":1},{"type":"document.create","record":{"id":4,"kind":"pi.usage","scope":{"kind":"conversation","conversationId":1},"history":"latest","fork":"initial"},"ordinal":2},{"type":"document.create","record":{"id":5,"kind":"pi.agent","scope":{"kind":"conversation","conversationId":1},"history":"rewindable","fork":"asOf"},"ordinal":3}]}
+{"format":1,"type":"commit","seq":2,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":3,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":4,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":5,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":6,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":7,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":8,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":9,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":10,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":11,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":12,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":13,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":14,"writes":[{"type":"task.sidecar","id":6,"ordinal":0}]}
+{"format":1,"type":"commit","seq":15,"writes":[{"type":"task","value":{"id":6,"conversationId":1,"kind":"mjdx.mapfold","version":1,"input":{"events":["turn-1","turn-2","turn-3","turn-4","turn-5","turn-6"]},"background":false,"abortRequested":false,"state":{"status":"terminal","outcome":{"status":"completed","result":"tree(6)"}}}}]}
