@@ -208,20 +208,20 @@ export async function routingIntent(userMessage: string, recentAssistant?: strin
 		},
 		search_terms: {
 			type: "string",
-			depends_on: ["intent"],
+			when: { intent: ["definition_recall", "incident_specific"] },
 			instructions: "5-12 terse content keywords for retrieving the relevant past work. Strip meta framing.",
 		},
 		need_clarification: {
 			type: "string",
 			enum: ["yes", "no"],
-			depends_on: ["intent"],
+			when: { intent: ["definition_recall", "incident_specific"] },
 			instructions:
 				"yes if the USER MESSAGE is too vague to act on well — a reference ('the thing', 'it', 'that issue') that neither the user message nor the recent assistant message resolves, or a missing subject/goal — and ONE clarifying question would materially change what the agent does. no if the request is clear enough to proceed, including references the recent assistant message resolves.",
 		},
 		clarify_why: {
 			type: "string",
-			depends_on: ["need_clarification"],
-			instructions: "If need_clarification is yes: the single missing piece, max 12 words. Otherwise: exactly 'ok'.",
+			when: { need_clarification: "yes" },
+			instructions: "The single missing piece, max 12 words.",
 		},
 	}, recentAssistant);
 	const res = r?.result ?? {};
