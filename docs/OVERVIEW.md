@@ -191,8 +191,11 @@ surface layer either way (panes can watch Durable threads).
   derived projection — IBIS-style tree (branches = questions/assumptions, leaves = results,
   promotions, invalidations-with-reason + turn pointers). trail = append-only source; map =
   rebuildable projection (never the truth). v1.7 candidate: lazy `/majordome map` — batch-compile
-  log → markmap-compatible md + JSON pointers, git-committed, browser-renderable (second Herdr
-  pane); ADRs = promoted leaves; one-pager = promoted-only linearization of the same tree.
+  log → `map.mmd` (Mermaid **mindmap**, short labels; same diagram language as dc_diagram) +
+  `map.json` (turn pointers, the machine side), git-committed. Display: zero-dep **termaid** in a
+  Herdr pane (`termaid .majordome/map.mmd` — pipe-friendly, terminal-width-aware; markmap dropped:
+  unwanted JS pipeline; static render is fine for a ToC, rich HTML later via any Mermaid viewer
+  if ever needed); ADRs = promoted leaves; one-pager = promoted-only linearization of the same tree.
   Use: pre-query structural filter (codemap pattern) — map hit → inject branch bundle (branch +
   leaves + why alternatives died); miss/low-confidence → fail open to vcc_recall (law: fail-open).
   Killer feature = invalidation memory: stops post-compaction re-litigation. Live per-turn map
