@@ -157,6 +157,22 @@ export async function rewriteQuery(text: string): Promise<string | null> {
 	return ok ? (v as string).trim() : null;
 }
 
+/** Self-Index key evolution (v2.4): 3-5 terse retrieval phrases that would
+ * surface `segment` for `query`. Faithfulness/specificity gated at the call
+ * site; fail-open empty. */
+export async function keyPhrases(segment: string, query: string): Promise<string[]> {
+	const r = await generate(`Query it should answer: ${query.slice(0, 200)}\n\nSegment:\n${segment.slice(0, 2500)}`, {
+		phrases: {
+			type: "string",
+			instructions: "Output 3-5 terse search phrases (comma-separated) that would retrieve this segment for the query. Use content words from the segment (or close synonyms) — never just echo the query framing.",
+		},
+	});
+	const v = r?.result?.phrases;
+	const ok = typeof v === "string" && !!v.trim();
+	trail("keyPhrases", { ok });
+	return ok ? (v as string).split(",").map((s) => s.trim()).filter(Boolean).slice(0, 5) : [];
+}
+
 // ── routing intent DAG (TypeLLM-only depends_on capability) ─────────────────
 
 export interface RoutingIntent {

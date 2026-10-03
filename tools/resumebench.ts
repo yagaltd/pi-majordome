@@ -71,5 +71,5 @@ const cont = rows.filter((r) => r.class === "continuation");
 const contOk = cont.filter((r) => r.intent === "continuation").length;
 const summary = { date: new Date().toISOString(), probes: probes.length, recallHitAt3: `${hits}/${recall.length}`, continuationGate: `${contOk}/${cont.length}`, rows };
 mkdirSync(join(import.meta.dirname ?? "tools", "..", "bench", "results"), { recursive: true });
-writeFileSync(join(import.meta.dirname ?? "tools", "..", "bench", "results", "resume-baseline.json"), JSON.stringify(summary, null, 2));
+writeFileSync(join(import.meta.dirname ?? "tools", "..", "bench", "results", "resume-last.json"), JSON.stringify(summary, null, 2));
 console.log(`\nbaseline: hit@3 ${hits}/${recall.length}, continuation gate ${contOk}/${cont.length} → bench/results/resume-baseline.json`);

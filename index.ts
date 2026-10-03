@@ -22,6 +22,10 @@ import { join } from "node:path";
 import { blockCores, detectBoundaries, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
 import { blockMeta, contradicts, dimVector, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev } from "./ext/judges.ts";
 import { docsNudge, injectionText, judgeLine, scanDocsTouched, shouldJudgeLine, route } from "./ext/router.ts";
+import { composeOnePager } from "./ext/onepager.ts";
+import { compileMap } from "./ext/map.ts";
+import { ingestDocs } from "./ext/ingest_docs.ts";
+import { listKinds, composeKind } from "./ext/docs.ts";
 import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
 interface St {
@@ -335,7 +339,7 @@ export default function majordome(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("majordome", {
-		description: "Topic memory dashboard (bare) · list · show · forget · export · reindex · stats · log · on/off",
+		description: "Topic memory dashboard (bare) · list · show · forget · one-pager · map · ingest-docs · docs · export · reindex · stats · log · on/off",
 		handler: async (args, ctx) => {
 			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
 			const cmd = parts[0];
@@ -481,6 +485,29 @@ export default function majordome(pi: ExtensionAPI): void {
 				} catch (e) {
 					notify(`digest saved → ${outFile}\n(send failed: ${String((e as Error).message ?? e).slice(0, 60)})\n\n${msg}`);
 				}
+				return;
+			}
+			if (cmd === "one-pager") {
+				const tag = a && a !== "show" ? a : undefined;
+				const op = composeOnePager(st.blocks, tag);
+				const dir = join(process.cwd(), ".majordome");
+				mkdirSync(dir, { recursive: true });
+				writeFileSync(join(dir, "one-pager.md"), op.md);
+				notify(a === "show" ? op.md : `one-pager \u2192 ${join(dir, "one-pager.md")} (${op.stats.blocks} blocks: ${op.stats.decisions} decisions, ${op.stats.now} now, ${op.stats.open} open)`);
+				return;
+			}
+			if (cmd === "map") {
+				const mm = compileMap(st.blocks);
+				const dir = join(process.cwd(), ".majordome");
+				mkdirSync(dir, { recursive: true });
+				writeFileSync(join(dir, "map.mmd"), mm.mmd);
+				writeFileSync(join(dir, "map.json"), JSON.stringify(mm.json, null, 2));
+				notify(`map \u2192 ${dir}/map.mmd + map.json (${mm.json.children.length} sessions)\nview: termaid ${join(dir, "map.mmd")}`);
+				return;
+			}
+			if (cmd === "ingest-docs") {
+				const r2 = ingestDocs();
+				notify(`ingested docs: ${r2.files} files \u2192 ${r2.blocks} blocks (configure ~/.config/pi-majordome/docs-sources.json)`);
 				return;
 			}
 			if (cmd === "export") {
