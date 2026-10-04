@@ -1,0 +1,80 @@
+{
+  "date": "2026-10-03T12:47:45.248Z",
+  "probes": 8,
+  "recallHitAt3": "1/6",
+  "continuationGate": "2/2",
+  "rows": [
+    {
+      "id": "res-decision-soft",
+      "class": "decision",
+      "intent": "definition_recall",
+      "arm": "dims",
+      "hitRank": 1,
+      "score": 5.16,
+      "winner": "--home-aurel-Documents-current-code-parser--:141"
+    },
+    {
+      "id": "res-decision-thinking",
+      "class": "decision",
+      "intent": "definition_recall",
+      "arm": "dims",
+      "hitRank": -1,
+      "score": 3.75,
+      "winner": "--home-aurel-Documents-current-code-parser--:97"
+    },
+    {
+      "id": "res-leaveoff-onepager",
+      "class": "leaveoff",
+      "intent": "definition_recall",
+      "arm": "dims",
+      "hitRank": -1,
+      "score": 0.68,
+      "winner": "--home-aurel-Documents-current-MorphFam-MorphEditor--:691"
+    },
+    {
+      "id": "res-invalidated-markmap",
+      "class": "invalidated",
+      "intent": "definition_recall",
+      "arm": "dims",
+      "hitRank": -1,
+      "score": 2.24,
+      "winner": "--home-aurel-Documents-current-code-parser--:170"
+    },
+    {
+      "id": "res-leaveoff-when",
+      "class": "leaveoff",
+      "intent": "definition_recall",
+      "arm": "dims",
+      "hitRank": -1,
+      "score": 2.25,
+      "winner": "--home-aurel-Documents-current-code-parser--:68"
+    },
+    {
+      "id": "res-decision-clarify",
+      "class": "decision",
+      "intent": "definition_recall",
+      "arm": "dims",
+      "hitRank": -1,
+      "score": 0.45,
+      "winner": "--home-aurel-Documents-current-code-parser--:46"
+    },
+    {
+      "id": "res-cont-ok",
+      "class": "continuation",
+      "intent": "continuation",
+      "arm": "-",
+      "hitRank": null,
+      "score": null,
+      "winner": null
+    },
+    {
+      "id": "res-cont-go",
+      "class": "continuation",
+      "intent": "continuation",
+      "arm": "-",
+      "hitRank": null,
+      "score": null,
+      "winner": null
+    }
+  ]
+}

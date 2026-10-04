@@ -137,6 +137,46 @@ extension custom entries). majordome adds the classified layer on top.
 
 ### v2 — orchestrator + memory consolidation
 
+**Build status (branch `v2`, worktree `../pi-majordome-v2` — 2026-10-03):**
+- ✅ **0** resume bench: 8 probes, pre-registered criteria; immutable baseline `resume-baseline.json`
+  (recall-only hit@3 **1/6**, continuation gate 2/2); runs → `resume-last.json`
+- ✅ **1** one-pager: `/majordome one-pager [tag|show]` — composed over GIST atoms, provenance-cited,
+  stamped; **A/B: 4/6 vs 1/6** (res-decision-soft, res-leaveoff-onepager, res-invalidated-markmap,
+  res-decision-clarify now hit)
+- ✅ **2** ingest adapter: `/majordome ingest-docs`, sources in `~/.config/pi-majordome/docs-sources.json`
+  (smoke: 9 files → 62 blocks, idempotent)
+- ✅ **3** map: `/majordome map` → `.majordome/map.mmd` (Mermaid mindmap, ✗ invalidations) +
+  `map.json`; pane: `termaid .majordome/map.mmd`
+- ✅ **4** Self-Index: `ext/selfindex.ts` — MISSES → keyPhrases judge → gated (102) → keys folded
+  (36/9 blocks); recall unchanged (missing golds are index *coverage* at 38 blocks, not keying)
+- fixed en route: latent master bug — `/majordome docs` ReferenceError (lost ext/docs.ts import)
+- ✅ **2.5 `/majordome init`** — cold-start over past sessions: same-slug indexed with judges
+  (resumable cursor, dry-run cost preview, mtime provenance), other slugs **parked as lineage**
+  (map-only, `--lineage <slug>` opt-in). Run on code-parser: 38 → **70 blocks, 100% gisted**.
+  One-pager A/B after init: 4/6 (timestamp bug 3/6 caught + fixed — ingest must keep original time).
+- ❌ REJECTED: lexical floor in the dims arm (max(cos, 0.5·bm25norm)) — 1/6 → 1/6; same-topic
+  corpora collide on polysemous terms, idf can't discriminate within a project. Root cause of
+  remaining MISSes = gist compression + dims quality, not lexing. Documented in-code.
+- next: orchestrator scope review (Durable A/B) + AGENTS.md pointer block (artifacts now exist)
+- ✅ **durable study** (`docs/durable-study.md`): Path A for v2.0 + durable sidecar; full Path B
+  deferred (experimental API, Harness rebuild). Verified by working crash/resume prototype.
+- ✅ **v2.0 orchestrator pieces**:
+  - shared-brain parity: 4 concurrent writers × 50 single-line appends → 200/200, 0 dupes
+    (`tools/parity.ts`) — dispatch storage assumption proven
+  - **mjdx-sidecar** (`durable-sidecar/`): map-maintenance as a durable task — refreshes
+    one-pager/map.json for registered projects (sidecars.json), checkpoint per project, fs-mtime
+    skip for unchanged inputs; crash/resume inherited from the verified proto pattern
+  - AGENTS.md pointer block live in code-parser (committed c772961)
+- ✅ **dispatch built, surface-agnostic**: tools/dispatch.ts — headless (pi -p, session saved +
+  indexed) and pane (herdr agent) modes, cold-start guard (init when slug memory empty), status
+  (per-worker block counts). Verified live: one dispatcher spawned workers in code-parser +
+  MorphEditor; both saved sessions into the shared brain. Web frontend later = Durable
+  viewState/subscribe on the same lifecycle.
+- open for review: worker dispatch protocol UX (Herdr panes vs headless), sidecar adoption as
+  default-on, consolidation (v2.4) still gated on the map
+
+
+
 **Architecture fork (decided at study phase):** Pi 1.0 shipped Pi Durable
 (earendil.com/posts/pi-durable) — a durable harness: tasks with ownership
 trees (subagent = conversation owned by a tool call), pluggable SQLite/JSONL

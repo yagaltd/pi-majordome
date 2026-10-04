@@ -50,6 +50,10 @@ export function rankArm(
 			.map((block, i) => ({ block, score: scores[i] ?? 0 }))
 			.sort((a, b) => b.score - a.score);
 	}
+	// REJECTED experiment (2026-10-03): lexical floor max(cos, 0.5·bm25norm) in
+	// this arm scored 1/6 → 1/6 on resumebench — same-topic corpora collide on
+	// terms like "map" (idf can't discriminate within one project). The fix is
+	// scope priors + one-pager scoping + dims quality, not lexical rescue.
 	const scored = cands.map((block) => ({
 		block,
 		score: cosineVec(queryVec, new Map(Object.entries(block.dims))),
@@ -123,7 +127,9 @@ export function judgeLine(why: string, mode: "soft" | "strict" = "soft"): string
 
 export function injectionText(w: Block, terms?: string, resume = false): string {
 	const slug = shortTag(w.session);
-	const bits = [`[majordome recall · ${slug} turns ${w.firstTurn}–${w.lastTurn}]`];
+	// validity date on every recall line — staleness must be visible to the reader
+	const when = w.closedAt ? w.closedAt.slice(0, 10) : "";
+	const bits = [`[majordome recall · ${slug} turns ${w.firstTurn}–${w.lastTurn}${when ? " · " + when : ""}]`];
 	if (w.gist) bits.push(w.gist);
 	if (w.intent) bits.push(`(intent: ${w.intent})`);
 	if (terms && terms.trim()) bits.push(`Read your request as: ${terms.trim().slice(0, 80)}.`);

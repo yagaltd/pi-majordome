@@ -1,0 +1,8 @@
+{
+  "name": "mjdx-sidecar",
+  "type": "module",
+  "dependencies": {
+    "@earendil-works/chord": "^1.0.1",
+    "@earendil-works/pi-durable": "^1.0.1"
+  }
+}

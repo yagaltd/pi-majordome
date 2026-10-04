@@ -22,7 +22,12 @@ import { join } from "node:path";
 import { blockCores, detectBoundaries, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
 import { blockMeta, contradicts, dimVector, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev } from "./ext/judges.ts";
 import { docsNudge, injectionText, judgeLine, scanDocsTouched, shouldJudgeLine, route } from "./ext/router.ts";
+import { composeOnePager } from "./ext/onepager.ts";
+import { compileMap } from "./ext/map.ts";
+import { ingestDocs } from "./ext/ingest_docs.ts";
 import { listKinds, composeKind } from "./ext/docs.ts";
+import { initRepo } from "./ext/init.ts";
+import { orch } from "./ext/orch.ts";
 import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
 interface St {
@@ -238,6 +243,12 @@ export default function majordome(pi: ExtensionAPI): void {
 		if (!st.on) return;
 		try {
 			await indexSession();
+				if (process.env.MJDX_WORKER) {
+					// push half: one line to the deck inbox — the orchestrator learns we finished
+					const mine = loadBlocks().filter((x) => x.sessionFile === st.sessionFile);
+					const last = mine.at(-1);
+					pushInbox({ worker: process.env.MJDX_WORKER, note: last?.gist ?? "session ended", sessionFile: st.sessionFile ?? undefined });
+				}
 		} catch (e) {
 			st.reason = `index error: ${String((e as Error).message ?? e).slice(0, 60)}`;
 			try {
@@ -336,7 +347,7 @@ export default function majordome(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("majordome", {
-		description: "Topic memory dashboard (bare) · list · show · forget · export · reindex · stats · log · on/off",
+		description: "Topic memory dashboard (bare) · list · show · forget · run-the-house (bare) · dash · orch · one-pager · map · ingest-docs · docs · export · reindex · stats · log · on/off",
 		handler: async (args, ctx) => {
 			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
 			const cmd = parts[0];
@@ -346,6 +357,13 @@ export default function majordome(pi: ExtensionAPI): void {
 			st.blocks = loadBlocks();
 
 			if (!cmd) {
+				// the butler answers when called by name: bare /majordome = run the house
+				orch(undefined)
+					.then((m) => notify(m))
+					.catch((e) => notify(`orch failed: ${(e as Error).message}`));
+				return;
+			}
+			if (cmd === "dash") {
 				const byTag = new Map<string, number>();
 				for (const bl of st.blocks) {
 					const t = shortTag(bl.session);
@@ -482,6 +500,46 @@ export default function majordome(pi: ExtensionAPI): void {
 				} catch (e) {
 					notify(`digest saved → ${outFile}\n(send failed: ${String((e as Error).message ?? e).slice(0, 60)})\n\n${msg}`);
 				}
+				return;
+			}
+			if (cmd === "init") {
+				initRepo({ cwd: process.cwd(), dryRun: a === "dry-run", slug: a && a !== "dry-run" ? a : undefined })
+					.then((m) => notify(m))
+					.catch((e) => notify(`init failed: ${(e as Error).message}`));
+				return;
+			}
+			if (cmd === "orch") {
+				orch(a && a !== "menu" ? [a, b].filter(Boolean).join(" ") : undefined)
+					.then((m) => notify(m))
+					.catch((e) => notify(`orch failed: ${(e as Error).message}`));
+				return;
+			}
+			if (cmd === "one-pager") {
+				const tag = a && a !== "show" ? a : undefined;
+				const op = composeOnePager(st.blocks, tag);
+				const dir = join(process.cwd(), ".majordome");
+				mkdirSync(dir, { recursive: true });
+				writeFileSync(join(dir, "one-pager.md"), op.md);
+				notify(a === "show" ? op.md : `one-pager \u2192 ${join(dir, "one-pager.md")} (${op.stats.blocks} blocks: ${op.stats.decisions} decisions, ${op.stats.now} now, ${op.stats.open} open)`);
+				return;
+			}
+			if (cmd === "map") {
+				const mm = compileMap(st.blocks);
+				const dir = join(process.cwd(), ".majordome");
+				mkdirSync(dir, { recursive: true });
+				writeFileSync(join(dir, "map.json"), JSON.stringify(mm.json, null, 2));
+				const { renderText } = await import("./ext/map.ts");
+				let view = renderText(mm.json);
+				if (a === "mmd" || a === "termaid") {
+					writeFileSync(join(dir, "map.mmd"), mm.mmd);
+					view += `\nmap.mmd \u2192 termaid ${join(dir, "map.mmd")}`;
+				}
+				notify(view);
+				return;
+			}
+			if (cmd === "ingest-docs") {
+				const r2 = ingestDocs();
+				notify(`ingested docs: ${r2.files} files \u2192 ${r2.blocks} blocks (configure ~/.config/pi-majordome/docs-sources.json)`);
 				return;
 			}
 			if (cmd === "export") {

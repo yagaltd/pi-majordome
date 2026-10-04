@@ -1,3 +1,29 @@
+## 2026-10-03 — v2 branch: dispatch (firstmate orchestrator, surface-agnostic)
+
+- tools/dispatch.ts: headless (pi -p) + pane (herdr agent) modes, cold-start guard, status
+- verified live: one dispatcher, two worker repos, sessions saved into the shared brain
+
+## 2026-10-03 — v2 branch: orchestrator (Path A) + durable sidecar
+
+- durable study: Path A recommended for v2.0, sidecar pattern adopted, full Path B deferred (docs/durable-study.md)
+- parity: 4-writer concurrent appends validated (200/200, atomic single-line JSONL)
+- mjdx-sidecar: durable map-maintenance job (per-project checkpoint, unchanged-skip, watch mode)
+
+## 2026-10-03 — v2 branch: /majordome init (cold-start) + lineage triage
+
+- init: past sessions → judged index (resumable, dry-run, mtime provenance); code-parser run: +32 blocks
+- lineage tier: other-repo sessions parked map-only, explicit --lineage opt-in, purgeable
+- rejected: dims-arm lexical floor (no aggregate gain; polysemy collision documented in-code)
+
+## 2026-10-03 — v2 branch: points 0–4 (bench-first)
+
+- v2.0 resume bench: 8 versioned probes, immutable baseline (recall-only hit@3 1/6, gate 2/2)
+- v2.1 one-pager command — A/B 4/6 vs baseline (composed GIST sections, provenance, stamps)
+- v2.2 docs ingest adapter — frontmatter md → index blocks, idempotent, doc: sessions
+- v2.3 reasoning map — lazy compile to Mermaid mindmap + turn-pointer json (termaid in pane)
+- v2.4 Self-Index key evolution — gated judge phrases into tokensHybrid; coverage-bound at 38 blocks
+- fixed: /majordome docs ReferenceError on master (lost ext/docs.ts import)
+
 ## 2026-10-03 — governance seeds (v1.x close-out)
 
 - Added: judgment trail — append-only verdict metadata at every judge decision point
