@@ -11,7 +11,7 @@
  * Same core as tools/dispatch.ts (the optional manual CLI) — one action set,
  * two surfaces. Cold repos init on first start; warm ones are noted.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { majordomeDir, loadBlocks } from "./store.ts";
 import { sessionSlug } from "./core.ts";
@@ -51,12 +51,17 @@ async function ensureAndStart(w: Worker, mode: "headless" | "pane"): Promise<str
 		spawn("herdr", ["agent", "start", "--cwd", w.cwd, "pi"], { cwd: w.cwd, stdio: "ignore" }).unref();
 		return `${w.name}: pane started (${note}) — steerable via herdr`;
 	}
-	const p = spawn(process.execPath, [whichPi(), "-p", "Summarize the current state of this project in 5 bullets."], {
-		cwd: w.cwd,
-		stdio: "ignore",
-	});
-	p.unref();
-	return `${w.name}: headless started (pid ${p.pid}) — session indexed on save (${note})`;
+		const logDir = join(w.cwd, ".majordome", "workers");
+		mkdirSync(logDir, { recursive: true });
+		const log = join(logDir, `${w.name}-${new Date().toISOString().replace(/[:.]/g, "-")}.log`);
+		const fd = openSync(log, "w");
+		const p = spawn(process.execPath, [whichPi(), "-p", "Summarize the current state of this project in 5 bullets."], {
+			cwd: w.cwd,
+			stdio: ["ignore", fd, fd],
+		});
+		p.unref();
+		closeSync(fd);
+		return `${w.name}: headless started (pid ${p.pid}) (${note}) — output \u2192 ${log}`;
 }
 
 export async function orch(arg?: string): Promise<string> {
