@@ -68,6 +68,18 @@ export async function orch(arg?: string): Promise<string> {
 	const conf = load();
 	const L = (s: string) => s;
 	if (!arg) {
+		// no-arg = the daily command: start all in the configured mode, then report
+		const out: string[] = [];
+		for (const w of conf.workers) out.push(await ensureAndStart(w, conf.mode));
+		if (!out.length) return "orchestrator: no workers — /majordome orch add /abs/path";
+		return out.join("\n");
+	}
+	if (arg === "pane" || arg === "headless") {
+		const out: string[] = [];
+		for (const w of conf.workers) out.push(await ensureAndStart(w, arg as "headless" | "pane"));
+		return `${arg}:\n` + out.join("\n");
+	}
+	if (arg === "menu") {
 		const lines = [L(`orchestrator — mode: ${conf.mode}`)];
 		conf.workers.forEach((w, i) => {
 			const n = slugBlocks(w.cwd);
