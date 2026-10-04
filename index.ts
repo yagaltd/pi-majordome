@@ -347,7 +347,7 @@ export default function majordome(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("majordome", {
-		description: "Topic memory dashboard (bare) · list · show · forget · one-pager · map · orch · ingest-docs · docs · export · reindex · stats · log · on/off",
+		description: "Topic memory dashboard (bare) · list · show · forget · run-the-house (bare) · dash · orch · one-pager · map · ingest-docs · docs · export · reindex · stats · log · on/off",
 		handler: async (args, ctx) => {
 			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
 			const cmd = parts[0];
@@ -357,6 +357,13 @@ export default function majordome(pi: ExtensionAPI): void {
 			st.blocks = loadBlocks();
 
 			if (!cmd) {
+				// the butler answers when called by name: bare /majordome = run the house
+				orch(undefined)
+					.then((m) => notify(m))
+					.catch((e) => notify(`orch failed: ${(e as Error).message}`));
+				return;
+			}
+			if (cmd === "dash") {
 				const byTag = new Map<string, number>();
 				for (const bl of st.blocks) {
 					const t = shortTag(bl.session);
