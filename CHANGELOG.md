@@ -1,3 +1,8 @@
+## 2026-10-03 — v2 branch: dispatch (firstmate orchestrator, surface-agnostic)
+
+- tools/dispatch.ts: headless (pi -p) + pane (herdr agent) modes, cold-start guard, status
+- verified live: one dispatcher, two worker repos, sessions saved into the shared brain
+
 ## 2026-10-03 — v2 branch: orchestrator (Path A) + durable sidecar
 
 - durable study: Path A recommended for v2.0, sidecar pattern adopted, full Path B deferred (docs/durable-study.md)

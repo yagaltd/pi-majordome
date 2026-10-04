@@ -167,6 +167,11 @@ extension custom entries). majordome adds the classified layer on top.
     one-pager/map.json for registered projects (sidecars.json), checkpoint per project, fs-mtime
     skip for unchanged inputs; crash/resume inherited from the verified proto pattern
   - AGENTS.md pointer block live in code-parser (committed c772961)
+- ✅ **dispatch built, surface-agnostic**: tools/dispatch.ts — headless (pi -p, session saved +
+  indexed) and pane (herdr agent) modes, cold-start guard (init when slug memory empty), status
+  (per-worker block counts). Verified live: one dispatcher spawned workers in code-parser +
+  MorphEditor; both saved sessions into the shared brain. Web frontend later = Durable
+  viewState/subscribe on the same lifecycle.
 - open for review: worker dispatch protocol UX (Herdr panes vs headless), sidecar adoption as
   default-on, consolidation (v2.4) still gated on the map
 
