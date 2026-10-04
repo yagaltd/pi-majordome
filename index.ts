@@ -243,6 +243,12 @@ export default function majordome(pi: ExtensionAPI): void {
 		if (!st.on) return;
 		try {
 			await indexSession();
+				if (process.env.MJDX_WORKER) {
+					// push half: one line to the deck inbox — the orchestrator learns we finished
+					const mine = loadBlocks().filter((x) => x.sessionFile === st.sessionFile);
+					const last = mine.at(-1);
+					pushInbox({ worker: process.env.MJDX_WORKER, note: last?.gist ?? "session ended", sessionFile: st.sessionFile ?? undefined });
+				}
 		} catch (e) {
 			st.reason = `index error: ${String((e as Error).message ?? e).slice(0, 60)}`;
 			try {

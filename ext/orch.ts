@@ -57,6 +57,7 @@ async function ensureAndStart(w: Worker, mode: "headless" | "pane"): Promise<str
 		const fd = openSync(log, "w");
 		const p = spawn(process.execPath, [whichPi(), "-p", "Summarize the current state of this project in 5 bullets."], {
 			cwd: w.cwd,
+			env: { ...process.env, MJDX_WORKER: w.name },
 			stdio: ["ignore", fd, fd],
 		});
 		p.unref();
