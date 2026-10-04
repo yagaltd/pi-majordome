@@ -80,8 +80,8 @@ export async function initRepo(opts: InitOpts): Promise<string> {
 	if (!current) {
 		const cands = [...bySlug.keys()].filter((s) => s.toLowerCase().includes(base));
 		if (cands.length === 1) current = cands[0];
-		else if (cands.length === 0) return `no sessions found for "${base}" — pass slug explicitly (known: ${[...bySlug.keys()].slice(0, 8).join(", ")})`;
-		else return `ambiguous slug for "${base}": ${cands.join(", ")} — pass --slug`;
+		else if (cands.length === 0) return `majordome init: no sessions found for "${base}" — pass slug explicitly`;
+		else return `majordome init: ambiguous slug "${base}" (${cands.length} candidates) — pass --slug`;
 	}
 
 	const state = loadState();
@@ -202,5 +202,6 @@ export async function initRepo(opts: InitOpts): Promise<string> {
 	// park unselected slugs (map-only visibility)
 	for (const s of bySlug.keys()) if (s !== current && !state.lineage[s] && !lineageSlugs.includes(s)) state.lineage[s] = "parked";
 	saveState(state);
-	return `init: +${indexed} blocks from ${newDone.length} sessions (${current}; ~${calls} judge calls). Parked lineages: ${Object.entries(state.lineage).filter(([, v]) => v === "parked").map(([k]) => k).join(", ") || "none"} — /majordome init --lineage <slug> to index one.`;
+	const parkedCount = Object.values(state.lineage).filter((v) => v === "parked").length;
+	return `majordome init complete: +${indexed} blocks from ${newDone.length} sessions. ${parkedCount} other project(s) parked (map-only) — /majordome init --lineage <slug> to index one.`;
 }
