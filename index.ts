@@ -27,6 +27,7 @@ import { compileMap } from "./ext/map.ts";
 import { ingestDocs } from "./ext/ingest_docs.ts";
 import { listKinds, composeKind } from "./ext/docs.ts";
 import { initRepo } from "./ext/init.ts";
+import { orch } from "./ext/orch.ts";
 import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
 interface St {
@@ -340,7 +341,7 @@ export default function majordome(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("majordome", {
-		description: "Topic memory dashboard (bare) · list · show · forget · one-pager · map · ingest-docs · docs · export · reindex · stats · log · on/off",
+		description: "Topic memory dashboard (bare) · list · show · forget · one-pager · map · orch · ingest-docs · docs · export · reindex · stats · log · on/off",
 		handler: async (args, ctx) => {
 			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
 			const cmd = parts[0];
@@ -492,6 +493,12 @@ export default function majordome(pi: ExtensionAPI): void {
 				initRepo({ cwd: process.cwd(), dryRun: a === "dry-run", slug: a && a !== "dry-run" ? a : undefined })
 					.then((m) => notify(m))
 					.catch((e) => notify(`init failed: ${(e as Error).message}`));
+				return;
+			}
+			if (cmd === "orch") {
+				orch(a && a !== "menu" ? [a, b].filter(Boolean).join(" ") : undefined)
+					.then((m) => notify(m))
+					.catch((e) => notify(`orch failed: ${(e as Error).message}`));
 				return;
 			}
 			if (cmd === "one-pager") {
