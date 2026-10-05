@@ -108,6 +108,18 @@ repo's artifacts fresh.
   supplies memory — verified co-loading). Majordome never talks to the user —
   the agent stays the interface; tone lives in your `AGENTS.md`.
 
+### Output shape (v2.6)
+
+A pre-turn judge reads your message (+ your `user.md` preferences) and, when a
+non-default shape serves better, injects one suggest-only line to the agent:
+`[majordome shape] diagram-first — lead with the graph; prose short. Keep every
+fact.` The ladder: `terse · diagram-first · table · walkthrough · artifact`
+(the Karpathy ladder as a routing table). Fail-open to default = zero lines,
+zero behavior change. Never invokes tools; never orders the agent. Measured by
+`tools/shapebench.ts`: 100% gold-shape accuracy live, fact retention ≥ default
+(median 112%), **−24% mean output tokens** shaped vs default — with caveman
+text as the baked-in negative control the metrics must catch.
+
 ### Docs generation
 
 ```

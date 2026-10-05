@@ -1,4 +1,5 @@
 ## 2026-10-03 — v2 branch: dispatch (firstmate orchestrator, surface-agnostic)
+- outputShape routing: pre-turn shape judge (terse/diagram-first/table/walkthrough/artifact; user.md preference context; suggest-only tail hint; fail-open default; trail-recorded) + ext/metrics.ts + shapebench (metric validation, caveman negative control; live: 100% gold accuracy, fact retention ≥ default, −24% mean output tokens).
 - docs adoption: brownfield cursor seeding at init (git log → mtime, absent-keys-only, idempotent) + per-repo docs profiles (code-marker detection → coding/generic watch sets, .majordome/docs.json override, custom watch names like NOTES) — profile-filtered nudges, docsbench gates d/e/f.
 - magic-docs v2: docsVerdict judge (value-driven nudge by kind; arithmetic fallback offline; trail-recorded) + per-slug doc cursors (slug:doc, legacy-migrated) + docsbench gates + subagent scratch sessions excluded from sweeps.
 - @slug: hard-scope recall by repo slug (`@office-parser …` — overrides priors, lifecycle+intent scopes still apply) + orch slug aliases (`orch @slug`); cross-slug bench gates (0-leak) — 13/13 green.
