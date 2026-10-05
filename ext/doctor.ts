@@ -11,6 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadBlocks, loadLifecycle, loadMeta, loadVocab, majordomeDir, effectiveStatus } from "./store.ts";
+import { isSubagentSession } from "./core.ts";
 
 const dir = majordomeDir();
 
@@ -52,8 +53,12 @@ export async function doctor(): Promise<string> {
 	const sd = sessionsDir();
 	if (existsSync(sd)) {
 		let laggy = 0;
+		let subagentDirs = 0;
 		const checked = new Set<string>();
 		for (const d of readdirSync(sd)) {
+			// subagent scratch sessions (.git-subagents worktrees) duplicate the main
+			// session's work — excluded from the sweep, counted for the report
+			if (isSubagentSession(d)) { subagentDirs++; continue; }
 			const sub = join(sd, d);
 			try {
 				for (const f of readdirSync(sub).filter((x) => x.endsWith(".jsonl"))) {
@@ -70,6 +75,7 @@ export async function doctor(): Promise<string> {
 		}
 		if (laggy) bad(`${laggy} session(s) lag the index heavily (long active sessions — the known closing-lag); /majordome init <slug> backfills`);
 		else ok("no heavy index lag detected");
+		if (subagentDirs) L.push(`· subagent scratch sessions: excluded from sweeps (${subagentDirs} dirs)`);
 	} else bad("sessions dir not found");
 
 	// 5. user.md (optional personal tier)

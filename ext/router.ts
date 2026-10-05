@@ -12,8 +12,8 @@
  *
  * Pure decision logic here; judges injected so tests run offline.
  */
-import { bm25Rank, federatedOrder, cosineVec, shortTag, tokens } from "./core.ts";
-import type { RoutingIntent } from "./judges.ts";
+import { bm25Rank, federatedOrder, cosineVec, sessionSlug, shortTag, tokens } from "./core.ts";
+import type { RoutingIntent, DocsKind } from "./judges.ts";
 import { statusOf, type Block } from "./store.ts";
 
 export type Arm = "dims" | "lex";
@@ -269,15 +269,77 @@ export function scanDocsTouched(raw: string): string[] {
 	return out;
 }
 
+// ── docs cursors (magic-docs v2): per-slug keys, lenient legacy migration ──
+
+/** Cursor key for a doc touch: `slug:docName` (e.g. code-parser:README) — a
+ * doc touch in repo X never advances repo Y's cursor. */
+export function cursorKey(slug: string, doc: string): string {
+	return `${slug}:${doc}`;
+}
+
+/** Read a doc cursor with legacy migration: pre-v2 stores keyed plain doc
+ * names; those entries are treated as belonging to the CURRENT session's slug
+ * (lenient, like Block.status parsing — never a store rewrite). */
+export function cursorForDoc(cursor: Record<string, string>, slug: string, doc: string): string | undefined {
+	return cursor[cursorKey(slug, doc)] ?? cursor[doc];
+}
+
+/** Per-doc cursor view for one session's slug: own `slug:doc` entries with
+ * the slug stripped, other slugs' entries dropped, legacy plain entries kept
+ * (they belong to the reading slug) but never shadowing a per-slug value.
+ * Feeds the arithmetic nudge rule. */
+export function cursorForSession(cursor: Record<string, string>, slug: string): Record<string, string> {
+	const out: Record<string, string> = {};
+	const own = `${slug}:`;
+	for (const [k, v] of Object.entries(cursor)) if (k.startsWith(own)) out[k.slice(own.length)] = v;
+	for (const [k, v] of Object.entries(cursor)) if (!k.includes(":") && out[k] === undefined) out[k] = v;
+	return out;
+}
+
+/** Verdict kind → docs-cursor doc name (ADRs conventionally land in docs/). */
+export const KIND_DOC: Record<DocsKind, string> = { readme: "README", changelog: "CHANGELOG", adr: "docs/" };
+
 export function docsNudge(
 	blocks: { sessionFile: string; intent: string | null; gist: string | null; closedAt: string }[],
 	sessionFile: string,
 	cursor: Record<string, string>,
 ): string | null {
 	const scoped = blocks.filter((b) => b.sessionFile === sessionFile && b.intent === "implementation" && b.gist);
-	const oldestTouch = Object.values(cursor).sort()[0];
+	// v2: per-slug cursor view — other repos' doc touches never cover this session's work
+	const own = cursorForSession(cursor, sessionSlug(sessionFile));
+	const oldestTouch = Object.values(own).sort()[0];
 	const since = oldestTouch ? scoped.filter((b) => b.closedAt > oldestTouch) : scoped;
 	if (since.length < 3) return null;
 	const list = since.slice(-3).map((b) => b.gist!.slice(0, 60)).join("; ");
-	return `[majordome docs] ${since.length} implementation blocks since ${Object.keys(cursor).join("/") || "any docs touch"} — recent: ${list}. Consider a README/CHANGELOG pass before wrapping up.`;
+	return `[majordome docs] ${since.length} implementation blocks since ${Object.keys(own).join("/") || "any docs touch"} — recent: ${list}. Consider a README/CHANGELOG pass before wrapping up.`;
+}
+
+/** Verdict-driven nudge text (magic-docs v2): always names its slug — that IS
+ * the routing (the session that did the work lives in that repo) — plus the
+ * kind, grounded with gists and block ids like the arithmetic nudge. */
+export function docsVerdictNudge(
+	slugTag: string,
+	kind: DocsKind,
+	items: { id: string; gist: string }[],
+): string {
+	const list = items.slice(-3).map((b) => `${b.gist.slice(0, 60)} (${b.id})`).join("; ");
+	const doc = kind === "readme" ? "README" : kind === "changelog" ? "CHANGELOG" : "docs/ ADR";
+	return `[majordome docs · ${slugTag}] judge verdict: ${kind}-worthy work this turn — ${list}. Consider a ${doc} pass before wrapping up.`;
+}
+
+/** Verdict → nudge decision (the exact rule index.ts applies at turn_end,
+ * pure so the bench can gate it): docsWorthy=false → no nudge regardless of
+ * count; a docs touch at/after this turn's work covers it; otherwise compose
+ * the nudge naming slug + kind. Null = stay quiet. */
+export function verdictToNudge(
+	verdict: { docsWorthy: boolean; kind: DocsKind | null },
+	cursor: Record<string, string>,
+	slug: string,
+	turnWork: { id: string; gist: string; closedAt: string }[],
+): string | null {
+	if (!verdict.docsWorthy || !verdict.kind || !turnWork.length) return null;
+	const cur = cursorForDoc(cursor, slug, KIND_DOC[verdict.kind]);
+	const newestWork = turnWork.map((b) => b.closedAt).sort().at(-1) ?? "";
+	if (cur && cur >= newestWork) return null; // the kind's cursor already covers this work
+	return docsVerdictNudge(shortTag(slug), verdict.kind, turnWork);
 }

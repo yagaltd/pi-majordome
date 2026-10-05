@@ -18,7 +18,7 @@
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { blockCores, detectBoundaries, parseSession, sessionSlug } from "./core.ts";
+import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug } from "./core.ts";
 import { blockMeta, dimVector, induceDims } from "./judges.ts";
 import { appendBlock, loadBlocks, loadVocab, saveVocab, type Block } from "./store.ts";
 
@@ -47,6 +47,9 @@ function discover(): string[] {
 	if (!existsSync(SESSIONS_DIR)) return [];
 	const out: string[] = [];
 	for (const d of readdirSync(SESSIONS_DIR)) {
+		// subagent scratch sessions (.git-subagents worktrees) duplicate the main
+		// session's work — their blocks never enter the index via sweeps
+		if (isSubagentSession(d)) continue;
 		const sub = join(SESSIONS_DIR, d);
 		try {
 			for (const f of readdirSync(sub)) if (f.endsWith(".jsonl")) out.push(join(sub, f));

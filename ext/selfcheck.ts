@@ -353,6 +353,55 @@ if (process.argv.includes("--parity")) {
 	check("orch ref: unknown slug → null (caller lists known slugs)", resolveWorkerRef("@ghost", workers) === null && resolveWorkerRef("99", workers) === null);
 }
 
+// ── magic-docs v2: per-slug cursors, legacy migration, verdict nudge, subagent exclusion ──
+{
+	const savedApiKey = process.env.TYPELLM_API_KEY; // hermetic: pin the offline config
+	delete process.env.TYPELLM_API_KEY;
+	process.env.MAJORDOME_KEY_FILE = join(tmp, "no-key-on-purpose"); // judges fail open
+	const { resetClassifyFn } = await import("./judges.ts");
+	resetClassifyFn();
+	const { cursorKey, cursorForDoc, cursorForSession, docsVerdictNudge, verdictToNudge } = await import("./router.ts");
+	const { isSubagentSession } = await import("./core.ts");
+	const { docsVerdict } = await import("./judges.ts");
+
+	// legacy cursor migration: plain doc keys read as the CURRENT session's slug
+	const legacy = { README: "2026-10-01T00:00:00Z" };
+	check("cursor: legacy plain key migrates leniently to the reading slug", cursorForDoc(legacy, "code-parser", "README") === "2026-10-01T00:00:00Z");
+	check("cursor: per-slug key format is slug:docName", cursorKey("code-parser", "README") === "code-parser:README");
+	// per-slug isolation: repo X's touch never moves repo Y's cursor
+	const cur = { "code-parser:README": "2026-10-03T00:00:00Z" };
+	check("cursor: per-slug key reads back for its own slug", cursorForDoc(cur, "code-parser", "README") === "2026-10-03T00:00:00Z");
+	check("cursor: repo X's touch invisible to repo Y", cursorForDoc(cur, "termaid", "README") === undefined);
+	check("cursor: per-slug key wins over legacy for its own slug", cursorForDoc({ ...legacy, ...cur }, "code-parser", "README") === "2026-10-03T00:00:00Z");
+	const view = cursorForSession({ "code-parser:README": "t1", "termaid:README": "t3", "code-parser:docs/": "t4", README: "t5-legacy" }, "code-parser");
+	check("cursor: session view — own stripped, other slugs dropped, legacy kept, per-slug wins", JSON.stringify(view) === JSON.stringify({ README: "t1", "docs/": "t4" }));
+
+	// fallback threshold on per-slug cursors (the arithmetic rule stays exact)
+	const SFY = "/h/.pi/agent/sessions/--home-u-repoy--/s.jsonl";
+	const implY = ["a", "b", "c"].map((g, i) => ({ sessionFile: SFY, intent: "implementation", gist: `built ${g}`, closedAt: `2026-10-0${i + 1}T12:00:00Z` }));
+	check("docsNudge v2: other repo's cursor never covers this repo's work", (docsNudge(implY as any, SFY, { "--home-u-repox--:README": "2026-10-05T00:00:00Z" }) ?? "").includes("3 implementation blocks"));
+	check("docsNudge v2: own repo legacy cursor still suppresses covered work", docsNudge(implY as any, SFY, { README: "2026-10-05T00:00:00Z" }) === null);
+	check("docsNudge v2: own per-slug cursor suppresses", docsNudge(implY as any, SFY, { "--home-u-repoy--:README": "2026-10-05T00:00:00Z" }) === null);
+
+	// verdict-driven nudge: names slug + kind, grounded; quiet on false/fresh-cursor
+	const work = [{ id: "code-parser:12", gist: "added --jobs flag for parallel workers", closedAt: "2026-10-04T12:00:00Z" }];
+	const vn = verdictToNudge({ docsWorthy: true, kind: "changelog" }, {}, "--home-u-code-parser--", work);
+	check("verdict nudge: names slug + kind + gist + id", !!vn && vn!.includes("code-parser") && vn!.includes("changelog") && vn!.includes("--jobs") && vn!.includes("code-parser:12"));
+	check("verdict nudge: docsWorthy=false → no nudge regardless of count", verdictToNudge({ docsWorthy: false, kind: null }, {}, "s", work) === null);
+	check("verdict nudge: fresh cursor (docs touched this turn) → quiet", verdictToNudge({ docsWorthy: true, kind: "readme" }, { "--home-u-code-parser--:README": "2026-10-04T13:00:00Z" }, "--home-u-code-parser--", work) === null);
+	check("verdict nudge: other repo's cursor never covers this repo", !!verdictToNudge({ docsWorthy: true, kind: "adr" }, { "--home-u-repox--:docs/": "2026-10-09T00:00:00Z" }, "--home-u-code-parser--", work));
+	const vnText = docsVerdictNudge("code-parser", "adr", [{ id: "code-parser:12", gist: "chose sqlite over postgres" }]);
+	check("verdict nudge text: grounded like the arithmetic nudge", vnText.includes("code-parser") && vnText.includes("adr") && vnText.includes("sqlite"));
+
+	// subagent exclusion filter (the one filter all sweepers share)
+	check("subagent exclusion: scratch session paths filtered", isSubagentSession("/h/.pi/agent/sessions/--home-u-repo-.git-subagents-run_x-task_1--/2026-01-01T00-00-00-000Z_a.jsonl") && isSubagentSession("--home-u-repo-.git-subagents-run_x-task_1--"));
+	check("subagent exclusion: normal sessions pass", !isSubagentSession("/h/.pi/agent/sessions/--home-u-repo--/s.jsonl") && !isSubagentSession("--home-u-repo--"));
+
+	// offline fail-open: no key + no classifier → null (caller keeps arithmetic rule)
+	check("docsVerdict: offline fail-open null", (await docsVerdict("implemented retry with backoff")) === null);
+	if (savedApiKey !== undefined) process.env.TYPELLM_API_KEY = savedApiKey;
+}
+
 if (failures) {
 	console.error(`\n${failures} failure(s)`);
 	process.exit(1);

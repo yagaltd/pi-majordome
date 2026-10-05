@@ -103,6 +103,15 @@ export function sessionSlug(sessionFile: string): string {
 	return m ? m[1] : sessionFile;
 }
 
+/** Subagent scratch sessions: pi runs subagents in `.git-subagents` worktree
+ * paths, so their session dirs carry the marker. Those sessions duplicate work
+ * already recorded in the main session — the ONE filter every sweeper
+ * (init / reindex-all / doctor lag check / live turn_end indexing) applies so
+ * their blocks never enter the index. */
+export function isSubagentSession(path: string): boolean {
+	return path.includes(".git-subagents");
+}
+
 // ── EMA boundary detection (verbatim port; deployment params) ──────────────
 
 /** First-turn indices of each block (always includes 1). decay/keep per eval.py. */
