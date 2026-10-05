@@ -1,0 +1,8 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"update on the docs previews: the webview panel broke sandboxing, larkspur-exporter switched code previews to the static-html renderer"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"switching the preview renderer to static-html."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"static-html renderer is the docs preview path now, the webview renderer is out"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"static-html confirmed as the preview path; webview dropped."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the preview pipeline builds static-html templates, no live embeds"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"preview pipeline now emits static-html only."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"ship the static-html previews in this release"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"static-html previews going out with the release."}]}}

@@ -1,0 +1,6 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"for embedding external dashboards, try the full-page iframe approach"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"trying the full-page iframe embed."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the iframe embed attempt failed — it broke csp on every portal page, so we reverted it"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"iframe embed reverted after the csp breakage."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"portal pages go back to server-side widgets until the csp story is solved"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"server-side widgets restored on the portal."}]}}

@@ -1,0 +1,6 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"attempt the schema migration with in-place alter scripts this time"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"attempting in-place alter scripts for the migration."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the in-place alter scripts failed halfway and corrupted the staging index — we rolled back to the dump-and-restore migration"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"in-place migration failed, rolled back; dump-and-restore is the migration path again."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"keep the dump-and-restore migration as the documented procedure"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"dump-and-restore documented as the migration procedure."}]}}

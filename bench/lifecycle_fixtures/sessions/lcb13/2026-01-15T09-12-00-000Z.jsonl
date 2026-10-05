@@ -1,0 +1,16 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"structured logs go through the pino pipeline, json lines to stdout"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"logging via the pino pipeline, json to stdout."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"decision: the pino pipeline is the structured logging path, redact request ids at the sink"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"pino pipeline confirmed with request-id redaction."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the log pipeline adds a level gate for debug noise"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"level gate added to the log pipeline."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"document the pino pipeline flags in the runbook"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"runbook documents the pino flags."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"outbound calls in the gateway layer use the undici client with a ten-second timeout"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"gateway uses undici, 10s timeout."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"keep the undici client as the single http path, no per-route fetch"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"undici is the single http path."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the gateway retries only idempotent calls through the undici pool"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"idempotent gateway calls retry via the undici pool."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"add the undici timeout to the ops dashboard"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"dashboard shows the undici timeout."}]}}

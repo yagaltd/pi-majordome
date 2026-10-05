@@ -1,0 +1,8 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the fixed-delay retries hammer the webhook receivers — larkspur-exporter moved to exponential backoff, 3 attempts"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"retry policy now exponential backoff, 3 attempts."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"exponential backoff with jitter is the webhook retry policy, fixed delay is wrong for receivers"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"backoff-with-jitter adopted; fixed delay replaced."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"cap the backoff at 30s so deliveries still land same-minute"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"backoff capped at 30s."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"update the worker config to the backoff schedule"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"worker runs the backoff schedule."}]}}

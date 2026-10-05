@@ -1,0 +1,414 @@
+{
+ "name": "lifecycle-fixtures",
+ "version": "v2.4-bench-before-build",
+ "corpus": "synthetic larkspur-exporter sessions with planted lifecycle ground truth (deterministic)",
+ "sessions": [
+  {
+   "slug": "lcb01",
+   "file": "sessions/lcb01/2026-01-15T09-00-00-000Z.jsonl",
+   "userTurns": 4,
+   "blocks": 1
+  },
+  {
+   "slug": "lcb02",
+   "file": "sessions/lcb02/2026-01-15T09-01-00-000Z.jsonl",
+   "userTurns": 4,
+   "blocks": 1
+  },
+  {
+   "slug": "lcb03",
+   "file": "sessions/lcb03/2026-01-15T09-02-00-000Z.jsonl",
+   "userTurns": 4,
+   "blocks": 1
+  },
+  {
+   "slug": "lcb04",
+   "file": "sessions/lcb04/2026-01-15T09-03-00-000Z.jsonl",
+   "userTurns": 4,
+   "blocks": 1
+  },
+  {
+   "slug": "lcb05",
+   "file": "sessions/lcb05/2026-01-15T09-04-00-000Z.jsonl",
+   "userTurns": 4,
+   "blocks": 1
+  },
+  {
+   "slug": "lcb06",
+   "file": "sessions/lcb06/2026-01-15T09-05-00-000Z.jsonl",
+   "userTurns": 4,
+   "blocks": 1
+  },
+  {
+   "slug": "lcb07",
+   "file": "sessions/lcb07/2026-01-15T09-06-00-000Z.jsonl",
+   "userTurns": 4,
+   "blocks": 1
+  },
+  {
+   "slug": "lcb08",
+   "file": "sessions/lcb08/2026-01-15T09-07-00-000Z.jsonl",
+   "userTurns": 4,
+   "blocks": 1
+  },
+  {
+   "slug": "lcb09",
+   "file": "sessions/lcb09/2026-01-15T09-08-00-000Z.jsonl",
+   "userTurns": 3,
+   "blocks": 1
+  },
+  {
+   "slug": "lcb10",
+   "file": "sessions/lcb10/2026-01-15T09-09-00-000Z.jsonl",
+   "userTurns": 3,
+   "blocks": 1
+  },
+  {
+   "slug": "lcb11",
+   "file": "sessions/lcb11/2026-01-15T09-10-00-000Z.jsonl",
+   "userTurns": 3,
+   "blocks": 1
+  },
+  {
+   "slug": "lcb12",
+   "file": "sessions/lcb12/2026-01-15T09-11-00-000Z.jsonl",
+   "userTurns": 8,
+   "blocks": 2
+  },
+  {
+   "slug": "lcb13",
+   "file": "sessions/lcb13/2026-01-15T09-12-00-000Z.jsonl",
+   "userTurns": 8,
+   "blocks": 4
+  },
+  {
+   "slug": "lcb14",
+   "file": "sessions/lcb14/2026-01-15T09-13-00-000Z.jsonl",
+   "userTurns": 4,
+   "blocks": 1
+  }
+ ],
+ "plants": [
+  {
+   "ref": "lcb01@t3",
+   "sessionSlug": "lcb01",
+   "turn": 3,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 4,
+   "expectedStatus": "superseded",
+   "label": "webview panel as docs preview renderer"
+  },
+  {
+   "ref": "lcb02@t3",
+   "sessionSlug": "lcb02",
+   "turn": 3,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 4,
+   "expectedStatus": "valid",
+   "label": "static-html renderer (supersedes webview)"
+  },
+  {
+   "ref": "lcb03@t3",
+   "sessionSlug": "lcb03",
+   "turn": 3,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 4,
+   "expectedStatus": "superseded",
+   "label": "settings.yaml as config format"
+  },
+  {
+   "ref": "lcb04@t2",
+   "sessionSlug": "lcb04",
+   "turn": 2,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 4,
+   "expectedStatus": "valid",
+   "label": "settings.toml (supersedes settings.yaml)"
+  },
+  {
+   "ref": "lcb05@t3",
+   "sessionSlug": "lcb05",
+   "turn": 3,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 4,
+   "expectedStatus": "superseded",
+   "label": "5 attempts fixed 2s delay webhook retries"
+  },
+  {
+   "ref": "lcb06@t2",
+   "sessionSlug": "lcb06",
+   "turn": 2,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 4,
+   "expectedStatus": "valid",
+   "label": "exponential backoff (supersedes fixed delay)"
+  },
+  {
+   "ref": "lcb07@t2",
+   "sessionSlug": "lcb07",
+   "turn": 2,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 4,
+   "expectedStatus": "superseded",
+   "label": "legacy-runner as integration harness"
+  },
+  {
+   "ref": "lcb08@t2",
+   "sessionSlug": "lcb08",
+   "turn": 2,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 4,
+   "expectedStatus": "valid",
+   "label": "vitest harness (supersedes legacy-runner)"
+  },
+  {
+   "ref": "lcb09@t2",
+   "sessionSlug": "lcb09",
+   "turn": 2,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 3,
+   "expectedStatus": "failed",
+   "label": "redis cache layer — failed under load, reverted to lru"
+  },
+  {
+   "ref": "lcb10@t2",
+   "sessionSlug": "lcb10",
+   "turn": 2,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 3,
+   "expectedStatus": "failed",
+   "label": "full-page iframe embed — broke csp, reverted"
+  },
+  {
+   "ref": "lcb11@t2",
+   "sessionSlug": "lcb11",
+   "turn": 2,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 3,
+   "expectedStatus": "failed",
+   "label": "in-place alter scripts — failed, rolled back to dump-and-restore"
+  },
+  {
+   "ref": "lcb12@t3",
+   "sessionSlug": "lcb12",
+   "turn": 3,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 4,
+   "expectedStatus": "valid",
+   "label": "device-code grant for cli login (control)"
+  },
+  {
+   "ref": "lcb12@t6",
+   "sessionSlug": "lcb12",
+   "turn": 6,
+   "blockFirstTurn": 5,
+   "blockLastTurn": 8,
+   "expectedStatus": "valid",
+   "label": "staging then east production deploy order (control)"
+  },
+  {
+   "ref": "lcb13@t3",
+   "sessionSlug": "lcb13",
+   "turn": 3,
+   "blockFirstTurn": 3,
+   "blockLastTurn": 3,
+   "expectedStatus": "valid",
+   "label": "pino pipeline for structured logs (control)"
+  },
+  {
+   "ref": "lcb13@t6",
+   "sessionSlug": "lcb13",
+   "turn": 6,
+   "blockFirstTurn": 5,
+   "blockLastTurn": 8,
+   "expectedStatus": "valid",
+   "label": "undici client with 10s timeout (control)"
+  },
+  {
+   "ref": "lcb14@t2",
+   "sessionSlug": "lcb14",
+   "turn": 2,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 4,
+   "expectedStatus": "speculative",
+   "label": "maybe plugin system (hedged future)"
+  },
+  {
+   "ref": "lcb14@t3",
+   "sessionSlug": "lcb14",
+   "turn": 3,
+   "blockFirstTurn": 1,
+   "blockLastTurn": 4,
+   "expectedStatus": "speculative",
+   "label": "might-consider rust rewrite (hedged future)"
+  }
+ ],
+ "supersessionPairs": [
+  {
+   "id": "ss-renderer",
+   "topic": "docs preview renderer",
+   "older": "lcb01@t3",
+   "newer": "lcb02@t3"
+  },
+  {
+   "id": "ss-config",
+   "topic": "config format",
+   "older": "lcb03@t3",
+   "newer": "lcb04@t2"
+  },
+  {
+   "id": "ss-retry",
+   "topic": "webhook retry policy",
+   "older": "lcb05@t3",
+   "newer": "lcb06@t2"
+  },
+  {
+   "id": "ss-harness",
+   "topic": "integration test harness",
+   "older": "lcb07@t2",
+   "newer": "lcb08@t2"
+  }
+ ],
+ "recallProbes": {
+  "neutral": [
+   {
+    "id": "neut-renderer",
+    "query": "which renderer renders the docs previews?",
+    "excludedRefs": [
+     "lcb01@t3"
+    ],
+    "expectValidRefs": [
+     "lcb02@t3"
+    ]
+   },
+   {
+    "id": "neut-config",
+    "query": "where does the config file live?",
+    "excludedRefs": [
+     "lcb03@t3"
+    ],
+    "expectValidRefs": [
+     "lcb04@t2"
+    ]
+   },
+   {
+    "id": "neut-retry",
+    "query": "how does the webhook retry policy work?",
+    "excludedRefs": [
+     "lcb05@t3"
+    ],
+    "expectValidRefs": [
+     "lcb06@t2"
+    ]
+   },
+   {
+    "id": "neut-harness",
+    "query": "how do the integration tests run?",
+    "excludedRefs": [
+     "lcb07@t2"
+    ],
+    "expectValidRefs": [
+     "lcb08@t2"
+    ]
+   },
+   {
+    "id": "neut-cache",
+    "query": "what cache layer is in place for the export pipeline?",
+    "excludedRefs": [
+     "lcb09@t2"
+    ],
+    "expectValidRefs": []
+   },
+   {
+    "id": "neut-embed",
+    "query": "how do portal pages embed external dashboards?",
+    "excludedRefs": [
+     "lcb10@t2"
+    ],
+    "expectValidRefs": []
+   },
+   {
+    "id": "neut-migrate",
+    "query": "how do we run schema migrations?",
+    "excludedRefs": [
+     "lcb11@t2"
+    ],
+    "expectValidRefs": []
+   },
+   {
+    "id": "neut-login",
+    "query": "how does cli login work?",
+    "excludedRefs": [],
+    "expectValidRefs": [
+     "lcb12@t3"
+    ]
+   },
+   {
+    "id": "neut-http",
+    "query": "what http client do outbound gateway calls use?",
+    "excludedRefs": [],
+    "expectValidRefs": [
+     "lcb13@t6"
+    ]
+   }
+  ],
+  "failureIntent": [
+   {
+    "id": "fail-tried",
+    "query": "what did we try that failed?",
+    "requiredRefs": [
+     "lcb09@t2",
+     "lcb10@t2",
+     "lcb11@t2"
+    ]
+   },
+   {
+    "id": "fail-reverted",
+    "query": "which approaches did we revert?",
+    "requiredRefs": [
+     "lcb09@t2",
+     "lcb10@t2",
+     "lcb11@t2"
+    ]
+   },
+   {
+    "id": "fail-iframe",
+    "query": "did the iframe embed attempt go wrong?",
+    "requiredRefs": [
+     "lcb10@t2"
+    ]
+   },
+   {
+    "id": "fail-migrate",
+    "query": "show me the wrong path we took with the schema migration",
+    "requiredRefs": [
+     "lcb11@t2"
+    ]
+   }
+  ]
+ },
+ "sanity": {
+  "note": "REAL historical pairs from this repo — hardcoded ground truth, no fixture files, excluded from numeric grading",
+  "realPairs": [
+   {
+    "id": "real-markmap-termaid",
+    "topic": "session-map renderer",
+    "olderClaim": "session map rendered as a markmap mindmap",
+    "newerClaim": "map display moved to the zero-dep termaid pane renderer — 'markmap dropped'",
+    "olderExpected": "superseded",
+    "newerExpected": "valid",
+    "evidence": "docs/OVERVIEW.md:246 ('markmap dropped: … termaid'); bench/resume_probes.json probe res-invalidated-markmap (query markmap, gold termaid)"
+   },
+   {
+    "id": "real-dashboard-dash",
+    "topic": "/majordome dashboard command name",
+    "olderClaim": "the /majordome dashboard command",
+    "newerClaim": "'dashboard moves to /majordome dash' — command renamed, /majordome orch kept as alias",
+    "olderExpected": "superseded",
+    "newerExpected": "valid",
+    "evidence": "commit 1ad0a3c 'naming consistency: bare /majordome = the orchestrator … dashboard moves to /majordome dash'; index.ts:367 (cmd === \"dash\")"
+   }
+  ]
+ },
+ "generatedAt": "2026-10-05T04:34:07.796Z"
+}

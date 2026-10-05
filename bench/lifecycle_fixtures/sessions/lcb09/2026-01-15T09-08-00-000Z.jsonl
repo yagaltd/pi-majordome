@@ -1,0 +1,6 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"let's try redis as the cache layer for the export pipeline"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"attempting redis as the cache layer."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"tried the redis cache layer — it failed under load, timeouts everywhere, and we reverted to the in-memory lru cache"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"redis attempt failed and was reverted; in-memory lru cache is back."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the in-memory lru cache stays until we understand the redis timeout spike"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"lru cache retained; redis parked."}]}}

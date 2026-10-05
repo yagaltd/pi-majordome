@@ -1,0 +1,8 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"maybe someday we could add a plugin system to larkspur-exporter"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"noted as a maybe: a plugin system."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"a plugin system might be worth exploring after the roadmap settles, no commitment"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"plugin system stays speculative — no commitment."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"another idea we might consider down the road is a rust rewrite of the parser core"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"rust rewrite filed under might-consider."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"no plans yet, just ideas floating: the plugin system and the rust rewrite"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"both remain open ideas, nothing planned."}]}}
