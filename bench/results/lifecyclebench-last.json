@@ -1,7 +1,7 @@
 {
- "date": "2026-10-05T04:54:06.489Z",
+ "date": "2026-10-05T05:13:05.535Z",
  "verdict": "pass",
- "isolatedDir": "/tmp/lifecyclebench-N9pUU1/home/majordome",
+ "isolatedDir": "/tmp/lifecyclebench-Tpi1bc/home/majordome",
  "consolidation": {
   "status": "ran",
   "file": "consolidate.ts",
@@ -65,8 +65,8 @@
   ],
   "leakRate": 0,
   "neutralLeaks": 0,
-  "neutralRanked": 90,
-  "failureAppearance": 1,
+  "neutralRanked": 140,
+  "failureAppearance": 0.875,
   "neutralRows": [
    {
     "id": "neut-renderer",
@@ -121,6 +121,36 @@
     "query": "what http client do outbound gateway calls use?",
     "returned": 10,
     "leakedRefs": []
+   },
+   {
+    "id": "neut-render2",
+    "query": "how are preview documents displayed?",
+    "returned": 10,
+    "leakedRefs": []
+   },
+   {
+    "id": "neut-cache2",
+    "query": "is there any caching on exports?",
+    "returned": 10,
+    "leakedRefs": []
+   },
+   {
+    "id": "neut-login2",
+    "query": "authentication flow for the cli",
+    "returned": 10,
+    "leakedRefs": []
+   },
+   {
+    "id": "neut-http2",
+    "query": "which library handles outbound gateway requests?",
+    "returned": 10,
+    "leakedRefs": []
+   },
+   {
+    "id": "neut-embed2",
+    "query": "external dashboards inside portal pages — supported?",
+    "returned": 10,
+    "leakedRefs": []
    }
   ],
   "failureRows": [
@@ -165,6 +195,48 @@
    {
     "id": "fail-migrate",
     "query": "show me the wrong path we took with the schema migration",
+    "requiredRefs": [
+     "lcb11@t2"
+    ],
+    "foundRefs": [
+     "lcb11@t2"
+    ]
+   },
+   {
+    "id": "fail-deadend",
+    "query": "which attempts turned out to be dead ends?",
+    "requiredRefs": [
+     "lcb09@t2",
+     "lcb10@t2",
+     "lcb11@t2"
+    ],
+    "foundRefs": [
+     "lcb09@t2",
+     "lcb10@t2",
+     "lcb11@t2"
+    ]
+   },
+   {
+    "id": "fail-brittle",
+    "query": "did the export caching prove brittle?",
+    "requiredRefs": [
+     "lcb09@t2"
+    ],
+    "foundRefs": []
+   },
+   {
+    "id": "fail-flop",
+    "query": "which experiment flopped on the embeds?",
+    "requiredRefs": [
+     "lcb10@t2"
+    ],
+    "foundRefs": [
+     "lcb10@t2"
+    ]
+   },
+   {
+    "id": "fail-abandon",
+    "query": "what did we abandon during the migration work?",
     "requiredRefs": [
      "lcb11@t2"
     ],
@@ -313,7 +385,7 @@
   },
   {
    "name": "leak rate ≤10%",
-   "value": "0% (0/90 ranked results)",
+   "value": "0% (0/140 ranked results)",
    "pass": true
   }
  ]

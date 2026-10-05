@@ -36,7 +36,7 @@ export function timeTravel(blocks: Block[], currentSession: string, currentTurn:
 /** Failure-intent queries ask about dead approaches — the failed/superseded
  * blocks are exactly what the user wants surfaced (spec regex, plus went/go
  * wrong so "did the iframe attempt go wrong?" counts too). */
-export const FAILURE_INTENT_RE = /what did we (try|attempt)|\bfailed\b|\brevert\w*\b|\babandon\w*\b|wrong path|didn'?t work|went wrong|go(es)? wrong/i;
+export const FAILURE_INTENT_RE = /what did we (try|attempt)|\bfailed\b|\brevert\w*\b|\babandon\w*\b|wrong path|didn'?t work|went wrong|go(es)? wrong|dead end|dead-end|proved brittle|flopped|not survive/i;
 
 export function isFailureIntent(query: string): boolean {
 	return FAILURE_INTENT_RE.test(query);

@@ -376,12 +376,21 @@ const RECALL_PROBES: LifecycleManifest["recallProbes"] = {
 		{ id: "neut-migrate", query: "how do we run schema migrations?", excludedRefs: ["lcb11@t2"], expectValidRefs: [] },
 		{ id: "neut-login", query: "how does cli login work?", excludedRefs: [], expectValidRefs: ["lcb12@t3"] },
 		{ id: "neut-http", query: "what http client do outbound gateway calls use?", excludedRefs: [], expectValidRefs: ["lcb13@t6"] },
+		{ id: "neut-render2", query: "how are preview documents displayed?", excludedRefs: ["lcb01@t3"], expectValidRefs: ["lcb02@t3"] },
+		{ id: "neut-cache2", query: "is there any caching on exports?", excludedRefs: ["lcb09@t2"], expectValidRefs: [] },
+		{ id: "neut-login2", query: "authentication flow for the cli", excludedRefs: [], expectValidRefs: ["lcb12@t3"] },
+		{ id: "neut-http2", query: "which library handles outbound gateway requests?", excludedRefs: [], expectValidRefs: ["lcb13@t6"] },
+		{ id: "neut-embed2", query: "external dashboards inside portal pages — supported?", excludedRefs: ["lcb10@t2"], expectValidRefs: [] },
 	],
 	failureIntent: [
 		{ id: "fail-tried", query: "what did we try that failed?", requiredRefs: ["lcb09@t2", "lcb10@t2", "lcb11@t2"] },
 		{ id: "fail-reverted", query: "which approaches did we revert?", requiredRefs: ["lcb09@t2", "lcb10@t2", "lcb11@t2"] },
 		{ id: "fail-iframe", query: "did the iframe embed attempt go wrong?", requiredRefs: ["lcb10@t2"] },
 		{ id: "fail-migrate", query: "show me the wrong path we took with the schema migration", requiredRefs: ["lcb11@t2"] },
+		{ id: "fail-deadend", query: "which attempts turned out to be dead ends?", requiredRefs: ["lcb09@t2", "lcb10@t2", "lcb11@t2"] },
+		{ id: "fail-brittle", query: "did the export caching prove brittle?", requiredRefs: ["lcb09@t2"] },
+		{ id: "fail-flop", query: "which experiment flopped on the embeds?", requiredRefs: ["lcb10@t2"] },
+		{ id: "fail-abandon", query: "what did we abandon during the migration work?", requiredRefs: ["lcb11@t2"] },
 	],
 };
 
