@@ -19,22 +19,18 @@ pi install /path/to/pi-majordome     # or: pi --extension ./index.ts for dev
 That's it — sessions self-bootstrap (session_start reloads the index; open
 tails close on the next turn_end). Nothing per-session, ever.
 
-**Optional — judge tiers** (all automatic, detected per session):
-
-| you have | routing intent | dims numbers | behavior |
-|---|---|---|---|
-| both keys (recommended) | TypeLLM DAG | Jev | full measured behavior |
-| TypeLLM only | TypeLLM DAG | guarded TypeLLM numbers | identical quality (A/B-proven) |
-| Jev only (no setup needed) | Jev choice | Jev | no query rewrite; otherwise full router |
-| neither | — | — | indexing + gists only, recall off (status says so) |
+**Optional — judge tiers** (all automatic, detected per session). Setup:
 
 ```bash
-npx tsx ext/judges.ts setup     # paste TypeLLM key → ~/.config/pi-majordome/typellm.key
+npx tsx ext/judges.ts setup     # interactive: paste your TypeLLM API key
 npx tsx ext/judges.ts verify    # one typed call proving key + transport
 ```
 
-Jev rides pi's classifier registry (`TYPESAFE_API_KEY` or `/login`). Gist
-fallback uses your own chat model — zero extra keys.
+`setup` writes the key to `~/.config/pi-majordome/typellm.key` (create the
+file yourself if you prefer; `TYPELLM_API_KEY` also works as an env var, and
+`MAJORDOME_KEY_FILE` overrides the path). Jev needs no setup — it rides pi's
+classifier registry (`TYPESAFE_API_KEY` or `/login`). Gist fallback uses your
+own chat model — zero extra keys.
 
 **Optional — backfill history**: `npx tsx tools/backfill.ts` ingests past
 sessions once; or let a repo's first worker start run `/majordome init` cold.
@@ -43,7 +39,11 @@ sessions once; or let a repo's first worker start run `/majordome init` cold.
 
 ### The orchestrator (the daily command)
 
-Run a house of project workers from one deck directory:
+Run a house of project workers from one deck directory — or from any repo;
+the brain is global, so coordination commands work from anywhere. You can
+work in code-parser while updating mailbox-parser and office-parser in the
+same session: recall is slug-scoped and every injected block is labeled with
+its repo. Full guide: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md).
 
 ```bash
 /majordome orch add /abs/path/to/repo   # register a worker (once per repo)
@@ -85,6 +85,12 @@ repo's artifacts fresh.
   Hits inject tail-only (`[majordome recall · repo turns N–M · date] gist…
   Read your request as: …`). Strong recall on definition work adds "resume
   rather than redoing it".
+- **@slug scoping**: prefix a query with `@repo-slug` to hard-scope recall to
+  that repo (`@office-parser what did we decide about the export loop?`) —
+  overrides priors, kills cross-repo noise; lifecycle and intent scopes still
+  apply. Also addresses orchestrator workers (`orch @slug`). Natural repo
+  mentions in prose already anchor retrieval — `@slug` is the explicit,
+  deterministic form. See docs/ORCHESTRATION.md.
 - **Lifecycle (v2.4)**: consolidation assigns `valid / superseded / failed /
   speculative` via pair judges (contradiction → superseded; tried-and-failed →
   failed). Default recall excludes dead blocks; "what did we try that failed?"
