@@ -67,6 +67,41 @@ export function scopeByLifecycle(cands: Block[], query: string): Block[] {
 	});
 }
 
+// ── @slug hard scope (v2.6) ───────────────────────────────────────────────────
+
+/** @slug token scan (spec regex) — sigil + slug chars, case-insensitive. */
+export const SLUG_TOKEN_RE = /@([a-z0-9][a-z0-9-]*)/gi;
+
+/** Session slug of a block: pi's cwd slug, lineage ingest prefix stripped. */
+export function slugOfBlock(b: { session: string }): string {
+	return b.session.replace(/^lineage:/, "");
+}
+
+/** Known-slug @tokens in the query, derived from the candidate pool itself
+ * (no registry): a token hits when it equals a block's session slug or its
+ * human shortTag, case-insensitively. Unknown @tokens (mentions, emails) are
+ * left alone as plain text. Null = no known slug → no hard scope, behavior
+ * exactly as before. */
+export function slugScopeFrom(query: string, cands: { session: string }[]): string[] | null {
+	const known = new Set<string>();
+	for (const b of cands) {
+		const s = slugOfBlock(b);
+		known.add(s.toLowerCase());
+		known.add(shortTag(s).toLowerCase());
+	}
+	const hits = new Set<string>();
+	for (const m of query.matchAll(SLUG_TOKEN_RE)) {
+		const t = m[1].toLowerCase();
+		if (known.has(t)) hits.add(t);
+	}
+	return hits.size ? [...hits].sort() : null;
+}
+
+function inSlugScope(b: { session: string }, scope: string[]): boolean {
+	const s = slugOfBlock(b);
+	return scope.includes(s.toLowerCase()) || scope.includes(shortTag(s).toLowerCase());
+}
+
 export interface Scored {
 	block: Block;
 	score: number;
@@ -107,6 +142,7 @@ export interface RouteResult {
 	nCands: number;
 	needClarification: boolean;
 	clarifyWhy: string;
+	slugScope: string[] | null; // known @slugs matched by the query (null = none)
 }
 
 /** Full route. judges injected: dag intent + query dims. Null dag or
@@ -124,12 +160,21 @@ export async function route(opts: {
 	const dag = await opts.routingIntent(opts.userMessage);
 	if (!dag || dag.intent === "continuation") return null;
 
-	const terms = dag.searchTerms || opts.userMessage;
+	let terms = dag.searchTerms || opts.userMessage;
 	const failureIntent = isFailureIntent(opts.userMessage);
 	const temporalIntent = isTemporalIntent(opts.userMessage);
-	const cands = scopeByLifecycle(timeTravel(opts.blocks, opts.currentSession, opts.currentTurn, opts.currentSessionFile), opts.userMessage);
+	const past = timeTravel(opts.blocks, opts.currentSession, opts.currentTurn, opts.currentSessionFile);
+	// @slug hard scope (v2.6): known @slugs override the scope priors — the
+	// candidate pool narrows to exactly those slugs' blocks (union for multiple;
+	// no cross-repo bleed). Lifecycle filtering and intent scopes still apply on
+	// top of the hard scope. The @ sigil is stripped from the retrieval terms
+	// (dims/BM25 judge the bare word, not "@office-parser"); the userMessage
+	// itself stays untouched for intent parsing.
+	const slugScope = slugScopeFrom(opts.userMessage, past);
+	const cands = scopeByLifecycle(slugScope ? past.filter((b) => inSlugScope(b, slugScope)) : past, opts.userMessage);
+	if (slugScope) terms = terms.replace(/@([a-z0-9][a-z0-9-]*)/gi, "$1");
 	if (!cands.length)
-		return { intent: dag.intent, arm: armFor(dag.intent), terms, winner: null, score: 0, ranked: [], nCands: 0, needClarification: dag.needClarification, clarifyWhy: dag.clarifyWhy };
+		return { intent: dag.intent, arm: armFor(dag.intent), terms, winner: null, score: 0, ranked: [], nCands: 0, needClarification: dag.needClarification, clarifyWhy: dag.clarifyWhy, slugScope };
 
 	// federate: per-session top-3 pools, round-robin; scoring per arm on full pool
 	const arm = armFor(dag.intent);
@@ -179,6 +224,7 @@ export async function route(opts: {
 		nCands: cands.length,
 		needClarification: dag.needClarification,
 		clarifyWhy: dag.clarifyWhy,
+		slugScope,
 	};
 }
 

@@ -1,11 +1,11 @@
 /**
  * Lifecycle fixtures generator (v2.4 bench-before-build; v2.5 IR + LongMemEval
- * + scale) — deterministic synthetic session transcripts with PLANTED
- * ground-truth lifecycle states:
+ * + scale; v2.6 @slug hard-scope corpus) — deterministic synthetic session
+ * transcripts with PLANTED ground-truth lifecycle states:
  *
  *   valid (default) | superseded | failed | speculative
  *
- * Corpus (14 tiny sessions, 13 planted turns):
+ * Corpus (18 tiny sessions, 15 planted turns):
  *   4 supersession chains — session A claims X, later session B contradicts
  *                           with Y → A planted superseded, B valid
  *   3 tried-and-failed     — "tried X, it failed / reverted" → failed
@@ -13,6 +13,17 @@
  *                           plants in one session live in DIFFERENT blocks —
  *                           the generator asserts that)
  *   2 speculative          — hedged future talk → speculative
+ *   4 cross-slug distractor sessions (v2.6) — a SECOND project (slugs
+ *                           other-project, other-project-ui/api/labs): plain
+ *                           valid decisions with overlapping generic
+ *                           vocabulary (renderer, config, pipeline) but
+ *                           disjoint specifics (kestrel vs larkspur), so
+ *                           @slug hard-scope probes have topically-similar
+ *                           cross-slug blocks to NOT bleed into. Template
+ *                           discipline mirrors the filler: no hedge/attempt/
+ *                           outcome/reversal tokens → they never trip
+ *                           consolidation (they stay valid and can never act
+ *                           as a superseding "newer" side).
  *
  * v2.5 LongMemEval ability probes (2-4 each):
  *   temporal    — the expected answer is the OLD (superseded) block
@@ -29,6 +40,14 @@
  * driven template rotation — no randomness, no clocks) around the planted
  * corpus as plausible-but-unrelated engineering distractors. Default 0 keeps
  * the small corpus byte-identical.
+ *
+ * v2.6 @slug hard-scope probes — scoped queries name a slug with the @ sigil
+ * ("@lcb02 which renderer renders the docs previews?") and must rank ONLY
+ * that slug's blocks: 0 cross-slug leaks (no larkspur↔kestrel bleed, even
+ * against the topically-similar other-project renderer block) and ≥1 expected
+ * ref per scoped probe. An UNscoped query on the same other-project topic
+ * must NOT hard-exclude the main blocks (no @token = no hard scope; priors
+ * still rank).
  *
  * Plus a hardcoded SANITY section with 2 REAL historical pairs from this
  * repo (markmap→termaid renderer switch; /majordome dashboard→dash rename).
@@ -104,8 +123,14 @@ export interface LifecycleManifest {
 	temporalProbes: { id: string; query: string; expectedOldRefs: string[] }[];
 	aggregationProbes: { id: string; query: string; expectedRefs: string[]; sessions: [string, string] }[];
 	abstentionProbes: { id: string; query: string; topic: string }[];
+	slugProbes: {
+		scopedMain: { id: string; query: string; scope: string; expectedRefs: string[] }[];
+		scopedOther: { id: string; query: string; scope: string; expectedRefs: string[] }[];
+		unscopedOtherTopic: { id: string; query: string; expectMainRefs: string[] }[];
+	};
+	otherProject: { note: string; sessions: { slug: string; file: string; userTurns: number; blocks: number }[] };
 	scale: number;
-	filler: { count: number; turnsPerSession: number; slugs: string[] };
+	filler: { count: number; turnsPerSession: number; slugs: string[]; otherCount: number; otherSlugs: string[] };
 	sanity: {
 		note: string;
 		realPairs: {
@@ -360,6 +385,108 @@ const SESSIONS: SessionSpec[] = [
 	},
 ];
 
+// ── cross-slug distractor project (v2.6) — the OTHER repo ────────────────────
+// Product: kestrel-dashboard (synthetic). Four sessions across four slugs (a
+// slug per session keeps block ids unique — init keys blocks by slug:turn).
+// Template discipline: plain valid decisions, NO hedge/attempt/outcome/reversal
+// tokens (consolidation never reassigns them and they can never supersede a
+// larkspur block), and shared GENERIC vocabulary (renderer, config, pipeline,
+// cache) with disjoint specifics — exactly the topically-similar-but-other-repo
+// corpus that @slug hard scope must not bleed into.
+const OTHER_SESSIONS: SessionSpec[] = [
+	{
+		slug: "other-project",
+		turns: [
+			u("kestrel-dashboard renders its landing widgets through the canvas painter, smooth animation on every tile"),
+			a("canvas painter owns the landing widgets."),
+			u("decision: the canvas painter is the widget renderer for kestrel-dashboard, registered in the paint loop"),
+			a("canvas painter locked in as the widget renderer."),
+			u("confirmed: widget rendering goes through the canvas painter pipeline, tiles repaint on data ticks"),
+			a("widget rendering pipeline confirmed: canvas painter, repaint on ticks."),
+			u("the paint loop batches widget frames so the dashboard stays smooth"),
+			a("paint loop batches widget frames."),
+			u("separate track: access controls move into config profiles, one profile per space"),
+			a("access controls home in config profiles."),
+			u("decision: config profiles feed the access rules, one profile per space"),
+			a("config profiles feed the access rules, one per space."),
+			u("profile edits hot-reload the affected rules without a restart"),
+			a("profile edits hot-reload their rules."),
+			u("document the config profile format in the team handbook"),
+			a("handbook documents the config profile format."),
+		],
+		plants: [
+			{ turn: 3, expectedStatus: "valid", label: "canvas painter widget rendering pipeline (other-project)" },
+			{ turn: 6, expectedStatus: "valid", label: "config profiles feed access rules (other-project)" },
+		],
+	},
+	{
+		slug: "other-project-ui",
+		turns: [
+			u("kestrel-dashboard palettes read from design tokens, one palette per workspace"),
+			a("palettes read from design tokens."),
+			u("the palette compiler emits css variables from the token set"),
+			a("palette compiler emits css variables."),
+			u("chart tooltips share the palette tokens so colors stay consistent"),
+			a("tooltips inherit palette colors."),
+			u("high-contrast mode flips the palette without touching the tokens"),
+			a("high-contrast flips the palette, tokens untouched."),
+			u("the palette picker previews skins live on the gallery page"),
+			a("palette picker previews skins live."),
+			u("ship the palette compiler with the next kestrel release"),
+			a("palette compiler ships next release."),
+			u("tooltips delay 300ms so cursor sweeps stay quiet"),
+			a("tooltip delay set to 300ms."),
+			u("note the token naming rules in the design guide"),
+			a("design guide notes token naming."),
+		],
+		plants: [],
+	},
+	{
+		slug: "other-project-api",
+		turns: [
+			u("the kestrel sync client queues edits locally when the network drops"),
+			a("edits queue locally offline."),
+			u("decision: the sync client replays the queue in order once connectivity returns"),
+			a("queue replays in order on reconnect."),
+			u("each queued edit carries an idempotency key so replays never duplicate"),
+			a("idempotency keys guard replays."),
+			u("the queue drains with backoff when the server sheds load"),
+			a("queue drains with backoff under load-shedding."),
+			u("conflicts resolve last-writer-wins per field, never per record"),
+			a("conflicts resolve per field."),
+			u("the sync client batches queue frames to save battery on mobile"),
+			a("queue frames batch to save battery."),
+			u("log the queue depth so support can diagnose stuck devices"),
+			a("queue depth logged for support."),
+			u("document the replay order guarantees in the api guide"),
+			a("api guide documents replay guarantees."),
+		],
+		plants: [],
+	},
+	{
+		slug: "other-project-labs",
+		turns: [
+			u("kestrel labs sketched a standup digest that condenses each member's week"),
+			a("standup digest sketched."),
+			u("the digest drafts from activity threads, members edit before it sends"),
+			a("digest drafts from threads, editable."),
+			u("release trains roll every second tuesday, curated by the rotating captain"),
+			a("release trains roll on tuesdays."),
+			u("a train car holds merged work that passed the canary soak"),
+			a("train cars hold canary-passed work."),
+			u("the captain curates the train manifest from the merged queue"),
+			a("captain curates the train manifest."),
+			u("missed trains slide to the next slot, never force-shipped"),
+			a("missed trains slide to the next slot."),
+			u("labs notes stay internal until the digest proves useful"),
+			a("labs notes stay internal for now."),
+			u("write the train captain rotation into the team playbook"),
+			a("playbook covers the captain rotation."),
+		],
+		plants: [],
+	},
+];
+
 // ── REAL historical sanity pairs (hardcoded, excluded from grading) ─────────
 
 export const REAL_SANITY_PAIRS: LifecycleManifest["sanity"]["realPairs"] = [
@@ -414,6 +541,26 @@ const RECALL_PROBES: LifecycleManifest["recallProbes"] = {
 		{ id: "fail-brittle", query: "which attempt proved brittle on export caching?", requiredRefs: ["lcb09@t2"] },
 		{ id: "fail-flop", query: "which experiment flopped on the embeds?", requiredRefs: ["lcb10@t2"] },
 		{ id: "fail-abandon", query: "what did we abandon during the migration work?", requiredRefs: ["lcb11@t2"] },
+	],
+};
+
+// ── v2.6 @slug hard-scope probes ─────────────────────────────────────────────
+// SCOPED queries carry @slug and must rank ONLY that slug's blocks: 0
+// cross-slug leaks (the other-project renderer/config blocks are topically
+// similar on purpose — that is the bleed the hard scope exists to stop) and
+// ≥1 expected ref per probe. UNSCOPED same-topic queries must keep main
+// blocks ranked: no @token = no hard scope, priors still do the ranking.
+const SLUG_PROBES: LifecycleManifest["slugProbes"] = {
+	scopedMain: [
+		{ id: "slug-renderer", query: "@lcb02 which renderer renders the docs previews?", scope: "lcb02", expectedRefs: ["lcb02@t3"] },
+		{ id: "slug-config", query: "@lcb04 where does the config file live?", scope: "lcb04", expectedRefs: ["lcb04@t2"] },
+	],
+	scopedOther: [
+		{ id: "slug-other", query: "@other-project how does the widget renderer pipeline work?", scope: "other-project", expectedRefs: ["other-project@t3", "other-project@t6"] },
+		{ id: "slug-other-case", query: "@Other-Project which config profiles feed the dashboards?", scope: "other-project", expectedRefs: ["other-project@t6"] },
+	],
+	unscopedOtherTopic: [
+		{ id: "slug-unscoped", query: "how does the widget renderer pipeline work for the kestrel dashboards?", expectMainRefs: ["lcb02@t3"] },
 	],
 };
 
@@ -499,6 +646,22 @@ const FILLER_TOPICS: string[][] = [
 ];
 const FILLER_TURNS_PER_SESSION = 16; // 4 topics × 4 turns
 
+// v2.6: scale-tier filler for the SECOND project — same template discipline,
+// kestrel-flavored topics, distinct slugs (other-project-xNN) so the cross-slug
+// corpus mass grows with the scale tier too. Zero at scale=0 (small corpus
+// byte-identical to pre-v2.6 plus the four base other-project sessions).
+const OTHER_FILLER_TOPICS: string[][] = [
+	// sparklines
+	["sparklines render from the same widget metrics as the big charts", "sparklines share widget metrics.", "the metrics sampler buckets activity by hour", "sampler buckets activity hourly.", "sparkline baselines smooth over weekend dips", "baselines smooth weekend dips.", "the widget legend hides on narrow tiles", "legend hides on narrow tiles."],
+	// alert routing
+	["alert routes pick the on-call rotation by severity", "alert routes follow severity.", "low-severity alerts batch into the morning recap", "low alerts batch into the recap.", "the escalation ladder pages the secondary after twenty minutes", "escalation pages secondary at twenty minutes.", "muted routes log silently for the audit", "muted routes log silently."],
+	// embed tokens
+	["embedded views authenticate with short-lived embed tokens", "embeds authenticate with short-lived tokens.", "the token mint caps each embed at a single referrer", "token mint caps one referrer per embed.", "expired embeds show a friendly refresh card", "expired embeds show a refresh card.", "the embed sdk keeps a tiny footprint, under forty kilobytes", "embed sdk stays under forty kilobytes."],
+	// heatmap view
+	["the heatmap view shades tiles by activity density", "heatmap shades tiles by density.", "dense hours get a hover breakdown per member", "dense hours break down per member.", "the heatmap legend doubles as a time scrubber", "legend doubles as a scrubber.", "weekend columns collapse when the workspace skips them", "weekend columns collapse when skipped."],
+];
+const otherFillerCount = (scale: number): number => Math.min(8, Math.ceil(scale / 8));
+
 function fillerSessionSpec(index: number): { slug: string; file: string; turns: Turn[] } {
 	// rotation: (index*3 + topicSlot*5) mod 20 — every session gets 4 distinct
 	// topics; across 60 sessions all 20 topics appear in shifting company
@@ -511,6 +674,19 @@ function fillerSessionSpec(index: number): { slug: string; file: string; turns: 
 	}
 	const file = `2026-01-16T10-${String(10 + (index % 50)).padStart(2, "0")}-${String((index * 7) % 60).padStart(2, "0")}-000Z.jsonl`;
 	return { slug: `filler${String(index).padStart(2, "0")}`, file, turns };
+}
+
+function otherFillerSpec(index: number): { slug: string; file: string; turns: Turn[] } {
+	// distinct rotation so the sessions differ from the main filler set
+	const turns: Turn[] = [];
+	for (let k = 0; k < 4; k++) {
+		const topic = OTHER_FILLER_TOPICS[(index * 2 + k * 3) % OTHER_FILLER_TOPICS.length];
+		for (let t = 0; t < topic.length; t += 2) {
+			turns.push(u(topic[t]), a(topic[t + 1]));
+		}
+	}
+	const file = `2026-01-17T11-${String(10 + (index % 45)).padStart(2, "0")}-${String((index * 11) % 60).padStart(2, "0")}-000Z.jsonl`;
+	return { slug: `other-project-x${String(index).padStart(2, "0")}`, file, turns };
 }
 
 /** Pollution guards: filler must never trip consolidation's status heuristics
@@ -530,15 +706,16 @@ const POLLUTION_TOKENS = new Set([
 function validateFiller(scale: number, abstentionQueries: string[]): void {
 	const abstentionTok = new Set<string>();
 	for (const q of abstentionQueries) for (const t of tokens(q)) abstentionTok.add(t);
-	for (let i = 1; i <= scale; i++) {
-		const spec = fillerSessionSpec(i);
+	const validate = (spec: { slug: string; turns: Turn[] }) => {
 		for (const turn of spec.turns) {
 			for (const tok of tokens(turn.text)) {
 				if (POLLUTION_TOKENS.has(tok)) throw new Error(`filler ${spec.slug}: pollution token "${tok}" (consolidation/intent would misread it) — reword: "${turn.text.slice(0, 60)}"`);
 				if (abstentionTok.has(tok)) throw new Error(`filler ${spec.slug}: token "${tok}" collides with an abstention probe — reword: "${turn.text.slice(0, 60)}"`);
 			}
 		}
-	}
+	};
+	for (let i = 1; i <= scale; i++) validate(fillerSessionSpec(i));
+	for (let i = 1; i <= otherFillerCount(scale); i++) validate(otherFillerSpec(i));
 }
 
 // ── generation + self-validation ──────────────────────────────────────────────
@@ -575,13 +752,36 @@ export function generateLifecycleFixtures(targetDir: string, scale = 0): Lifecyc
 	for (const p of ABSTENTION_PROBES) {
 		if (FAILURE_INTENT_RE.test(p.query) || TEMPORAL_INTENT_RE.test(p.query)) throw new Error(`abstention probe ${p.id} reads as failure/temporal-intent`);
 	}
+	// v2.6 @slug probes: scoped queries must carry their own @scope token and
+	// stay neutral-intent; unscoped same-topic queries must carry NO @token at
+	// all (they assert the absence of hard scope). Scopes must name real
+	// session slugs, expected refs must be planted.
+	for (const p of [...SLUG_PROBES.scopedMain, ...SLUG_PROBES.scopedOther]) {
+		if (FAILURE_INTENT_RE.test(p.query) || TEMPORAL_INTENT_RE.test(p.query)) throw new Error(`slug probe ${p.id} reads as failure/temporal-intent`);
+		if (!p.query.toLowerCase().includes(`@${p.scope.toLowerCase()}`)) throw new Error(`slug probe ${p.id}: query must carry @${p.scope}`);
+	}
+	for (const p of SLUG_PROBES.unscopedOtherTopic) {
+		if (FAILURE_INTENT_RE.test(p.query) || TEMPORAL_INTENT_RE.test(p.query)) throw new Error(`unscoped slug probe ${p.id} reads as failure/temporal-intent`);
+		if (/@[a-z0-9]/i.test(p.query)) throw new Error(`unscoped slug probe ${p.id} must not carry an @token`);
+	}
 	validateFiller(scale, ABSTENTION_PROBES.map((p) => p.query));
+	// the cross-slug sessions follow the same discipline as the filler, in every tier
+	for (const spec of OTHER_SESSIONS) {
+		for (const turn of spec.turns) {
+			for (const tok of tokens(turn.text)) {
+				if (POLLUTION_TOKENS.has(tok)) throw new Error(`other-project session ${spec.slug}: pollution token "${tok}" — reword: "${turn.text.slice(0, 60)}"`);
+			}
+		}
+	}
 
 	const plants: PlantEntry[] = [];
 	const sessionRows: LifecycleManifest["sessions"] = [];
+	const otherRows: LifecycleManifest["otherProject"]["sessions"] = [];
 
-	for (let s = 0; s < SESSIONS.length; s++) {
-		const spec = SESSIONS[s];
+	const isOther = (slug: string) => OTHER_SESSIONS.some((o) => o.slug === slug);
+	for (let s = 0; s < SESSIONS.length + OTHER_SESSIONS.length; s++) {
+		const spec = [...SESSIONS, ...OTHER_SESSIONS][s];
+		const rowsOut = isOther(spec.slug) ? otherRows : sessionRows;
 		const dir = join(sessionsDir, spec.slug);
 		mkdirSync(dir, { recursive: true });
 		// fixed fake timestamp → deterministic file name + mtime-independent
@@ -621,7 +821,8 @@ export function generateLifecycleFixtures(targetDir: string, scale = 0): Lifecyc
 				label: p.label,
 			});
 		}
-		sessionRows.push({ slug: spec.slug, file: `sessions/${spec.slug}/${file}`, userTurns: turns.length, blocks: bounds.length });
+		const row = { slug: spec.slug, file: `sessions/${spec.slug}/${file}`, userTurns: turns.length, blocks: bounds.length };
+		rowsOut.push(row);
 	}
 
 	// filler distractor sessions (scale tier) — plain transcripts, no plants
@@ -633,12 +834,27 @@ export function generateLifecycleFixtures(targetDir: string, scale = 0): Lifecyc
 		writeFileSync(join(dir, f.file), transcriptLines({ turns: f.turns }));
 		fillerSlugs.push(f.slug);
 	}
+	// v2.6: scale-tier filler for the second project — cross-slug mass grows too
+	const otherFillerSlugs: string[] = [];
+	for (let i = 1; i <= otherFillerCount(scale); i++) {
+		const f = otherFillerSpec(i);
+		const dir = join(sessionsDir, f.slug);
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(join(dir, f.file), transcriptLines({ turns: f.turns }));
+		otherFillerSlugs.push(f.slug);
+	}
 
 	// cross-checks: every probe ref exists; every pair member exists
 	const refs = new Set(plants.map((p) => p.ref));
-	for (const q of [...RECALL_PROBES.neutral, ...RECALL_PROBES.failureIntent, ...TEMPORAL_PROBES.map((t) => ({ ...t, excludedRefs: [], requiredRefs: t.expectedOldRefs })), ...AGGREGATION_PROBES.map((t) => ({ ...t, excludedRefs: [], requiredRefs: t.expectedRefs }))]) {
+	for (const q of [...RECALL_PROBES.neutral, ...RECALL_PROBES.failureIntent, ...TEMPORAL_PROBES.map((t) => ({ ...t, excludedRefs: [], requiredRefs: t.expectedOldRefs })), ...AGGREGATION_PROBES.map((t) => ({ ...t, excludedRefs: [], requiredRefs: t.expectedRefs })), ...SLUG_PROBES.scopedMain.map((t) => ({ id: t.id, excludedRefs: [], requiredRefs: t.expectedRefs })), ...SLUG_PROBES.scopedOther.map((t) => ({ id: t.id, excludedRefs: [], requiredRefs: t.expectedRefs })), ...SLUG_PROBES.unscopedOtherTopic.map((t) => ({ id: t.id, excludedRefs: [], requiredRefs: t.expectMainRefs }))]) {
 		const list = [...("excludedRefs" in q ? (q as any).excludedRefs ?? [] : []), ...((q as any).requiredRefs ?? []), ...((q as any).expectValidRefs ?? [])];
 		for (const r of list) if (!refs.has(r)) throw new Error(`probe ${q.id}: unknown ref ${r}`);
+	}
+	// slug scopes must name real session slugs
+	for (const p of [...SLUG_PROBES.scopedMain, ...SLUG_PROBES.scopedOther]) {
+		if (!plants.some((x) => x.sessionSlug === p.scope) && !SESSIONS.some((s) => s.slug === p.scope) && !OTHER_SESSIONS.some((s) => s.slug === p.scope)) {
+			throw new Error(`slug probe ${p.id}: scope "${p.scope}" matches no session slug`);
+		}
 	}
 	// aggregation members: two DIFFERENT sessions, both valid plants
 	for (const p of AGGREGATION_PROBES) {
@@ -653,8 +869,9 @@ export function generateLifecycleFixtures(targetDir: string, scale = 0): Lifecyc
 	// abstention: zero token overlap with the ENTIRE corpus (planted + filler)
 	{
 		const corpusTok = new Set<string>();
-		for (const spec of SESSIONS) for (const t of spec.turns) for (const tok of tokens(t.text)) corpusTok.add(tok);
+		for (const spec of [...SESSIONS, ...OTHER_SESSIONS]) for (const t of spec.turns) for (const tok of tokens(t.text)) corpusTok.add(tok);
 		for (let i = 1; i <= scale; i++) for (const t of fillerSessionSpec(i).turns) for (const tok of tokens(t.text)) corpusTok.add(tok);
+		for (let i = 1; i <= otherFillerCount(scale); i++) for (const t of otherFillerSpec(i).turns) for (const tok of tokens(t.text)) corpusTok.add(tok);
 		for (const p of ABSTENTION_PROBES) {
 			const hit = [...tokens(p.query)].filter((t) => corpusTok.has(t));
 			if (hit.length) throw new Error(`abstention probe ${p.id}: tokens ${hit.join(",")} exist in the corpus — pick a truly absent topic`);
@@ -663,8 +880,8 @@ export function generateLifecycleFixtures(targetDir: string, scale = 0): Lifecyc
 
 	const manifest: LifecycleManifest = {
 		name: "lifecycle-fixtures",
-		version: "v2.5-ir-longmemeval-scale",
-		corpus: "synthetic larkspur-exporter sessions with planted lifecycle ground truth (deterministic)",
+		version: "v2.6-slug-scope",
+		corpus: "synthetic larkspur-exporter + kestrel-dashboard sessions with planted lifecycle ground truth (deterministic)",
 		sessions: sessionRows,
 		plants,
 		supersessionPairs: [
@@ -677,8 +894,13 @@ export function generateLifecycleFixtures(targetDir: string, scale = 0): Lifecyc
 		temporalProbes: TEMPORAL_PROBES,
 		aggregationProbes: AGGREGATION_PROBES,
 		abstentionProbes: ABSTENTION_PROBES,
+		slugProbes: SLUG_PROBES,
+		otherProject: {
+			note: "cross-slug distractor project (kestrel-dashboard) — valid-only templates, shared generic vocabulary, disjoint specifics; @slug hard scope must not bleed into it",
+			sessions: otherRows,
+		},
 		scale,
-		filler: { count: scale, turnsPerSession: FILLER_TURNS_PER_SESSION, slugs: fillerSlugs },
+		filler: { count: scale, turnsPerSession: FILLER_TURNS_PER_SESSION, slugs: fillerSlugs, otherCount: otherFillerSlugs.length, otherSlugs: otherFillerSlugs },
 		sanity: {
 			note: "REAL historical pairs from this repo — hardcoded ground truth, no fixture files, excluded from numeric grading",
 			realPairs: REAL_SANITY_PAIRS,
@@ -707,9 +929,9 @@ if (isMain) {
 	const target = process.argv[2] && !process.argv[2].startsWith("--") ? process.argv[2] : join(import.meta.dirname ?? "tools", "..", "bench", "lifecycle_fixtures");
 	const manifest = generateLifecycleFixtures(target, scale);
 	const counts = manifest.plants.reduce<Record<string, number>>((m, p) => ({ ...m, [p.expectedStatus]: (m[p.expectedStatus] ?? 0) + 1 }), {});
-	console.log(`lifecycle fixtures → ${target}${scale ? ` (scale: +${scale} filler sessions)` : ""}`);
-	console.log(`sessions: ${manifest.sessions.length}, plants: ${manifest.plants.length} (${Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(", ")}), filler: ${manifest.filler.count}`);
-	console.log(`supersession pairs: ${manifest.supersessionPairs.length}, probes: ${manifest.recallProbes.neutral.length} neutral / ${manifest.recallProbes.failureIntent.length} failure / ${manifest.temporalProbes.length} temporal / ${manifest.aggregationProbes.length} aggregation / ${manifest.abstentionProbes.length} abstention`);
+	console.log(`lifecycle fixtures → ${target}${scale ? ` (scale: +${scale} filler +${manifest.filler.otherCount} other-project filler sessions)` : ""}`);
+	console.log(`sessions: ${manifest.sessions.length} main + ${manifest.otherProject.sessions.length} other-project, plants: ${manifest.plants.length} (${Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(", ")}), filler: ${manifest.filler.count} + ${manifest.filler.otherCount}`);
+	console.log(`supersession pairs: ${manifest.supersessionPairs.length}, probes: ${manifest.recallProbes.neutral.length} neutral / ${manifest.recallProbes.failureIntent.length} failure / ${manifest.temporalProbes.length} temporal / ${manifest.aggregationProbes.length} aggregation / ${manifest.abstentionProbes.length} abstention / ${manifest.slugProbes.scopedMain.length + manifest.slugProbes.scopedOther.length} slug-scoped + ${manifest.slugProbes.unscopedOtherTopic.length} slug-unscoped`);
 	console.log(`sanity real pairs: ${manifest.sanity.realPairs.map((p) => p.id).join(", ")}`);
 	console.log(`manifest: ${join(target, "fixtures_manifest.json")}`);
 }
