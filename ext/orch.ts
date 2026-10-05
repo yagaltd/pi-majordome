@@ -3,6 +3,8 @@
  *
  * One command: /majordome orch prints the menu into the chat; replies act:
  *   /majordome orch 1        start worker 1 (config mode: headless default)
+ *   /majordome orch @slug    start by slug — worker name or cwd basename
+ *                            (case-insensitive; "orch slug" works too)
  *   /majordome orch a        start all
  *   /majordome orch add /abs/path [name]   register a repo (persisted)
  *   /majordome orch remove 2 remove worker 2
@@ -21,6 +23,23 @@ import { initRepo } from "./init.ts";
 
 type Worker = { name: string; cwd: string };
 type OrchConf = { workers: Worker[]; mode: "headless" | "pane" };
+
+/** Worker addressing (v2.6): "N" (1-based) | "slug" | "@slug" — slug = worker
+ * name or the cwd basename, case-insensitive. All three resolve to one worker. */
+export function resolveWorkerRef(ref: string, workers: Worker[]): Worker | null {
+	const trim = ref.trim();
+	if (/^\d+$/.test(trim)) return workers[Number(trim) - 1] ?? null;
+	const key = trim.replace(/^@/, "").toLowerCase();
+	return (
+		workers.find((w) => w.name.toLowerCase() === key) ??
+		workers.find((w) => (w.cwd.split("/").filter(Boolean).pop() ?? "").toLowerCase() === key) ??
+		null
+	);
+}
+
+const workerSlug = (w: Worker): string => w.cwd.split("/").filter(Boolean).pop() ?? w.name;
+const knownSlugs = (workers: Worker[]): string =>
+	workers.map((w) => (workerSlug(w).toLowerCase() === w.name.toLowerCase() ? w.name : `${w.name}|${workerSlug(w)}`)).join(", ") || "(none registered)";
 
 const confFile = () => join(majordomeDir(), "orchestrator.json");
 const load = (): OrchConf => {
@@ -88,7 +107,7 @@ export async function orch(arg?: string): Promise<string> {
 			lines.push(` ${i + 1}. ${w.name.padEnd(16)} ${n} blocks [${n > 0 ? "warm" : "cold"}]`);
 		});
 		lines.push(" a. start all · add /abs/path [name] · remove <n> · status");
-		lines.push(`reply: /majordome orch <n | a | add … | remove … | status>`);
+		lines.push(`reply: /majordome orch <n | @slug | a | add … | remove … | status>`);
 		return lines.join("\n");
 	}
 	const trim = arg.trim();
@@ -122,7 +141,10 @@ export async function orch(arg?: string): Promise<string> {
 		save(conf);
 		return `removed ${gone.name} (${gone.cwd})`;
 	}
-	const num = Number(trim);
-	if (Number.isInteger(num) && conf.workers[num - 1]) return await ensureAndStart(conf.workers[num - 1], conf.mode);
+	// worker addressing: "N", "slug", or "@slug" — one worker, three spellings
+	const w = resolveWorkerRef(trim, conf.workers);
+	if (w) return await ensureAndStart(w, conf.mode);
+	if (/^\d+$/.test(trim)) return `no worker #${trim}`;
+	if (/^@?[a-z0-9][a-z0-9-]*$/i.test(trim)) return `no worker matching "${trim}" — known slugs: ${knownSlugs(conf.workers)}`;
 	return `unknown: "${trim}" — /majordome orch for the menu`;
 }

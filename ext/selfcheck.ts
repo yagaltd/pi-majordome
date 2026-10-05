@@ -12,7 +12,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSession, tokens, jaccard, detectBoundaries, blockCores, bm25Rank, federatedOrder, cosineVec } from "./core.ts";
 import { parseDims, routingIntent, setClassifyFn, resetClassifyFn } from "./judges.ts";
-import { timeTravel, rankArm, route, injectionText, judgeLine, docsNudge, scanDocsTouched, armFor } from "./router.ts";
+import { timeTravel, rankArm, route, injectionText, judgeLine, docsNudge, scanDocsTouched, armFor, slugScopeFrom, slugOfBlock } from "./router.ts";
+import { resolveWorkerRef } from "./orch.ts";
 import { composeKind, digest, filterBlocks } from "./docs.ts";
 import type { Block } from "./store.ts";
 
@@ -303,6 +304,53 @@ if (process.argv.includes("--parity")) {
 	check("consolidation: older superseded, newer stays valid", statusOf(after.find((b) => b.id === "pair:1")!) === "superseded" && statusOf(after.find((b) => b.id === "pair:2")!) === "valid");
 	check("consolidation: idempotent re-run", (await runConsolidation()).changed === 0);
 	check("consolidation: verdict trail recorded", loadLifecycle().supersessions.some((l) => l.older === "pair:1" && l.newer === "pair:2" && l.source === "heuristic-lexical"));
+}
+
+// ── v2.6 @slug hard scope + orch slug aliases ──
+{
+	const mk = (session: string, terms: string[], status?: BlockStatus): Block => ({
+		id: `${session}:1`, session, sessionFile: `/x/${session}/s.jsonl`, firstTurn: 1, lastTurn: 2,
+		gist: null, intent: null, dims: {}, tokensHybrid: terms, head: terms.join(" "), closedAt: "2026-01-01T00:00:00Z", ...(status ? { status } : {}),
+	});
+	const main = mk("lcb02", ["renderer", "previews", "docs"]);
+	const mainDead = { ...mk("lcb02", ["webview", "renderer"]), id: "lcb02:9", firstTurn: 9, status: "failed" as const };
+	const other = mk("lineage:other-project", ["renderer", "widgets", "pipeline"]);
+	const routeOpts = (userMessage: string) => ({
+		userMessage,
+		blocks: [main, mainDead, other],
+		currentSession: "__selfcheck__",
+		currentTurn: 99999,
+		routingIntent: async () => ({ intent: "incident_specific", searchTerms: userMessage, needClarification: false, clarifyWhy: "" }),
+		queryDims: async () => null,
+		tokens: (s: string) => tokens(s),
+	});
+
+	const r1 = await route(routeOpts("@lcb02 which renderer renders the docs previews?"));
+	check("slug scope: hard-scopes ranked results to the named slug", r1 !== null && r1.slugScope?.[0] === "lcb02" && r1.ranked.length === 1 && r1.ranked[0].block.id === "lcb02:1");
+	check("slug scope: @ sigil stripped from retrieval terms", r1 !== null && !r1.terms.includes("@") && r1.terms.includes("lcb02"));
+	const r2 = await route(routeOpts("@Other-Project how does the widget renderer pipeline work?"));
+	check("slug scope: case-insensitive, lineage: prefix handled, other slug scoped", r2 !== null && r2.slugScope?.[0] === "other-project" && r2.ranked.length >= 1 && r2.ranked.every((s) => slugOfBlock(s.block) === "other-project"));
+	const r3 = await route(routeOpts("@nobody which renderer renders previews?"));
+	check("slug scope: unknown @token stays plain text (no scope, priors rank all)", r3 !== null && r3.slugScope === null && r3.ranked.length === 2); // failed mainDead still lifecycle-excluded
+	const piSlugBlock = mk("--home-aurel-Documents-current-code-parser--", ["renderer"]);
+	const r4 = await route({ ...routeOpts("@code-parser which renderer renders previews?"), blocks: [piSlugBlock, main, other] });
+	check("slug scope: matches shortTag of pi cwd slugs", r4 !== null && r4.slugScope?.[0] === "code-parser" && r4.ranked.length === 1 && r4.ranked[0].block.session === "--home-aurel-Documents-current-code-parser--");
+	const r5 = await route(routeOpts("@lcb02 which renderer renders the docs previews?"));
+	check("slug scope: lifecycle filter still applies on top (failed excluded)", r5 !== null && !r5.ranked.some((s) => s.block.id === "lcb02:9"));
+	const r6 = await route(routeOpts("@lcb02 what did we try that failed?"));
+	check("slug scope: failure-intent still applies inside the scope", r6 !== null && r6.ranked.length >= 1 && r6.ranked.some((s) => s.block.id === "lcb02:9"));
+	check("slugScopeFrom: no @tokens → null (behavior unchanged)", slugScopeFrom("plain query about renderers", [main, other]) === null);
+
+	const workers = [
+		{ name: "office-parser", cwd: "/home/a/Code/office-parser" },
+		{ name: "termaid", cwd: "/home/a/Code/termaid" },
+		{ name: "side-quest", cwd: "/home/a/vibe/renamed-dir" },
+	];
+	check("orch ref: numeric addressing", resolveWorkerRef("2", workers)?.name === "termaid");
+	check("orch ref: bare slug = worker name, case-insensitive", resolveWorkerRef("Termaid", workers)?.name === "termaid");
+	check("orch ref: @slug form resolves the same worker", resolveWorkerRef("@termaid", workers)?.name === "termaid");
+	check("orch ref: slug falls back to cwd basename", resolveWorkerRef("office-parser", workers)?.name === "office-parser" && resolveWorkerRef("renamed-dir", workers)?.name === "side-quest");
+	check("orch ref: unknown slug → null (caller lists known slugs)", resolveWorkerRef("@ghost", workers) === null && resolveWorkerRef("99", workers) === null);
 }
 
 if (failures) {

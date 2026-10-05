@@ -45,9 +45,24 @@
  *                 implemented in router.ts: results with score ≤ 0 (no
  *                 shared non-stopword token) are not recall hits — reported
  *                 as a spec deviation (small, obviously-correct product fix).
+ * v2.6 additions (same invocation, same hermetic sandbox):
+ *   @SLUG HARD-SCOPE PROBES + CROSS-SLUG CORPUS — the generator adds a second
+ *     project (other-project*, kestrel-dashboard templates: same generic
+ *     vocabulary as the main corpus, disjoint specifics) so scoped queries
+ *     have topically-similar cross-slug blocks to NOT bleed into. Probes:
+ *     (a) @slug-scoped query on a MAIN slug ranks only main-slug blocks;
+ *     (b) scoped to other-project ranks only its blocks (case-insensitive
+ *     @token covered); (c) an UNscoped query on the other project's topic
+ *     must NOT hard-exclude main blocks — no @token, no hard scope, priors
+ *     still rank. PRE-REGISTERED GATES: '@slug hard scope: 0 cross-slug
+ *     leaks, ≥1 expected ref per scoped probe' and '@slug unscoped: no hard
+ *     exclusion without @token (main refs still ranked)'. Slug probes are
+ *     graded separately and do NOT enter the v2.5 IR aggregates (those bars
+ *     stay apples-to-apples).
  *   SCALE KNOB — tier two regenerates the corpus with 60 deterministic filler
- *     distractor sessions (gen_lifecycle_fixtures --scale 60) and reruns
- *     every gate over the larger corpus, plus scale-specific bars.
+ *     distractor sessions (gen_lifecycle_fixtures --scale 60, plus
+ *     other-project filler sessions) and reruns every gate over the larger
+ *     corpus, plus scale-specific bars.
  *
  * PRE-REGISTERED BAR (agreed spec, fixed before any implementation exists):
  *   state accuracy            ≥ 90% per class
@@ -60,6 +75,11 @@
  *   temporal: every temporal probe surfaces ≥1 expected old ref = 100%
  *   aggregation: both refs in top-5 for every aggregation probe = 100%
  *   abstention: 0 false hits (zero-overlap corpus asserted by the generator)
+ *   @slug hard scope: 0 cross-slug leaks, ≥1 expected ref per scoped probe —
+ *                    both tiers (scoped queries rank ONLY the named slug's
+ *                    blocks; lifecycle + intent scopes still apply on top)
+ *   @slug unscoped:  no hard exclusion without @token — every unscoped
+ *                    other-topic probe still ranks ≥1 expected main ref
  *   scale tier adds: Recall@10 ≥ 0.70 and leak ≤ 10% at scale
  * Gates apply once consolidation exists; otherwise the bench reports honestly:
  *   implementation absent — baseline n/a. The recall leak/failure checks still
@@ -219,6 +239,15 @@ interface TierResult {
 	temporal: { rows: { id: string; query: string; expectedOldRefs: string[]; found: string[] }[]; passRate: number };
 	aggregation: { rows: { id: string; query: string; expectedRefs: string[]; ranks: (number | null)[]; bothInTop5: boolean }[]; passRate: number; maxRankNeeded: number };
 	abstention: { rows: { id: string; query: string; hits: number }[]; falseHits: number; floorPresent: boolean };
+	slug: {
+		rows: { id: string; query: string; scope: string; expectedRefs: string[]; found: string[]; leaks: string[] }[];
+		unscopedRows: { id: string; query: string; expectMainRefs: string[]; found: string[] }[];
+		leaks: number;
+		scopedFound: number;
+		scopedTotal: number;
+		unscopedFound: number;
+		unscopedTotal: number;
+	};
 	gates: { name: string; value: string; pass: boolean }[];
 }
 type ConsolState = { status: "absent" | "present" | "ran" | "ran-with-errors"; file?: string; exportName?: string; detail?: string };
@@ -346,6 +375,35 @@ async function runTier(tierName: string, scale: number, storeDir: string, initSt
 	}
 	const abstentionFalseHits = abstentionRows.reduce((s, r) => s + r.hits, 0);
 
+	// ── 4d. v2.6 @slug hard scope ─────────────────────────────────────────────
+	// A scoped query must rank ONLY the named slug's blocks: any ranked block
+	// from another slug is a cross-slug leak (the other-project corpus is
+	// topically similar on purpose — that is the bleed being measured). The
+	// unscoped same-topic probe asserts the opposite: without an @token there is
+	// no hard scope and main blocks still rank via the normal priors.
+	const slugRows: TierResult["slug"]["rows"] = [];
+	let slugLeaks = 0;
+	let slugScopedFound = 0;
+	for (const probe of [...manifest.slugProbes.scopedMain, ...manifest.slugProbes.scopedOther]) {
+		const r = await recall(probe.query);
+		const refs = rankedRefs(r);
+		const found = probe.expectedRefs.filter((ref) => refs.includes(ref));
+		const leaks = (r?.ranked ?? [])
+			.filter((s) => slugOfSession(s.block.session).toLowerCase() !== probe.scope.toLowerCase())
+			.map((s) => slugOfSession(s.block.session));
+		slugLeaks += leaks.length;
+		if (found.length) slugScopedFound++;
+		slugRows.push({ id: probe.id, query: probe.query, scope: probe.scope, expectedRefs: probe.expectedRefs, found, leaks: [...new Set(leaks)] });
+	}
+	const slugUnscopedRows: TierResult["slug"]["unscopedRows"] = [];
+	let slugUnscopedFound = 0;
+	for (const probe of manifest.slugProbes.unscopedOtherTopic) {
+		const refs = rankedRefs(await recall(probe.query));
+		const found = probe.expectMainRefs.filter((ref) => refs.includes(ref));
+		if (found.length) slugUnscopedFound++;
+		slugUnscopedRows.push({ id: probe.id, query: probe.query, expectMainRefs: probe.expectMainRefs, found });
+	}
+
 	// ── 4c. IR ranking metrics over probes WITH expected refs ─────────────────
 	const irPerProbe: TierResult["ir"]["perProbe"] = [];
 	const irProbe = (id: string, expected: string[], refs: string[]) => {
@@ -405,6 +463,8 @@ async function runTier(tierName: string, scale: number, storeDir: string, initSt
 		{ name: "temporal: ≥1 old ref surfaced =100%", value: `${Math.round(temporalPassRate * 100)}% (${temporalRows.filter((r) => r.found.length).length}/${temporalRows.length})`, pass: implemented && temporalPassRate === 1 },
 		{ name: "aggregation: both refs in top-5 =100%", value: `${Math.round(aggregationPassRate * 100)}% (${aggregationRows.filter((r) => r.bothInTop5).length}/${aggregationRows.length})`, pass: implemented && aggregationPassRate === 1 },
 		{ name: "abstention: 0 false hits", value: `${abstentionFalseHits} hits across ${abstentionRows.length} absent-topic probes (score floor: ${consolidationFile ? "present" : "n/a — router ranks score-0 blocks"})`, pass: implemented && abstentionFalseHits === 0 },
+		{ name: "@slug hard scope: 0 cross-slug leaks, ≥1 expected ref per scoped probe", value: `${slugLeaks} leaks · ${slugScopedFound}/${slugRows.length} scoped probes with expected ref (${slugRows.filter((r) => r.leaks.length).length} leaking)`, pass: implemented && slugLeaks === 0 && slugScopedFound === slugRows.length },
+		{ name: "@slug unscoped: no hard exclusion without @token (main refs still ranked)", value: `${slugUnscopedFound}/${slugUnscopedRows.length} unscoped probes keeping main refs ranked`, pass: implemented && slugUnscopedFound === slugUnscopedRows.length },
 	];
 	if (scale > 0) {
 		gates.push({ name: "scale: IR Recall@10 ≥0.70", value: ir.recall10.toFixed(3), pass: implemented && ir.recall10 >= 0.7 });
@@ -433,12 +493,13 @@ async function runTier(tierName: string, scale: number, storeDir: string, initSt
 		temporal: { rows: temporalRows, passRate: temporalPassRate },
 		aggregation: { rows: aggregationRows, passRate: aggregationPassRate, maxRankNeeded: aggMaxRankNeeded },
 		abstention: { rows: abstentionRows, falseHits: abstentionFalseHits, floorPresent: !!consolidationFile },
+		slug: { rows: slugRows, unscopedRows: slugUnscopedRows, leaks: slugLeaks, scopedFound: slugScopedFound, scopedTotal: slugRows.length, unscopedFound: slugUnscopedFound, unscopedTotal: slugUnscopedRows.length },
 		gates,
 	};
 }
 
 // ── run both tiers in one invocation ─────────────────────────────────────────
-console.log(`lifecycle bench (v2.5 IR + LongMemEval + scale) — sandbox ${tmpRoot}`);
+console.log(`lifecycle bench (v2.6 @slug hard scope + IR + LongMemEval + scale) — sandbox ${tmpRoot}`);
 
 const small = await runTier("small (mechanism corpus, untouched)", 0, mjdDir, join(mjdDir, "init.json"), join(mjdDir, "trails.jsonl"));
 const scaleDir = join(tmpRoot, "store-scale");
@@ -448,7 +509,7 @@ assertIsolated(); // scale env switch must never have escaped the sandbox
 // ── report ───────────────────────────────────────────────────────────────────
 const fmtMs = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`);
 console.log(`
-──────────────── lifecycle bench report (v2.5) ────────────────`);
+──────────────── lifecycle bench report (v2.6) ────────────────`);
 for (const tier of [small, scale]) {
 	console.log(`
 ── tier: ${tier.name} — ${tier.blocks} blocks, runtime ${fmtMs(tier.wallMs)} ──`);
@@ -483,6 +544,8 @@ PRE-REGISTERED BAR → RESULTS`);
 	for (const r of tier.temporal.rows) console.log(`    temporal    ${r.id.padEnd(14)} old refs found: ${r.found.length ? r.found.join(",") : "NONE"}`);
 	for (const r of tier.aggregation.rows) console.log(`    aggregation ${r.id.padEnd(14)} ref ranks: [${r.ranks.map((x) => x ?? "—").join(",")}] both-in-top-5=${r.bothInTop5}`);
 	for (const r of tier.abstention.rows) console.log(`    abstention  ${r.id.padEnd(14)} hits above floor: ${r.hits}`);
+	for (const r of tier.slug.rows) console.log(`    slug-scoped ${r.id.padEnd(14)} scope=@${r.scope.padEnd(13)} found: ${r.found.length ? r.found.join(",") : "NONE"} · leaks: ${r.leaks.length ? r.leaks.join(",") : "0"}`);
+	for (const r of tier.slug.unscopedRows) console.log(`    slug-unscpd ${r.id.padEnd(14)} main refs found: ${r.found.length ? r.found.join(",") : "NONE"} (must keep main ranked)`);
 	if (tier.aggregation.maxRankNeeded) console.log(`  aggregation mechanism (federated per-session top-3 round-robin) comfortably meets k=${Math.max(3, tier.aggregation.maxRankNeeded)} (worst observed ref rank ${tier.aggregation.maxRankNeeded})`);
 }
 
@@ -498,7 +561,7 @@ const anyImplemented = [small, scale].some((t) => t.consolidation.status === "ra
 
 const summary = {
 	date: new Date().toISOString(),
-	version: "v2.5-ir-longmemeval-scale",
+	version: "v2.6-slug-scope-ir-longmemeval-scale",
 	verdict: !anyImplemented ? "implementation-absent-baseline-na" : allGatesPass ? "pass" : "fail",
 	isolatedDir: mjdDir,
 	tiers: [small, scale].map((t) => ({
@@ -508,8 +571,7 @@ const summary = {
 			supersessionPairRecall: t.pairRecall, pairResults: t.pairResults,
 			leakRate: t.leakRate, neutralLeaks: t.neutralLeaks, neutralRanked: t.neutralRanked,
 			failureAppearance: t.failureAppearance, neutralRows: t.neutralRows, failureRows: t.failureRows,
-			ir: t.ir, temporal: t.temporal, aggregation: t.aggregation, abstention: t.abstention,
-			gradedBlocks: t.graded,
+			ir: t.ir, temporal: t.temporal, aggregation: t.aggregation, abstention: t.abstention, slug: t.slug, gradedBlocks: t.graded,
 		},
 		gates: t.gates,
 	})),

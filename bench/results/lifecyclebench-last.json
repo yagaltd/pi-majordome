@@ -1,14 +1,14 @@
 {
- "date": "2026-10-05T05:57:40.854Z",
- "version": "v2.5-ir-longmemeval-scale",
+ "date": "2026-10-05T06:50:44.737Z",
+ "version": "v2.6-slug-scope-ir-longmemeval-scale",
  "verdict": "pass",
- "isolatedDir": "/tmp/lifecyclebench-PsRkv8/home/majordome",
+ "isolatedDir": "/tmp/lifecyclebench-ekEhVm/home/majordome",
  "tiers": [
   {
    "name": "small (mechanism corpus, untouched)",
    "scale": 0,
-   "blocks": 18,
-   "wallMs": 24,
+   "blocks": 33,
+   "wallMs": 40,
    "consolidation": {
     "status": "ran",
     "file": "consolidate.ts",
@@ -17,8 +17,8 @@
    "metrics": {
     "stateAccuracy": {
      "valid": {
-      "correct": 8,
-      "total": 8,
+      "correct": 10,
+      "total": 10,
       "accuracy": 1
      },
      "superseded": {
@@ -72,25 +72,25 @@
     ],
     "leakRate": 0,
     "neutralLeaks": 0,
-    "neutralRanked": 19,
+    "neutralRanked": 30,
     "failureAppearance": 1,
     "neutralRows": [
      {
       "id": "neut-renderer",
       "query": "which renderer renders the docs previews?",
-      "returned": 1,
+      "returned": 3,
       "leakedRefs": []
      },
      {
       "id": "neut-config",
       "query": "where does the config file live?",
-      "returned": 3,
+      "returned": 5,
       "leakedRefs": []
      },
      {
       "id": "neut-retry",
       "query": "how does the webhook retry policy work?",
-      "returned": 2,
+      "returned": 3,
       "leakedRefs": []
      },
      {
@@ -102,7 +102,7 @@
      {
       "id": "neut-cache",
       "query": "what cache layer is in place for the export pipeline?",
-      "returned": 4,
+      "returned": 5,
       "leakedRefs": []
      },
      {
@@ -120,19 +120,19 @@
      {
       "id": "neut-login",
       "query": "how does cli login work?",
-      "returned": 1,
+      "returned": 2,
       "leakedRefs": []
      },
      {
       "id": "neut-http",
       "query": "what http client do outbound gateway calls use?",
-      "returned": 1,
+      "returned": 3,
       "leakedRefs": []
      },
      {
       "id": "neut-render2",
       "query": "how are preview documents displayed?",
-      "returned": 3,
+      "returned": 5,
       "leakedRefs": []
      },
      {
@@ -259,7 +259,7 @@
      "recall5": 0.9722222222222223,
      "recall10": 1,
      "mrr": 0.8937499999999999,
-     "ndcg10": 0.9249026897803104,
+     "ndcg10": 0.9197866612527291,
      "perProbe": [
       {
        "id": "neut-renderer",
@@ -568,13 +568,13 @@
         "lcb06@t2"
        ],
        "ranks": [
-        2,
+        4,
         1
        ],
        "recall5": 1,
        "recall10": 1,
        "mrr": 1,
-       "ndcg10": 1
+       "ndcg10": 0.8772153153380493
       },
       {
        "id": "agg-preview-tests",
@@ -661,7 +661,7 @@
         "lcb06@t2"
        ],
        "ranks": [
-        2,
+        4,
         1
        ],
        "bothInTop5": true
@@ -681,7 +681,7 @@
       }
      ],
      "passRate": 1,
-     "maxRankNeeded": 2
+     "maxRankNeeded": 4
     },
     "abstention": {
      "rows": [
@@ -708,6 +708,76 @@
      ],
      "falseHits": 0,
      "floorPresent": true
+    },
+    "slug": {
+     "rows": [
+      {
+       "id": "slug-renderer",
+       "query": "@lcb02 which renderer renders the docs previews?",
+       "scope": "lcb02",
+       "expectedRefs": [
+        "lcb02@t3"
+       ],
+       "found": [
+        "lcb02@t3"
+       ],
+       "leaks": []
+      },
+      {
+       "id": "slug-config",
+       "query": "@lcb04 where does the config file live?",
+       "scope": "lcb04",
+       "expectedRefs": [
+        "lcb04@t2"
+       ],
+       "found": [
+        "lcb04@t2"
+       ],
+       "leaks": []
+      },
+      {
+       "id": "slug-other",
+       "query": "@other-project how does the widget renderer pipeline work?",
+       "scope": "other-project",
+       "expectedRefs": [
+        "other-project@t3",
+        "other-project@t6"
+       ],
+       "found": [
+        "other-project@t3"
+       ],
+       "leaks": []
+      },
+      {
+       "id": "slug-other-case",
+       "query": "@Other-Project which config profiles feed the dashboards?",
+       "scope": "other-project",
+       "expectedRefs": [
+        "other-project@t6"
+       ],
+       "found": [
+        "other-project@t6"
+       ],
+       "leaks": []
+      }
+     ],
+     "unscopedRows": [
+      {
+       "id": "slug-unscoped",
+       "query": "how does the widget renderer pipeline work for the kestrel dashboards?",
+       "expectMainRefs": [
+        "lcb02@t3"
+       ],
+       "found": [
+        "lcb02@t3"
+       ]
+      }
+     ],
+     "leaks": 0,
+     "scopedFound": 4,
+     "scopedTotal": 4,
+     "unscopedFound": 1,
+     "unscopedTotal": 1
     },
     "gradedBlocks": [
      {
@@ -828,6 +898,20 @@
       "actual": "speculative",
       "control": false,
       "blockId": "lineage:lcb14:1"
+     },
+     {
+      "ref": "other-project@t3",
+      "expected": "valid",
+      "actual": "valid",
+      "control": false,
+      "blockId": "lineage:other-project:1"
+     },
+     {
+      "ref": "other-project@t6",
+      "expected": "valid",
+      "actual": "valid",
+      "control": false,
+      "blockId": "lineage:other-project:5"
      }
     ]
    },
@@ -849,7 +933,7 @@
     },
     {
      "name": "leak rate ≤10%",
-     "value": "0% (0/19 ranked results)",
+     "value": "0% (0/30 ranked results)",
      "pass": true
     },
     {
@@ -864,7 +948,7 @@
     },
     {
      "name": "IR nDCG@10 ≥0.70",
-     "value": "0.925",
+     "value": "0.920",
      "pass": true
     },
     {
@@ -881,14 +965,24 @@
      "name": "abstention: 0 false hits",
      "value": "0 hits across 4 absent-topic probes (score floor: present)",
      "pass": true
+    },
+    {
+     "name": "@slug hard scope: 0 cross-slug leaks, ≥1 expected ref per scoped probe",
+     "value": "0 leaks · 4/4 scoped probes with expected ref (0 leaking)",
+     "pass": true
+    },
+    {
+     "name": "@slug unscoped: no hard exclusion without @token (main refs still ranked)",
+     "value": "1/1 unscoped probes keeping main refs ranked",
+     "pass": true
     }
    ]
   },
   {
    "name": "scale (distractor corpus)",
    "scale": 60,
-   "blocks": 759,
-   "wallMs": 1511,
+   "blocks": 870,
+   "wallMs": 2385,
    "consolidation": {
     "status": "ran",
     "file": "consolidate.ts",
@@ -897,8 +991,8 @@
    "metrics": {
     "stateAccuracy": {
      "valid": {
-      "correct": 8,
-      "total": 8,
+      "correct": 10,
+      "total": 10,
       "accuracy": 1
      },
      "superseded": {
@@ -952,25 +1046,25 @@
     ],
     "leakRate": 0,
     "neutralLeaks": 0,
-    "neutralRanked": 175,
+    "neutralRanked": 218,
     "failureAppearance": 1,
     "neutralRows": [
      {
       "id": "neut-renderer",
       "query": "which renderer renders the docs previews?",
-      "returned": 1,
+      "returned": 3,
       "leakedRefs": []
      },
      {
       "id": "neut-config",
       "query": "where does the config file live?",
-      "returned": 27,
+      "returned": 29,
       "leakedRefs": []
      },
      {
       "id": "neut-retry",
       "query": "how does the webhook retry policy work?",
-      "returned": 2,
+      "returned": 3,
       "leakedRefs": []
      },
      {
@@ -982,13 +1076,13 @@
      {
       "id": "neut-cache",
       "query": "what cache layer is in place for the export pipeline?",
-      "returned": 4,
+      "returned": 5,
       "leakedRefs": []
      },
      {
       "id": "neut-embed",
       "query": "how do portal pages embed external dashboards?",
-      "returned": 12,
+      "returned": 36,
       "leakedRefs": []
      },
      {
@@ -1000,19 +1094,19 @@
      {
       "id": "neut-login",
       "query": "how does cli login work?",
-      "returned": 1,
+      "returned": 2,
       "leakedRefs": []
      },
      {
       "id": "neut-http",
       "query": "what http client do outbound gateway calls use?",
-      "returned": 25,
+      "returned": 27,
       "leakedRefs": []
      },
      {
       "id": "neut-render2",
       "query": "how are preview documents displayed?",
-      "returned": 3,
+      "returned": 5,
       "leakedRefs": []
      },
      {
@@ -1036,7 +1130,7 @@
      {
       "id": "neut-embed2",
       "query": "external dashboards inside portal pages — supported?",
-      "returned": 12,
+      "returned": 20,
       "leakedRefs": []
      }
     ],
@@ -1139,7 +1233,7 @@
      "recall5": 0.9722222222222223,
      "recall10": 1,
      "mrr": 0.8729166666666667,
-     "ndcg10": 0.9095247628457878,
+     "ndcg10": 0.9044087343182065,
      "perProbe": [
       {
        "id": "neut-renderer",
@@ -1448,13 +1542,13 @@
         "lcb06@t2"
        ],
        "ranks": [
-        2,
+        4,
         1
        ],
        "recall5": 1,
        "recall10": 1,
        "mrr": 1,
-       "ndcg10": 1
+       "ndcg10": 0.8772153153380493
       },
       {
        "id": "agg-preview-tests",
@@ -1541,7 +1635,7 @@
         "lcb06@t2"
        ],
        "ranks": [
-        2,
+        4,
         1
        ],
        "bothInTop5": true
@@ -1561,7 +1655,7 @@
       }
      ],
      "passRate": 1,
-     "maxRankNeeded": 2
+     "maxRankNeeded": 4
     },
     "abstention": {
      "rows": [
@@ -1588,6 +1682,76 @@
      ],
      "falseHits": 0,
      "floorPresent": true
+    },
+    "slug": {
+     "rows": [
+      {
+       "id": "slug-renderer",
+       "query": "@lcb02 which renderer renders the docs previews?",
+       "scope": "lcb02",
+       "expectedRefs": [
+        "lcb02@t3"
+       ],
+       "found": [
+        "lcb02@t3"
+       ],
+       "leaks": []
+      },
+      {
+       "id": "slug-config",
+       "query": "@lcb04 where does the config file live?",
+       "scope": "lcb04",
+       "expectedRefs": [
+        "lcb04@t2"
+       ],
+       "found": [
+        "lcb04@t2"
+       ],
+       "leaks": []
+      },
+      {
+       "id": "slug-other",
+       "query": "@other-project how does the widget renderer pipeline work?",
+       "scope": "other-project",
+       "expectedRefs": [
+        "other-project@t3",
+        "other-project@t6"
+       ],
+       "found": [
+        "other-project@t3"
+       ],
+       "leaks": []
+      },
+      {
+       "id": "slug-other-case",
+       "query": "@Other-Project which config profiles feed the dashboards?",
+       "scope": "other-project",
+       "expectedRefs": [
+        "other-project@t6"
+       ],
+       "found": [
+        "other-project@t6"
+       ],
+       "leaks": []
+      }
+     ],
+     "unscopedRows": [
+      {
+       "id": "slug-unscoped",
+       "query": "how does the widget renderer pipeline work for the kestrel dashboards?",
+       "expectMainRefs": [
+        "lcb02@t3"
+       ],
+       "found": [
+        "lcb02@t3"
+       ]
+      }
+     ],
+     "leaks": 0,
+     "scopedFound": 4,
+     "scopedTotal": 4,
+     "unscopedFound": 1,
+     "unscopedTotal": 1
     },
     "gradedBlocks": [
      {
@@ -1708,6 +1872,20 @@
       "actual": "speculative",
       "control": false,
       "blockId": "lineage:lcb14:1"
+     },
+     {
+      "ref": "other-project@t3",
+      "expected": "valid",
+      "actual": "valid",
+      "control": false,
+      "blockId": "lineage:other-project:1"
+     },
+     {
+      "ref": "other-project@t6",
+      "expected": "valid",
+      "actual": "valid",
+      "control": false,
+      "blockId": "lineage:other-project:5"
      }
     ]
    },
@@ -1729,7 +1907,7 @@
     },
     {
      "name": "leak rate ≤10%",
-     "value": "0% (0/175 ranked results)",
+     "value": "0% (0/218 ranked results)",
      "pass": true
     },
     {
@@ -1744,7 +1922,7 @@
     },
     {
      "name": "IR nDCG@10 ≥0.70",
-     "value": "0.910",
+     "value": "0.904",
      "pass": true
     },
     {
@@ -1760,6 +1938,16 @@
     {
      "name": "abstention: 0 false hits",
      "value": "0 hits across 4 absent-topic probes (score floor: present)",
+     "pass": true
+    },
+    {
+     "name": "@slug hard scope: 0 cross-slug leaks, ≥1 expected ref per scoped probe",
+     "value": "0 leaks · 4/4 scoped probes with expected ref (0 leaking)",
+     "pass": true
+    },
+    {
+     "name": "@slug unscoped: no hard exclusion without @token (main refs still ranked)",
+     "value": "1/1 unscoped probes keeping main refs ranked",
      "pass": true
     },
     {
