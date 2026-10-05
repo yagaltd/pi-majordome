@@ -1,198 +1,119 @@
 # pi-majordome
 
-Topic-scoped, cross-session memory for pi agents — "infinite chat": keep
-chatting across projects and weeks; the right past context loads when the
-query calls for it, without wrecking the provider's prompt cache.
+Topic-scoped, cross-session memory for pi agents — with a lifecycle. Sessions
+are indexed into gist'd blocks as you work; the right past context is recalled
+into new sessions when the query calls for it; consolidation keeps memory
+honest (valid · superseded · failed · speculative); and the orchestrator runs
+a house of project workers from one deck. Cache-safe by construction: memory
+injects tail-only, never wrecking the provider's prompt cache.
 
-Status: **offline study complete (slices 1-5b) — next: the live pi extension.**
-Read [docs/DESIGN.md](docs/DESIGN.md) and docs/EVAL-SLICE{1..5}.md +
-docs/JUDGE-COMPARISON.md. Headline: TypeLLM DAG intent -> specialist arm
-(Jev-vector vs lexical) reaches 3/7 recall@1 over the cross-session suite —
-past every single arm and naive fusion (2/7); continuation detection fires
-mid-suite; pair cells honestly refuse to join unrelated sessions (max
-same_topic 0.36). Router spec v4 in docs/EVAL-SLICE5.md; next: confidence
-arm-selection, same-product pair-cell fixture, then the live pi extension.
+Every gate is measured: [Benchmarks](#benchmarks) — 10 pre-registered gates,
+both mechanism and retrieval quality, at two scales.
 
-## Quick start
-
-```sh
-# offline tier (no key): boundaries + clustering + Jaccard/BM25 retrieval
-python3 bench/eval.py \
-  --session ~/.pi/agent/sessions/<project-dir>/<session>.jsonl
-
-# add the TypeLLM tier (~11 calls; key from ~/.config/pi-codemap/typellm.key
-# or TYPELLM_API_KEY)
-python3 bench/eval.py --session <session.jsonl> --classify
-```
-
-The hand-labeled answer key for the reference session is `bench/key.json`
-(6 blocks, 5 probes). Results land in `bench/results/report.json`.
-
-## Layout
-
-```
-bench/eval.py             parser + boundary sweep + clustering + retrieval probes
-bench/typellm_client.py   /v1/generate client (dims + intent + gist, one batched call)
-bench/key.json            ground truth for the reference session
-bench/results/            reports (v1-clean, v2, ema)
-docs/EVAL-SLICE2.md       slice-two: hybrid retrieval, EMA, v2 dims
-docs/EVAL-SLICE3.md       slice-three: RRF, rewrites, dim induction, router spec
-bench/cross_eval.py       slice-four: two-session index, time-travel, federated pooling
-bench/key_cross.json      cross-session ground truth (A gold + B ranges + 7 probes)
-docs/EVAL-SLICE4.md       slice-four: cross-session recall, communities
-bench/slice5.py           slice-five: pair cells, DAG intents, specialist arms
-docs/EVAL-SLICE5.md       slice-five: specialist routing, router spec v4
-docs/EVAL-SLICE5B.md      5b: pair-cell positive case, confidence arms rejected
-bench/slice5b.py          5b: AUG index, chunked pair batteries
-docs/DESIGN.md            design ledger (brainstorm trace, design laws)
-docs/EVAL-SLICE1.md       slice-one methodology, results, diagnosis
-```
-
-## Install / run
+## Install
 
 ```bash
-pi install /path/to/pi-majordome        # or: pi --extension ./index.ts for dev
-npx tsx ext/selfcheck.ts --parity       # offline assertions + bench replay parity
-npx tsx tools/backfill.ts               # seed the index from bench artifacts (real vectors)
+pi install /path/to/pi-majordome     # or: pi --extension ./index.ts for dev
 ```
 
-## Setup (majordome-only users; pi-codemap NOT required)
+That's it — sessions self-bootstrap (session_start reloads the index; open
+tails close on the next turn_end). Nothing per-session, ever.
+
+**Optional — judge tiers** (all automatic, detected per session):
+
+| you have | routing intent | dims numbers | behavior |
+|---|---|---|---|
+| both keys (recommended) | TypeLLM DAG | Jev | full measured behavior |
+| TypeLLM only | TypeLLM DAG | guarded TypeLLM numbers | identical quality (A/B-proven) |
+| Jev only (no setup needed) | Jev choice | Jev | no query rewrite; otherwise full router |
+| neither | — | — | indexing + gists only, recall off (status says so) |
 
 ```bash
 npx tsx ext/judges.ts setup     # paste TypeLLM key → ~/.config/pi-majordome/typellm.key
 npx tsx ext/judges.ts verify    # one typed call proving key + transport
 ```
 
-## Judge configs (all automatic, detected per session)
+Jev rides pi's classifier registry (`TYPESAFE_API_KEY` or `/login`). Gist
+fallback uses your own chat model — zero extra keys.
 
-| you have | strings/gists | routing intent | dims numbers | behavior |
-|---|---|---|---|---|
-| both keys (recommended) | TypeLLM | TypeLLM DAG | Jev | full measured behavior |
-| TypeLLM only | TypeLLM | TypeLLM DAG | guarded TypeLLM numbers | identical quality (A/B-proven config) |
-| Jev only (no setup CLI needed) | **your chat model** (`reg.complete` — no extra key) | **Jev choice** | Jev | no query rewrite (raw terms); otherwise full router |
-| neither | your chat model | — | — | indexing + gists only, recall off (status says so) |
+**Optional — backfill history**: `npx tsx tools/backfill.ts` ingests past
+sessions once; or let a repo's first worker start run `/majordome init` cold.
 
-- **TypeLLM key: enables the measured DAG path** (intent + search-term rewrite).
-- **Jev: rides pi's classifier registry** (`TYPESAFE_API_KEY` or `/login`).
-- Gist fallback uses **your own chat model** — gists cost a few hundred tokens
-  at block close, zero extra API keys.
-- `MAJORDOME_MIN_SCORE` (default 0.6) tunes the injection noise gate — see
-  `/majordome stats` for the injected-vs-suppressed score gap.
-- **Per session: nothing.** New and resumed sessions self-bootstrap
-  (session_start reloads index + wiring; interrupted open tails are closed on
-  the next turn_end). One-time history ingest, optional: `npx tsx tools/backfill.ts`.
+## Usage
 
-## Composition & smart hints
+### The orchestrator (the daily command)
 
-- **pi-clm compatible** (installed alongside; `pi install npm:@lolipopshock/pi-clm`):
-  pi-clm curates the window (learned compaction), majordome supplies recalled
-  memory — different layers, verified co-loading.
-- **Resume hint**: strong recall (score ≥ 0.7) on a definition_recall adds
-  "looks like work already done — resume rather than redoing it".
-- **Contradiction check**: on the same strong hits, one judge call asks whether
-  the message REVERSES a decision in the recalled block — if yes, the agent is
-  told to confirm before acting.
+Run a house of project workers from one deck directory:
 
-## Turn judge (per-turn annotation)
+```bash
+/majordome orch add /abs/path/to/repo   # register a worker (once per repo)
+/majordome                              # start all workers + per-worker report
+```
 
-Every non-continuation turn is judged for ambiguity in the same DAG call.
-The judge is deliberately **context-blind** (it sees your message + a sliver
-of the last assistant turn — not the conversation), so its verdict is advice
-to the agent, never an order: **soft** mode (default) appends
-`Possible ambiguity (…) — if your tools or the conversation don't resolve it,
-ask one clarifying question` and the agent decides; **strict** mode commands
-clarify-first. Messages pointing at inspectable artifacts (URL, path, repo,
-error output) are never ambiguous — that IS the specification. Debounced so
-it never ping-pongs. Tune with `/majordome judge off|soft|strict` or
-`MAJORDOME_JUDGE` env; `/majordome` dashboard shows the mode. When memory
-fires, the recall line shows how the judge read the request
-(`Read your request as: …`). Majordome never talks to the user — the agent
-stays the interface.
+Workers self-init cold ("majordome init complete: +N blocks…"), push completion
+notices to the deck inbox, and everything lands in one global brain
+(`~/.pi/majordome`) — never per-repo state. A sidecar in watch mode keeps each
+repo's artifacts fresh.
 
-## Known behaviors (v1, measured)
+### Commands
 
-- **min-size guard**: a topic switch needs 4+ turns since the last boundary
-  before a block can close — closes may lag a few turns; nothing is lost, the
-  next boundary picks it up. Chatty one-liner sessions over-segment (EMA on
-  tiny turns); coding sessions are the tuned distribution.
-- **dims can fail open empty** (degenerate-vector guard) — the block still
-  indexes with gist + lex retrieval; dims backfill on `reindex`.
-- **chatty sessions trip the noise gate differently** than coding sessions —
-  `/majordome stats` shows the injected-vs-suppressed gap; tune
-  `MAJORDOME_MIN_SCORE` from it.
-- **judge modes**: `/majordome judge off|soft|strict` — soft (default) informs
-  the agent, strict orders clarify-first, off silences.
-- **`[object Object]` sightings are NOT lost messages**: verified across all
-  session history — user text is always persisted intact. The string appears
-  only in what the MODEL receives (request-transform layer: majordome /
-  pi-clm / vcc context transforms). If an agent claims your message was
-  destroyed, `grep '"role":"user"' <session>.jsonl` — the truth is on disk.
-- `reindex all` sweeps every session on disk — expect judge calls per block.
+```
+/majordome                  run the house (start all workers + report)
+/majordome orch             menu: start one/all, add /path, remove, status
+/majordome one-pager        compose/refresh the status doc (show to print)
+/majordome map              reasoning/topic map (termaid for a pane view)
+/majordome init             cold-start/backfill memory for this repo (then consolidates)
+/majordome doctor           audit: orphans, parse health, dims coverage, index lag, lifecycle distribution
+/majordome dash             dashboard: state, judges, projects, routing log (✓ injected ✗ suppressed)
+/majordome list [tag]       table ToC: ID · TURNS · INTENT · GIST (ids short: code-parser:118)
+/majordome show <id>        block record: gist, dims, status, transcript pointer
+/majordome forget <id|tag|all>          purge from the index; session JSONLs untouched
+/majordome export <id|tag|all> [dir]    markdown ADR per block
+/majordome reindex [all]    rebuild from session files (backfills gists + dims)
+/majordome docs <kind>      doc generation (readme | changelog | adr | <custom>)
+/majordome stats | log      score-gap calibration · decision log
+/majordome judge off|soft|strict    ambiguity-judge mode (soft = default)
+/majordome on | off         kill switch
+/majordome help             this list, in-chat
+```
 
-## Docs nudge (v1.x — never remind manually again)
+### How memory behaves
 
-At block close, majordome advances a per-doc **cursor** (README / CHANGELOG /
-docs/) when the session touches them, and counts implementation blocks closed
-since the last touch. At 3+, one tail line informs the agent — sourced from the
-real gists, e.g. `[majordome docs] 4 implementation blocks since README/CHANGELOG
-— recent: …` — so docs updates are grounded in what actually shipped, not
-hallucinated from a summary. `/majordome export` produces the per-block ADRs;
-the nudge is the trigger, the agent is the writer.
+- **Recall**: blocks are judged into topic dims at close; your query is
+  distilled into search terms and judged into the same dims space — cosine for
+  semantics, BM25 for exact terms, federated per-project top-3 for coverage.
+  Hits inject tail-only (`[majordome recall · repo turns N–M · date] gist…
+  Read your request as: …`). Strong recall on definition work adds "resume
+  rather than redoing it".
+- **Lifecycle (v2.4)**: consolidation assigns `valid / superseded / failed /
+  speculative` via pair judges (contradiction → superseded; tried-and-failed →
+  failed). Default recall excludes dead blocks; "what did we try that failed?"
+  surfaces failed records; temporal queries ("what did we use before X?")
+  surface superseded ones. `/majordome doctor` reports the distribution.
+- **Contradiction check**: a strong hit that REVERSES a recalled decision
+  tells the agent to confirm before acting.
+- **Personal tier**: `~/.pi/majordome/user.md` — your cross-project rules,
+  injected into every session. Point to it from your `AGENTS.md` (one line)
+  as the guaranteed-delivery fallback.
+- **Judge modes**: the per-turn ambiguity judge is deliberately context-blind;
+  soft mode (default) advises, strict orders clarify-first. Messages pointing
+  at inspectable artifacts (URL, path, repo, error output) are never flagged.
+- **Composition**: pi-clm compatible (it curates the window, majordome
+  supplies memory — verified co-loading). Majordome never talks to the user —
+  the agent stays the interface; tone lives in your `AGENTS.md`.
 
-## Personality
-
-Majordome never talks to the user — the agent does. Your `AGENTS.md` (per
-project, or the orchestrator session's in v2) is where tone/verbosity/relay
-preferences live. Majordome's own injected lines are fixed templates in code;
-if they ever need user tuning, that becomes a small config file — not AGENTS.md
-(prose there, machine templates here).
-
-## Docs generation — `/majordome docs`
+### Docs generation
 
 ```
 /majordome docs                          kinds + usage
 /majordome docs readme [tag|all] [show]  digest since README cursor → agent updates README
-/majordome docs changelog …              same for CHANGELOG
-/majordome docs adr [tag|all]            per-block ADR files (same as /majordome export)
-/majordome docs <custom> …               your template from ~/.pi/majordome/templates/<name>.md
+/majordome docs adr [tag|all]            per-block ADRs (same as export)
+/majordome docs <custom> …               your template from ~/.pi/majordome/templates/
 ```
 
-A kind is an instruction template with a `{{digest}}` placeholder; the digest is
-the doc-worthy blocks (implementation/documentation) **since that doc's cursor**
-— the exact undocumented work, every line traceable to a block. Without `show`,
-the composed instruction+digest is **sent to the agent** (`pi.sendUserMessage`),
-which writes the doc; the cursor advances next time the session touches it.
-Ships an example custom template (`html-explanation`) — see
-`~/.pi/majordome/templates/`.
-
-## Commands
-
-```
-/majordome                  dashboard: state, judges, projects, routing log (✓ injected ✗ suppressed — none)
-/majordome list [tag]       table ToC: ID  TURNS  INTENT  GIST   (ids are short: code-parser:118)
-/majordome show <id>        block record: gist, dims, first ask, transcript pointer
-/majordome forget <id|tag|all>   purge from the index; session JSONLs untouched
-/majordome export <id|tag|all> [dir]   markdown ADR per block (frontmatter + dims + provenance)
-/majordome reindex [all]    rebuild from session files (backfills gists)
-/majordome on | off         kill switch
-```
-
-```mermaid
-flowchart LR
-  U["user turn"] --> DAG{"TypeLLM DAG:<br/>continuation?"}
-  DAG -->|yes - most turns| NO["no retrieval<br/>zero cost"]
-  DAG -->|definition_recall / incident_specific| TT["time-travel filter<br/>past blocks only (file-scoped)"]
-  TT --> FED["federated per-project top-3"]
-  FED --> ARM{"specialist arm"}
-  ARM -->|definition_recall| DIMS["dims cosine<br/>(Jev / guarded TypeLLM)"]
-  ARM -->|incident_specific| LEX["hybrid BM25"]
-  DIMS --> GATE{"noise gate<br/>dims ≥ 0.6, lex > 0"}
-  LEX --> GATE
-  GATE -->|pass| INJ["tail injection (cache-free)<br/>gist + intent + pointer"]
-  GATE -->|suppress| LOG["decision log ✓/✗"]
-  INJ --> LOG
-  NO --> LOG
-```
+Digests are doc-worthy blocks **since that doc's cursor** — the exact
+undocumented work, traceable to a block. Generated docs are stamped
+`generated_by: majordome`; `verified:` is human-only.
 
 ## Benchmarks
 
@@ -217,32 +138,79 @@ Runtime ≈2.6s for both tiers. The bench found and fixed a real recall bug
 (score-0 winners — now the evidence floor in `route()`). Machine-readable:
 `bench/results/lifecyclebench-last.json`.
 
-## Status
+## Development
 
-- **v1 (this build)**: `turn_end` EMA indexer (tau 0.07 / min 4, the measured
-  params), two-judge seam at block close, intent-specialist router (DAG →
-  time-travel → federated top-3 → dims/lex arm), tail-only cache-safe
-  injection, `/majordome` governance, decision log for calibration.
-  Self-check: 23/23; live smoke: definition_recall → dims arm → 0.707 cosine,
-  correct cross-session winner.
-- **Live hardening** (bench/key_live.json, tools/livebench.ts — real probes
-  mined from our own sessions): confident-gold recall 4/4 @1 (past + cross),
-  continuation gate 3/3, noise gate dims<0.6 / lex==0 measured from the
-  score distribution (true positive 0.707 vs noise ≤0.63). Fixed en route:
-  continuation over-gating on mid-work phrasing (strict gate + recent-assistant
-  context), abstention evidence for v1.x.
-- **v1.x**: ADR export polish, gist backfill on reindex, mid-slot promotion.
-- **v2**: orchestrator (firstmate-style) + memory consolidation; see OVERVIEW.
+### Layout
 
-## Governance (v1.x seeds)
+```
+index.ts                  extension entry (chat commands, session hooks, injection)
+ext/store.ts              JSONL store: blocks, meta, vocab, lifecycle sidecar
+ext/core.ts               retrieval primitives (BM25 binary-tf, cosine, federation)
+ext/router.ts             intent → arm routing, scopeByLifecycle, evidence floor
+ext/consolidate.ts        v2.4 lifecycle pass (pair judges → block.status)
+ext/judges.ts             TypeLLM/Jev judge seam (fail-open) + setup/verify CLI
+ext/{init,orch,inbox,doctor,trail,codex,docs,ingest_docs,onepager,map,selfcheck}.ts
+tools/                    backfill, lifecyclebench v2, fixture generator, probes
+bench/                    offline study harness (eval.py …) + lifecycle fixtures
+docs/                     DESIGN.md (decisions) · OVERVIEW.md (roadmap) · EVAL-SLICE*
+```
 
-- **Judgment trail** — every judge verdict appends metadata to `~/.config/pi-majordome/trails.jsonl`
-  (`{t, j: judge, v, verdict fields}` — never message text). Consumed by calibration and any future
-  audit/dataset compile. Override: `MAJORDOME_TRAIL_FILE`. Writes fail open, never breaking a judge.
-- **Push codex** — `~/.config/pi-majordome/codex.md`, the invariants file (search-before-write,
-  append-only record, never index raw messages, soft judges, fail-open, `verified` is human-only).
-  Shipped default on first run; edit the file to make it yours — it is never overwritten.
-- **Doc stamps** — generated docs (`/majordome docs`) are stamped with
-  `generated_by: majordome` + `generated_at` + `stale_after` (+30d). `verified:` is human-only.
+### Offline tier (study harness, no API key)
 
-See `docs/OVERVIEW.md` (v2 roadmap) and `docs/DESIGN.md` (decisions).
+The retrieval design was validated slice-by-slice with a hand-labeled
+reference session — commands preserved verbatim:
+
+```bash
+python3 bench/eval.py --session ~/.pi/agent/sessions/<project>/<session>.jsonl
+python3 bench/eval.py --session <session.jsonl> --classify   # + TypeLLM tier
+```
+
+`bench/key.json` is the ground truth (6 blocks, 5 probes); results land in
+`bench/results/report.json`. Design trace: docs/EVAL-SLICE{1..5}.md,
+docs/JUDGE-COMPARISON.md. Headline from the study: DAG intent → specialist
+arm reaches 3/7 recall@1 over the cross-session suite, past every single arm
+and naive fusion (2/7).
+
+### Checks
+
+```bash
+npx tsx ext/selfcheck.ts [--parity]   # assertions (+ bench replay parity)
+npx tsx tools/lifecyclebench.ts       # the 10-gate harness, both tiers
+```
+
+### Known behaviors
+
+- **min-size guard**: a topic switch needs 4+ turns since the last boundary —
+  closes may lag; nothing is lost, the next boundary picks it up.
+- **dims can fail open empty** (degenerate-vector guard) — blocks still index
+  with gist + lex retrieval; dims backfill on `reindex`.
+- **`[object Object]` sightings are NOT lost messages**: user text is always
+  persisted intact — the string appears only in model-facing request
+  transforms. `grep '"role":"user"' <session>.jsonl` is the truth on disk.
+- `reindex all` sweeps every session on disk — expect judge calls per block.
+- **Judge configs** (per session, automatic): TypeLLM key enables the DAG
+  path (intent + search-term rewrite); Jev rides pi's classifier registry;
+  gist fallback uses your chat model at block close. `MAJORDOME_MIN_SCORE`
+  (default 0.6) tunes the injection noise gate.
+
+### Status
+
+- **Shipped (v2.x)**: lifecycle states + consolidation (v2.4, bench-gated),
+  orchestrator (deck / workers / inbox / one-pager), sidecar, evidence floor
+  in recall, personal tier (`user.md`), visibility scopes (repo · user ·
+  shared), doctor audits, lifecyclebench v2 (IR metrics + LongMemEval
+  abilities + scale tier).
+- **Next (consolidation era)**: organic supersession pairs from the dogfood
+  stretch feed v2.4 consolidation; recall-scope maturation; see
+  docs/OVERVIEW.md.
+
+### Governance
+
+- **Judgment trail** — every judge verdict appends to
+  `~/.pi/majordome/trails.jsonl` (never message text); consumed by
+  calibration and future audits. Override: `MAJORDOME_TRAIL_FILE`. Fail-open.
+- **Push codex** — `~/.pi/majordome/codex.md`, the invariants file
+  (search-before-write, append-only record, never index raw messages, soft
+  judges, fail-open, `verified:` is human-only). Shipped on first run; edit
+  to make it yours — never overwritten.
+- **Doc stamps** — `generated_by` + `generated_at` + `stale_after` (+30d).
