@@ -10,7 +10,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { loadBlocks, loadMeta, loadVocab, majordomeDir } from "./store.ts";
+import { loadBlocks, loadLifecycle, loadMeta, loadVocab, majordomeDir, effectiveStatus } from "./store.ts";
 
 const dir = majordomeDir();
 
@@ -77,7 +77,15 @@ export async function doctor(): Promise<string> {
 	if (!existsSync(umd)) L.push("· user.md: absent (optional — your cross-project preferences; create it and majordome injects it)");
 	else ok("user.md present (personal tier)");
 
-	// 6. orchestrator worker paths
+	// 6. lifecycle distribution (v2.4): counts per status + dead weight
+	const art = loadLifecycle();
+	const dist = { valid: 0, superseded: 0, failed: 0, speculative: 0 } as Record<string, number>;
+	for (const b of blocks) dist[effectiveStatus(b, art)]++;
+	const dead = dist.superseded + dist.failed;
+	const deadPct = blocks.length ? Math.round((dead / blocks.length) * 100) : 0;
+	L.push(`· lifecycle: valid ${dist.valid} · superseded ${dist.superseded} · failed ${dist.failed} · speculative ${dist.speculative} — dead weight ${deadPct}% (${dead}/${blocks.length})${art.supersessions.length ? ` · ${art.supersessions.length} supersession link(s)` : ""}`);
+
+	// 7. orchestrator worker paths
 	try {
 		const oc = JSON.parse(readFileSync(join(dir, "orchestrator.json"), "utf8"));
 		const missing = (oc.workers ?? []).filter((w: any) => !existsSync(w.cwd));

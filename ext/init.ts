@@ -203,5 +203,17 @@ export async function initRepo(opts: InitOpts): Promise<string> {
 	for (const s of bySlug.keys()) if (s !== current && !state.lineage[s] && !lineageSlugs.includes(s)) state.lineage[s] = "parked";
 	saveState(state);
 	const parkedCount = Object.values(state.lineage).filter((v) => v === "parked").length;
-	return `majordome init complete: +${indexed} blocks from ${newDone.length} sessions. ${parkedCount} other project(s) parked (map-only) — /majordome init --lineage <slug> to index one.`;
+	// v2.4: a plain init consolidates — lifecycle statuses land on the fresh
+	// blocks immediately (judge seam + lexical fallback, trail-recorded)
+	let lifecycleNote = "";
+	if (indexed > 0) {
+		try {
+			const { runConsolidation, summaryLine } = await import("./consolidate.ts");
+			const cr = await runConsolidation();
+			lifecycleNote = ` ${summaryLine(cr)}.`;
+		} catch {
+			/* consolidation is maintenance, never a reason to fail init */
+		}
+	}
+	return `majordome init complete: +${indexed} blocks from ${newDone.length} sessions.${lifecycleNote} ${parkedCount} other project(s) parked (map-only) — /majordome init --lineage <slug> to index one.`;
 }

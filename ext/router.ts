@@ -14,7 +14,7 @@
  */
 import { bm25Rank, federatedOrder, cosineVec, shortTag, tokens } from "./core.ts";
 import type { RoutingIntent } from "./judges.ts";
-import type { Block } from "./store.ts";
+import { statusOf, type Block } from "./store.ts";
 
 export type Arm = "dims" | "lex";
 
@@ -29,6 +29,28 @@ export function armFor(intent: string): Arm {
  * blocks (the open tail / current block is already in context). */
 export function timeTravel(blocks: Block[], currentSession: string, currentTurn: number, currentSessionFile?: string): Block[] {
 	return blocks.filter((b) => b.sessionFile !== currentSessionFile || b.lastTurn < currentTurn);
+}
+
+// ── lifecycle recall scope (v2.4) ─────────────────────────────────────────────
+
+/** Failure-intent queries ask about dead approaches — the failed/superseded
+ * blocks are exactly what the user wants surfaced (spec regex, plus went/go
+ * wrong so "did the iframe attempt go wrong?" counts too). */
+export const FAILURE_INTENT_RE = /what did we (try|attempt)|\bfailed\b|\brevert\w*\b|\babandon\w*\b|wrong path|didn'?t work|went wrong|go(es)? wrong/i;
+
+export function isFailureIntent(query: string): boolean {
+	return FAILURE_INTENT_RE.test(query);
+}
+
+/** Default recall scope excludes dead blocks (failed + superseded —
+ * consolidation already picked the living successor); failure-intent queries
+ * include them. Speculative stays in default scope (hedged ≠ dead). */
+export function scopeByLifecycle(cands: Block[], query: string): Block[] {
+	if (isFailureIntent(query)) return cands;
+	return cands.filter((b) => {
+		const s = statusOf(b);
+		return s === "valid" || s === "speculative";
+	});
 }
 
 export interface Scored {
@@ -89,7 +111,8 @@ export async function route(opts: {
 	if (!dag || dag.intent === "continuation") return null;
 
 	const terms = dag.searchTerms || opts.userMessage;
-	const cands = timeTravel(opts.blocks, opts.currentSession, opts.currentTurn, opts.currentSessionFile);
+	const failureIntent = isFailureIntent(opts.userMessage);
+	const cands = scopeByLifecycle(timeTravel(opts.blocks, opts.currentSession, opts.currentTurn, opts.currentSessionFile), opts.userMessage);
 	if (!cands.length)
 		return { intent: dag.intent, arm: armFor(dag.intent), terms, winner: null, score: 0, ranked: [], nCands: 0, needClarification: dag.needClarification, clarifyWhy: dag.clarifyWhy };
 
@@ -102,7 +125,13 @@ export async function route(opts: {
 		return (bm25Rank([blk], q)[0] ?? 0);
 	});
 	// rank the merged set with the arm's full scoring for a winner score
-	const ranked = rankArm(merged.length ? merged : cands, q, queryVec, arm);
+	let ranked = rankArm(merged.length ? merged : cands, q, queryVec, arm);
+	if (failureIntent) {
+		// failure-intent queries prefer the dead approaches themselves
+		ranked = ranked
+			.map((s) => ({ block: s.block, score: s.score + (statusOf(s.block) === "failed" ? 0.25 : 0) }))
+			.sort((a, b) => b.score - a.score);
+	}
 	return {
 		intent: dag.intent,
 		arm,
