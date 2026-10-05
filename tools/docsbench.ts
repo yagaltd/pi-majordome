@@ -27,13 +27,29 @@
  *      proven offline regardless (canned Jev judge + pure verdictToNudge):
  *      docsWorthy=false → no nudge despite ≥3 implementation blocks;
  *      docsWorthy=true + stale cursor → nudge naming slug + kind.
+ *  (d) brownfield seeding (v2.7) 100% — init over a repo with a fresh-mtime
+ *      README.md + old-mtime CHANGELOG.md seeds per-slug cursors matching
+ *      the FILES' dates (mtime path in the fixture: no git, no invention);
+ *      a second init after re-touching README changes nothing (absent keys
+ *      only, idempotent) and omits the adoption line; backfilled work closed
+ *      BEFORE the seeded date never nudges.
+ *  (e) docs profile resolution + filtered nudges — code manifest → coding
+ *      {README, CHANGELOG, docs/}, none → generic {docs/}; precedence
+ *      override > stored > detected with invalid overrides failing open;
+ *      generic-profile repo with coding-shaped impl turns → NO README/
+ *      CHANGELOG nudge at threshold, .majordome/docs.json override re-enables
+ *      it; built-in regex behavior unchanged for the coding profile.
+ *  (f) custom watch names — profile {"watch":["NOTES"]} makes a notes.md
+ *      touch advance the NOTES cursor (the exact index.ts wiring),
+ *      case-insensitively, without matching lookalikes; verdict kinds still
+ *      respect the custom profile (CHANGELOG-kind quiet, docs/ not watched).
  *
  *   npx tsx tools/docsbench.ts
  *
  * Exit codes: 0 = all gates pass (judge path may be n/a hermetically);
  *             1 = one or more pre-registered gates failed.
  */
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -47,6 +63,7 @@ process.env.HOME = tmpHome;
 process.env.MAJORDOME_DIR = mjdDir;
 process.env.MAJORDOME_KEY_FILE = join(tmpRoot, "no-key-on-purpose"); // missing → judges fail open
 process.env.MAJORDOME_TRAIL_FILE = join(mjdDir, "trails.jsonl");
+process.env.MAJORDOME_INIT_STATE = join(mjdDir, "init.json"); // belt & braces: init state lives in the sandbox too
 delete process.env.TYPELLM_API_KEY;
 
 const { loadMeta, majordomeDir, saveMeta } = await import("../ext/store.ts");
@@ -206,6 +223,125 @@ console.log("\n── gate (c): docsVerdict judge path ──");
 	})()]);
 	const cPass = probes.filter((p) => p[1]).length;
 	gate("(c) verdict→nudge wiring = 100% (canned, offline)", cPass === probes.length, `${cPass}/${probes.length} probes`);
+	for (const [name, ok] of probes) if (!ok) console.log(`          ✗ ${name}`);
+}
+
+// ── gate (d): brownfield seeding at init (real file dates, idempotent) ─────
+console.log("\n── gate (d): brownfield cursor seeding at init ──");
+{
+	const { initRepo } = await import("../ext/init.ts");
+	const { detectDocsProfile } = await import("../ext/docsprofile.ts");
+	const slugX = "--home-u-brownfield--"; // fresh slug: gate (a) already seeded repox's cursors in this sandbox store
+	const repoX = join(tmpRoot, "repos", "brownfield"); // basename must appear in the session slug
+	mkdirSync(repoX, { recursive: true });
+	// a minimal session so slug resolution finds the repo (hermetic: no key →
+	// judges fail open; seeding is judge-free and runs regardless)
+	const sessDir = join(tmpHome, ".pi", "agent", "sessions", slugX);
+	mkdirSync(sessDir, { recursive: true });
+	const mkMsg = (role: string, text: string) => JSON.stringify({ type: "message", message: { role, content: [{ type: "text", text }] } });
+	writeFileSync(join(sessDir, "s.jsonl"), [
+		mkMsg("user", "fix the parser crash"), mkMsg("assistant", "patched the parser loop"),
+		mkMsg("user", "add regression tests"), mkMsg("assistant", "tests added for the parser"),
+	].join("\n"));
+	// brownfield docs: README fresh-mtime, CHANGELOG old-mtime, docs/ dir older
+	const FRESH = new Date("2026-10-28T09:30:00.000Z");
+	const OLD = new Date("2026-09-15T14:00:00.000Z");
+	const OLDER = new Date("2026-08-02T08:00:00.000Z");
+	writeFileSync(join(repoX, "README.md"), "# brownfield\n");
+	writeFileSync(join(repoX, "CHANGELOG.md"), "# changelog\n");
+	mkdirSync(join(repoX, "docs"), { recursive: true });
+	writeFileSync(join(repoX, "docs", "api.md"), "# api\n");
+	utimesSync(join(repoX, "README.md"), FRESH, FRESH);
+	utimesSync(join(repoX, "CHANGELOG.md"), OLD, OLD);
+	utimesSync(join(repoX, "docs", "api.md"), OLDER, OLDER);
+	const expectIso = (d: Date) => d.toISOString(); // mtime path: seeded date IS the file date
+
+	const r1 = await initRepo({ cwd: repoX, noDims: true });
+	const cur1 = loadMeta().docsCursor;
+	const probes: [string, boolean][] = [
+		["init output notes the generic profile (headless, no prompts)", r1.includes("docs profile: generic (no code markers)") && r1.includes('.majordome/docs.json {"watch":[...]}')],
+		["README cursor seeded from the fresh file mtime", cur1[cursorKey(slugX, "README")] === expectIso(FRESH)],
+		["CHANGELOG cursor seeded from the old file mtime", cur1[cursorKey(slugX, "CHANGELOG")] === expectIso(OLD)],
+		["docs/ cursor seeded from newest docs mtime (depth ≤2)", cur1[cursorKey(slugX, "docs/")] === expectIso(OLDER)],
+		["init output carries ONE compact adoption line", r1.includes("docs adopted: README ← 2026-10-28, CHANGELOG ← 2026-09-15") && r1.includes("(cursors seeded)")],
+	];
+	// idempotent: re-touch README forward, re-init — the cursor NEVER moves
+	const FRESHER = new Date("2026-10-30T09:30:00.000Z");
+	utimesSync(join(repoX, "README.md"), FRESHER, FRESHER);
+	const r2 = await initRepo({ cwd: repoX, noDims: true });
+	probes.push(["second init changes nothing (absent keys only)", loadMeta().docsCursor[cursorKey(slugX, "README")] === expectIso(FRESH)]);
+	probes.push(["second init output omits the adoption line", !r2.includes("docs adopted:")]);
+	// backfilled work closed BEFORE the seeded date never nudges (cursor covers it)
+	const SFX = `/h/.pi/agent/sessions/${slugX}/w.jsonl`;
+	const backfill = ["wired the retry cache", "fixed the config race", "added --jobs flag"].map((g, i) => ({ sessionFile: SFX, intent: "implementation", gist: g, closedAt: `2026-07-0${i + 1}T12:00:00Z` }));
+	const lateWork = backfill.map((b, i) => ({ ...b, closedAt: `2026-10-2${i + 8}T12:00:00Z` }));
+	probes.push(["work closed before the seeded dates never nudges", docsNudge(backfill, SFX, loadMeta().docsCursor) === null]);
+	probes.push(["control: work after the cursor still fires", (docsNudge(lateWork, SFX, loadMeta().docsCursor) ?? "").includes("3 implementation blocks")]);
+	const dPass = probes.filter((p) => p[1]).length;
+	gate("(d) brownfield seeding = 100% (real dates, idempotent)", dPass === probes.length, `${dPass}/${probes.length} probes`);
+	for (const [name, ok] of probes) if (!ok) console.log(`          ✗ ${name}`);
+}
+
+// ── gate (e): docs profile resolution precedence + filtered nudges ──────────
+console.log("\n── gate (e): docs profile resolution + filtered nudges ──");
+{
+	const { detectDocsProfile, readDocsOverride, resolveDocsProfile } = await import("../ext/docsprofile.ts");
+	const repoCoding = join(tmpRoot, "repos", "coding");
+	const repoGeneric = join(tmpRoot, "repos", "generic");
+	mkdirSync(join(repoCoding, "src"), { recursive: true });
+	writeFileSync(join(repoCoding, "package.json"), "{}\n");
+	mkdirSync(join(repoGeneric, "docs"), { recursive: true });
+	const probes: [string, boolean][] = [
+		["code manifest → coding profile", JSON.stringify(detectDocsProfile(repoCoding)) === JSON.stringify({ watch: ["README", "CHANGELOG", "docs/"], source: "detected-coding" })],
+		["no manifest → generic profile (docs/ only)", detectDocsProfile(repoGeneric).source === "detected-generic" && JSON.stringify(detectDocsProfile(repoGeneric).watch) === JSON.stringify(["docs/"])],
+		["absent override reads null", readDocsOverride(repoCoding) === null],
+		["stored profile wins over detection (no override)", resolveDocsProfile(repoGeneric, { watch: ["NOTES"], source: "detected-generic" }).watch.join(",") === "NOTES"],
+	];
+	// override re-enables README/CHANGELOG in the generic repo
+	mkdirSync(join(repoGeneric, ".majordome"), { recursive: true });
+	writeFileSync(join(repoGeneric, ".majordome", "docs.json"), JSON.stringify({ watch: ["README", "CHANGELOG", "docs/"] }));
+	const ov = resolveDocsProfile(repoGeneric, { watch: ["NOTES"], source: "detected-generic" });
+	probes.push(["override file wins over stored + detected", ov.source === "override" && ov.watch.join(",") === "README,CHANGELOG,docs/"]);
+	// invalid override fails open to the detected default (doctor notes it)
+	writeFileSync(join(repoGeneric, ".majordome", "docs.json"), "{not json");
+	probes.push(["invalid override fails open to detection", resolveDocsProfile(repoGeneric, null).source === "detected-generic" && readDocsOverride(repoGeneric) === "invalid"]);
+	// arithmetic fallback is profile-gated: generic repo → no README/CHANGELOG nudge at threshold
+	const three = impl(["wired the retry cache", "fixed the config loader race", "added --jobs flag"]);
+	probes.push(["generic profile: no README/CHANGELOG nudge at threshold", docsNudge(three, SFY, {}, ["docs/"]) === null]);
+	probes.push(["generic profile: CHANGELOG cursor is inert (not watched)", docsNudge(three, SFY, { [cursorKey(slugY, "CHANGELOG")]: "2026-10-31T23:59:59Z" }, ["docs/"]) === null]);
+	probes.push(["override re-enables: nudge fires at threshold", (docsNudge(three, SFY, {}, ["README", "CHANGELOG", "docs/"]) ?? "").includes("3 implementation blocks")]);
+	probes.push(["override re-enables: CHANGELOG cursor covers again", docsNudge(three, SFY, { [cursorKey(slugY, "CHANGELOG")]: "2026-10-31T23:59:59Z" }, ["README", "CHANGELOG", "docs/"]) === null]);
+	// verdict path is profile-gated: changelog verdict in a generic repo stays quiet
+	const turnWork = [
+		{ id: `${slugY}:10`, gist: "wired the retry cache", closedAt: "2026-10-01T12:00:00Z" },
+		{ id: `${slugY}:11`, gist: "fixed the config loader race", closedAt: "2026-10-02T12:00:00Z" },
+	];
+	probes.push(["changelog verdict in generic repo → quiet", verdictToNudge({ docsWorthy: true, kind: "changelog" }, {}, slugY, turnWork, ["docs/"]) === null]);
+	probes.push(["adr verdict in generic repo still fires (docs/ watched)", !!verdictToNudge({ docsWorthy: true, kind: "adr" }, {}, slugY, turnWork, ["docs/"])]);
+	probes.push(["built-in regex behavior unchanged (coding profile)", JSON.stringify(scanDocsTouched('"path":"docs/README.md" "path":"CHANGELOG.md" "path":"docs/api.md"', ["README", "CHANGELOG", "docs/"])) === JSON.stringify(["README", "CHANGELOG", "docs/"])]);
+	const ePass = probes.filter((p) => p[1]).length;
+	gate("(e) docs profile: precedence + filtered nudges = 100%", ePass === probes.length, `${ePass}/${probes.length} probes`);
+	for (const [name, ok] of probes) if (!ok) console.log(`          ✗ ${name}`);
+}
+
+// ── gate (f): custom watch names ─────────────────────────────────────────────
+console.log("\n── gate (f): custom watch name (NOTES) ──");
+{
+	const probes: [string, boolean][] = [
+		["custom name matches its own doc path", scanDocsTouched('"path":"docs/notes.md"', ["NOTES"]).join(",") === "NOTES"],
+		["custom name is case-insensitive (path separator required, like the built-ins)", JSON.stringify(scanDocsTouched('"file":"src/Notes.MD"', ["NOTES"])) === JSON.stringify(["NOTES"])],
+		["custom name does not match lookalikes", scanDocsTouched('"file":"prompts/notes.txt" "file":"footer-notes.md"', ["NOTES"]).length === 0],
+		["NOTES touch advances the NOTES cursor (index.ts wiring)", (() => {
+			const cursor: Record<string, string> = {};
+			const touched = scanDocsTouched('"path":"docs/notes.md"', ["NOTES"]);
+			for (const doc of touched) cursor[cursorKey(slugY, doc)] = "2026-10-30T00:00:00Z"; // the exact turn_end loop
+			return touched.length === 1 && cursorForDoc(cursor, slugY, "NOTES") === "2026-10-30T00:00:00Z" && cursorForDoc(cursor, "--home-u-repox--", "NOTES") === undefined;
+		})()],
+		["AGENTS.md works as a custom watch name", scanDocsTouched('"file":"/repo/AGENTS.md"', ["AGENTS"]).join(",") === "AGENTS"],
+		["verdict kinds still respect the custom profile", verdictToNudge({ docsWorthy: true, kind: "changelog" }, {}, slugY, [{ id: `${slugY}:1`, gist: "x", closedAt: "2026-10-01T00:00:00Z" }], ["NOTES"]) === null],
+	];
+	const fPass = probes.filter((p) => p[1]).length;
+	gate("(f) custom watch names = 100%", fPass === probes.length, `${fPass}/${probes.length} probes`);
 	for (const [name, ok] of probes) if (!ok) console.log(`          ✗ ${name}`);
 }
 
