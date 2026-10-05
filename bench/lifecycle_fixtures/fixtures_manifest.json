@@ -1,6 +1,6 @@
 {
  "name": "lifecycle-fixtures",
- "version": "v2.4-bench-before-build",
+ "version": "v2.5-ir-longmemeval-scale",
  "corpus": "synthetic larkspur-exporter sessions with planted lifecycle ground truth (deterministic)",
  "sessions": [
   {
@@ -350,6 +350,48 @@
     "expectValidRefs": [
      "lcb13@t6"
     ]
+   },
+   {
+    "id": "neut-render2",
+    "query": "how are preview documents displayed?",
+    "excludedRefs": [
+     "lcb01@t3"
+    ],
+    "expectValidRefs": [
+     "lcb02@t3"
+    ]
+   },
+   {
+    "id": "neut-cache2",
+    "query": "is there any caching on exports?",
+    "excludedRefs": [
+     "lcb09@t2"
+    ],
+    "expectValidRefs": []
+   },
+   {
+    "id": "neut-login2",
+    "query": "authentication flow for the cli",
+    "excludedRefs": [],
+    "expectValidRefs": [
+     "lcb12@t3"
+    ]
+   },
+   {
+    "id": "neut-http2",
+    "query": "which library handles outbound gateway requests?",
+    "excludedRefs": [],
+    "expectValidRefs": [
+     "lcb13@t6"
+    ]
+   },
+   {
+    "id": "neut-embed2",
+    "query": "external dashboards inside portal pages — supported?",
+    "excludedRefs": [
+     "lcb10@t2"
+    ],
+    "expectValidRefs": []
    }
   ],
   "failureIntent": [
@@ -384,8 +426,134 @@
     "requiredRefs": [
      "lcb11@t2"
     ]
+   },
+   {
+    "id": "fail-deadend",
+    "query": "which attempts turned out to be dead ends?",
+    "requiredRefs": [
+     "lcb09@t2",
+     "lcb10@t2",
+     "lcb11@t2"
+    ]
+   },
+   {
+    "id": "fail-brittle",
+    "query": "which attempt proved brittle on export caching?",
+    "requiredRefs": [
+     "lcb09@t2"
+    ]
+   },
+   {
+    "id": "fail-flop",
+    "query": "which experiment flopped on the embeds?",
+    "requiredRefs": [
+     "lcb10@t2"
+    ]
+   },
+   {
+    "id": "fail-abandon",
+    "query": "what did we abandon during the migration work?",
+    "requiredRefs": [
+     "lcb11@t2"
+    ]
    }
   ]
+ },
+ "temporalProbes": [
+  {
+   "id": "temp-renderer",
+   "query": "what did we decide before the static-html renderer switch?",
+   "expectedOldRefs": [
+    "lcb01@t3"
+   ]
+  },
+  {
+   "id": "temp-config",
+   "query": "which config format did we use previously?",
+   "expectedOldRefs": [
+    "lcb03@t3"
+   ]
+  },
+  {
+   "id": "temp-retry",
+   "query": "what was the webhook retry policy before the backoff change?",
+   "expectedOldRefs": [
+    "lcb05@t3"
+   ]
+  },
+  {
+   "id": "temp-harness",
+   "query": "what's the history of the integration test harness?",
+   "expectedOldRefs": [
+    "lcb07@t2"
+   ]
+  }
+ ],
+ "aggregationProbes": [
+  {
+   "id": "agg-auth-logging",
+   "query": "how do cli login and the log pipeline work?",
+   "expectedRefs": [
+    "lcb12@t3",
+    "lcb13@t3"
+   ],
+   "sessions": [
+    "lcb12",
+    "lcb13"
+   ]
+  },
+  {
+   "id": "agg-config-retry",
+   "query": "what did we settle for the config format and the webhook retry policy?",
+   "expectedRefs": [
+    "lcb04@t2",
+    "lcb06@t2"
+   ],
+   "sessions": [
+    "lcb04",
+    "lcb06"
+   ]
+  },
+  {
+   "id": "agg-preview-tests",
+   "query": "which preview renderer ships, and what runs the integration tests?",
+   "expectedRefs": [
+    "lcb02@t3",
+    "lcb08@t2"
+   ],
+   "sessions": [
+    "lcb02",
+    "lcb08"
+   ]
+  }
+ ],
+ "abstentionProbes": [
+  {
+   "id": "abs-kubernetes",
+   "query": "anything about kubernetes?",
+   "topic": "kubernetes orchestration (absent)"
+  },
+  {
+   "id": "abs-billing",
+   "query": "did billing invoices surface anywhere?",
+   "topic": "billing / invoicing (absent)"
+  },
+  {
+   "id": "abs-darktheme",
+   "query": "was the dark theme ever discussed?",
+   "topic": "dark theme (absent)"
+  },
+  {
+   "id": "abs-websocket",
+   "query": "any mention of websocket presence?",
+   "topic": "websocket presence channels (absent)"
+  }
+ ],
+ "scale": 0,
+ "filler": {
+  "count": 0,
+  "turnsPerSession": 16,
+  "slugs": []
  },
  "sanity": {
   "note": "REAL historical pairs from this repo — hardcoded ground truth, no fixture files, excluded from numeric grading",
@@ -410,5 +578,5 @@
    }
   ]
  },
- "generatedAt": "2026-10-05T04:34:07.796Z"
+ "generatedAt": "2026-10-05T05:55:53.867Z"
 }

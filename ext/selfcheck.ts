@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSession, tokens, jaccard, detectBoundaries, blockCores, bm25Rank, federatedOrder, cosineVec } from "./core.ts";
 import { parseDims, routingIntent, setClassifyFn, resetClassifyFn } from "./judges.ts";
-import { timeTravel, rankArm, injectionText, judgeLine, docsNudge, scanDocsTouched, armFor } from "./router.ts";
+import { timeTravel, rankArm, route, injectionText, judgeLine, docsNudge, scanDocsTouched, armFor } from "./router.ts";
 import { composeKind, digest, filterBlocks } from "./docs.ts";
 import type { Block } from "./store.ts";
 
@@ -230,6 +230,52 @@ if (process.argv.includes("--parity")) {
 	check("scope: failure-intent includes dead", scopeByLifecycle(cands, "what did we try that failed?").length === 4);
 	check("isFailureIntent: spec regex hits", isFailureIntent("which approaches did we revert?") && isFailureIntent("show me the wrong path we took") && isFailureIntent("that didn't work"));
 	check("isFailureIntent: neutral queries pass through", !isFailureIntent("how does the webhook retry policy work?") && !isFailureIntent("where does the config file live?"));
+
+	// temporal intent (v2.5 LongMemEval): superseded blocks answer "before" questions
+	const { isTemporalIntent } = await import("./router.ts");
+	check("isTemporalIntent: spec regex hits", isTemporalIntent("what did we decide before the renderer switch?") && isTemporalIntent("which config did we use previously?") && isTemporalIntent("what renderer did we used to have?") && isTemporalIntent("history of the test harness?"));
+	check("isTemporalIntent: neutral/failure queries pass through", !isTemporalIntent("which renderer renders the docs previews?") && !isTemporalIntent("what did we try that failed?"));
+	const sup = mk("sup:1", "superseded");
+	check("scope: temporal includes superseded, still excludes failed", JSON.stringify(scopeByLifecycle([valid, dead1, dead2, sup, spec], "what did we use before the switch?").map((b) => b.id)) === JSON.stringify(["v:1", "d:2", "sup:1", "sp:1"]));
+
+	// abstention floor (v2.5): zero-evidence queries return no ranked results
+	const floorBlocks = [valid, dead1, dead2, sup].map((b, i) => ({ ...b, session: `s${i}`, tokensHybrid: i === 0 ? ["renderer", "previews"] : [`topic${i}`] }));
+	const rfloor = await route({
+		userMessage: "anything about kubernetes?",
+		blocks: floorBlocks,
+		currentSession: "__selfcheck__",
+		currentTurn: 99999,
+		routingIntent: async () => ({ intent: "incident_specific", searchTerms: "anything about kubernetes?", needClarification: false, clarifyWhy: "" }),
+		queryDims: async () => null,
+		tokens: (s) => tokens(s),
+	});
+	check("route: abstention — zero-evidence query returns no hits", rfloor !== null && rfloor.ranked.length === 0 && rfloor.winner === null);
+	const rhit = await route({
+		userMessage: "which renderer renders previews?",
+		blocks: floorBlocks,
+		currentSession: "__selfcheck__",
+		currentTurn: 99999,
+		routingIntent: async () => ({ intent: "incident_specific", searchTerms: "which renderer renders previews?", needClarification: false, clarifyWhy: "" }),
+		queryDims: async () => null,
+		tokens: (s) => tokens(s),
+	});
+	check("route: floor keeps genuine hits ranked", rhit !== null && rhit.ranked.length > 0 && rhit.ranked[0].score > 0);
+	// intent-targeted class bypass: failure-intent queries keep zero-evidence
+	// failed blocks ranked (the intent IS the retrieval evidence for the class)
+	const byBypass = [
+		{ ...valid, id: "fv:1", session: "fv", tokensHybrid: ["renderer"] },
+		{ ...dead1, id: "fd:1", session: "fd", tokensHybrid: ["redis"] },
+	]
+	const rbypass = await route({
+		userMessage: "what did we try that failed?",
+		blocks: byBypass,
+		currentSession: "__selfcheck__",
+		currentTurn: 99999,
+		routingIntent: async () => ({ intent: "incident_specific", searchTerms: "what did we try that failed?", needClarification: false, clarifyWhy: "" }),
+		queryDims: async () => null,
+		tokens: (s) => tokens(s),
+	});
+	check("route: failure-intent keeps zero-evidence failed blocks ranked", rbypass !== null && rbypass.ranked.length === 1 && rbypass.ranked[0].block.id === "fd:1");
 
 	// in-block verdicts (token-exact, hybrid-field based)
 	const tok = (s: string) => tokens(s);

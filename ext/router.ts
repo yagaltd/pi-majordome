@@ -42,11 +42,25 @@ export function isFailureIntent(query: string): boolean {
 	return FAILURE_INTENT_RE.test(query);
 }
 
+/** Temporal queries (LongMemEval ability) ask what held BEFORE the current
+ * decision — the superseded blocks are the answer, not noise. Failures stay
+ * failure-intent-only: "used to" never resurrects tried-and-failed work. */
+export const TEMPORAL_INTENT_RE = /\b(?:before|prior to|previously|used to|history of)\b/i;
+
+export function isTemporalIntent(query: string): boolean {
+	return TEMPORAL_INTENT_RE.test(query);
+}
+
 /** Default recall scope excludes dead blocks (failed + superseded —
  * consolidation already picked the living successor); failure-intent queries
- * include them. Speculative stays in default scope (hedged ≠ dead). */
+ * include them all; temporal queries include the superseded generation (the
+ * "what did we do before" answer) but still exclude failed. Speculative stays
+ * in every scope (hedged ≠ dead). */
 export function scopeByLifecycle(cands: Block[], query: string): Block[] {
 	if (isFailureIntent(query)) return cands;
+	if (isTemporalIntent(query)) {
+		return cands.filter((b) => statusOf(b) !== "failed");
+	}
 	return cands.filter((b) => {
 		const s = statusOf(b);
 		return s === "valid" || s === "speculative";
@@ -112,6 +126,7 @@ export async function route(opts: {
 
 	const terms = dag.searchTerms || opts.userMessage;
 	const failureIntent = isFailureIntent(opts.userMessage);
+	const temporalIntent = isTemporalIntent(opts.userMessage);
 	const cands = scopeByLifecycle(timeTravel(opts.blocks, opts.currentSession, opts.currentTurn, opts.currentSessionFile), opts.userMessage);
 	if (!cands.length)
 		return { intent: dag.intent, arm: armFor(dag.intent), terms, winner: null, score: 0, ranked: [], nCands: 0, needClarification: dag.needClarification, clarifyWhy: dag.clarifyWhy };
@@ -126,10 +141,32 @@ export async function route(opts: {
 	});
 	// rank the merged set with the arm's full scoring for a winner score
 	let ranked = rankArm(merged.length ? merged : cands, q, queryVec, arm);
-	if (failureIntent) {
-		// failure-intent queries prefer the dead approaches themselves
+	// evidence floor (v2.5, found by the lifecyclebench abstention probes):
+	// BM25/cosine score > 0 ⇔ the block shares ≥1 non-stopword query token.
+	// Zero-evidence blocks are not recall hits — without this floor every
+	// off-topic query still returned a full ranked list (and a winner).
+	// Exception: members of the intent-targeted class (failure-intent → failed,
+	// temporal → superseded). The parsed intent is itself retrieval evidence for
+	// the class it asks about ("what did we try that failed?" shares no tokens
+	// with the failure records by design), so those blocks stay ranked even at
+	// score 0 — exactly how they ranked before the floor existed.
+	ranked = ranked.filter((s) => {
+		if (s.score > 0) return true;
+		const st = statusOf(s.block);
+		return (failureIntent && st === "failed") || (temporalIntent && st === "superseded");
+	});
+	if (failureIntent || temporalIntent) {
+		// intent priors lift only blocks with lexical evidence (floor first):
+		// failure-intent prefers the dead approaches themselves, temporal
+		// prefers the superseded generation the query is asking about
 		ranked = ranked
-			.map((s) => ({ block: s.block, score: s.score + (statusOf(s.block) === "failed" ? 0.25 : 0) }))
+			.map((s) => ({
+				block: s.block,
+				score:
+					s.score +
+					(failureIntent && statusOf(s.block) === "failed" ? 0.25 : 0) +
+					(temporalIntent && statusOf(s.block) === "superseded" ? 0.25 : 0),
+			}))
 			.sort((a, b) => b.score - a.score);
 	}
 	return {
