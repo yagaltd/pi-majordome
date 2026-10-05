@@ -1,0 +1,320 @@
+{
+ "date": "2026-10-05T04:54:06.489Z",
+ "verdict": "pass",
+ "isolatedDir": "/tmp/lifecyclebench-N9pUU1/home/majordome",
+ "consolidation": {
+  "status": "ran",
+  "file": "consolidate.ts",
+  "exportName": "runConsolidation"
+ },
+ "metrics": {
+  "stateAccuracy": {
+   "valid": {
+    "correct": 8,
+    "total": 8,
+    "accuracy": 1
+   },
+   "superseded": {
+    "correct": 4,
+    "total": 4,
+    "accuracy": 1
+   },
+   "failed": {
+    "correct": 3,
+    "total": 3,
+    "accuracy": 1
+   },
+   "speculative": {
+    "correct": 2,
+    "total": 2,
+    "accuracy": 1
+   }
+  },
+  "falseDemotions": 0,
+  "validDemotedAllValidPlants": 0,
+  "supersessionPairRecall": 1,
+  "pairResults": [
+   {
+    "id": "ss-renderer",
+    "older": "lcb01@t3",
+    "newer": "lcb02@t3",
+    "recalled": true,
+    "linked": true
+   },
+   {
+    "id": "ss-config",
+    "older": "lcb03@t3",
+    "newer": "lcb04@t2",
+    "recalled": true,
+    "linked": true
+   },
+   {
+    "id": "ss-retry",
+    "older": "lcb05@t3",
+    "newer": "lcb06@t2",
+    "recalled": true,
+    "linked": true
+   },
+   {
+    "id": "ss-harness",
+    "older": "lcb07@t2",
+    "newer": "lcb08@t2",
+    "recalled": true,
+    "linked": true
+   }
+  ],
+  "leakRate": 0,
+  "neutralLeaks": 0,
+  "neutralRanked": 90,
+  "failureAppearance": 1,
+  "neutralRows": [
+   {
+    "id": "neut-renderer",
+    "query": "which renderer renders the docs previews?",
+    "returned": 10,
+    "leakedRefs": []
+   },
+   {
+    "id": "neut-config",
+    "query": "where does the config file live?",
+    "returned": 10,
+    "leakedRefs": []
+   },
+   {
+    "id": "neut-retry",
+    "query": "how does the webhook retry policy work?",
+    "returned": 10,
+    "leakedRefs": []
+   },
+   {
+    "id": "neut-harness",
+    "query": "how do the integration tests run?",
+    "returned": 10,
+    "leakedRefs": []
+   },
+   {
+    "id": "neut-cache",
+    "query": "what cache layer is in place for the export pipeline?",
+    "returned": 10,
+    "leakedRefs": []
+   },
+   {
+    "id": "neut-embed",
+    "query": "how do portal pages embed external dashboards?",
+    "returned": 10,
+    "leakedRefs": []
+   },
+   {
+    "id": "neut-migrate",
+    "query": "how do we run schema migrations?",
+    "returned": 10,
+    "leakedRefs": []
+   },
+   {
+    "id": "neut-login",
+    "query": "how does cli login work?",
+    "returned": 10,
+    "leakedRefs": []
+   },
+   {
+    "id": "neut-http",
+    "query": "what http client do outbound gateway calls use?",
+    "returned": 10,
+    "leakedRefs": []
+   }
+  ],
+  "failureRows": [
+   {
+    "id": "fail-tried",
+    "query": "what did we try that failed?",
+    "requiredRefs": [
+     "lcb09@t2",
+     "lcb10@t2",
+     "lcb11@t2"
+    ],
+    "foundRefs": [
+     "lcb09@t2",
+     "lcb10@t2",
+     "lcb11@t2"
+    ]
+   },
+   {
+    "id": "fail-reverted",
+    "query": "which approaches did we revert?",
+    "requiredRefs": [
+     "lcb09@t2",
+     "lcb10@t2",
+     "lcb11@t2"
+    ],
+    "foundRefs": [
+     "lcb09@t2",
+     "lcb10@t2",
+     "lcb11@t2"
+    ]
+   },
+   {
+    "id": "fail-iframe",
+    "query": "did the iframe embed attempt go wrong?",
+    "requiredRefs": [
+     "lcb10@t2"
+    ],
+    "foundRefs": [
+     "lcb10@t2"
+    ]
+   },
+   {
+    "id": "fail-migrate",
+    "query": "show me the wrong path we took with the schema migration",
+    "requiredRefs": [
+     "lcb11@t2"
+    ],
+    "foundRefs": [
+     "lcb11@t2"
+    ]
+   }
+  ],
+  "gradedBlocks": [
+   {
+    "ref": "lcb01@t3",
+    "expected": "superseded",
+    "actual": "superseded",
+    "control": false,
+    "blockId": "lcb01:1"
+   },
+   {
+    "ref": "lcb02@t3",
+    "expected": "valid",
+    "actual": "valid",
+    "control": false,
+    "blockId": "lineage:lcb02:1"
+   },
+   {
+    "ref": "lcb03@t3",
+    "expected": "superseded",
+    "actual": "superseded",
+    "control": false,
+    "blockId": "lineage:lcb03:1"
+   },
+   {
+    "ref": "lcb04@t2",
+    "expected": "valid",
+    "actual": "valid",
+    "control": false,
+    "blockId": "lineage:lcb04:1"
+   },
+   {
+    "ref": "lcb05@t3",
+    "expected": "superseded",
+    "actual": "superseded",
+    "control": false,
+    "blockId": "lineage:lcb05:1"
+   },
+   {
+    "ref": "lcb06@t2",
+    "expected": "valid",
+    "actual": "valid",
+    "control": false,
+    "blockId": "lineage:lcb06:1"
+   },
+   {
+    "ref": "lcb07@t2",
+    "expected": "superseded",
+    "actual": "superseded",
+    "control": false,
+    "blockId": "lineage:lcb07:1"
+   },
+   {
+    "ref": "lcb08@t2",
+    "expected": "valid",
+    "actual": "valid",
+    "control": false,
+    "blockId": "lineage:lcb08:1"
+   },
+   {
+    "ref": "lcb09@t2",
+    "expected": "failed",
+    "actual": "failed",
+    "control": false,
+    "blockId": "lineage:lcb09:1"
+   },
+   {
+    "ref": "lcb10@t2",
+    "expected": "failed",
+    "actual": "failed",
+    "control": false,
+    "blockId": "lineage:lcb10:1"
+   },
+   {
+    "ref": "lcb11@t2",
+    "expected": "failed",
+    "actual": "failed",
+    "control": false,
+    "blockId": "lineage:lcb11:1"
+   },
+   {
+    "ref": "lcb12@t3",
+    "expected": "valid",
+    "actual": "valid",
+    "control": true,
+    "blockId": "lineage:lcb12:1"
+   },
+   {
+    "ref": "lcb12@t6",
+    "expected": "valid",
+    "actual": "valid",
+    "control": true,
+    "blockId": "lineage:lcb12:5"
+   },
+   {
+    "ref": "lcb13@t3",
+    "expected": "valid",
+    "actual": "valid",
+    "control": true,
+    "blockId": "lineage:lcb13:3"
+   },
+   {
+    "ref": "lcb13@t6",
+    "expected": "valid",
+    "actual": "valid",
+    "control": true,
+    "blockId": "lineage:lcb13:5"
+   },
+   {
+    "ref": "lcb14@t2",
+    "expected": "speculative",
+    "actual": "speculative",
+    "control": false,
+    "blockId": "lineage:lcb14:1"
+   },
+   {
+    "ref": "lcb14@t3",
+    "expected": "speculative",
+    "actual": "speculative",
+    "control": false,
+    "blockId": "lineage:lcb14:1"
+   }
+  ]
+ },
+ "gates": [
+  {
+   "name": "state accuracy ≥90% per class",
+   "value": "valid=100% superseded=100% failed=100% speculative=100%",
+   "pass": true
+  },
+  {
+   "name": "false demotions = 0",
+   "value": "0 (valid controls)",
+   "pass": true
+  },
+  {
+   "name": "supersession pair recall ≥80%",
+   "value": "100% (4/4)",
+   "pass": true
+  },
+  {
+   "name": "leak rate ≤10%",
+   "value": "0% (0/90 ranked results)",
+   "pass": true
+  }
+ ]
+}

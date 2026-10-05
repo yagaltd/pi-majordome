@@ -9,6 +9,12 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+/** Lifecycle state (v2.4). Absent reads as "valid" — pre-v2.4 records and
+ * hand-written store lines stay first-class without migration. Assigned only
+ * by consolidation, always backed by a recorded verdict (trail + artifact). */
+export type BlockStatus = "valid" | "superseded" | "failed" | "speculative";
+export const BLOCK_STATUSES: readonly BlockStatus[] = ["valid", "superseded", "failed", "speculative"];
+
 export interface Block {
 	id: string; // <slug>:<firstTurn>
 	session: string; // cwd slug
@@ -21,6 +27,46 @@ export interface Block {
 	tokensHybrid: string[]; // sorted token array = BM25 field
 	head: string; // first user message snippet
 	closedAt: string;
+	status?: BlockStatus; // absent = valid (lenient parse below)
+}
+
+export function statusOf(b: { status?: BlockStatus }): BlockStatus {
+	return b.status ?? "valid";
+}
+
+/** Lifecycle sidecar artifact (v2.4): statuses may also live here for stores
+ * where records were not rewritten. Bench/doctor read either shape. */
+export interface Supersession {
+	older: string; // block id demoted
+	newer: string; // block id that supersedes it
+	verdict: string; // e.g. "contradicts" | "tried-and-failed"
+	source: string; // "typellm" | "jev" | "heuristic-lexical"
+}
+export interface Lifecycle {
+	statuses: Record<string, BlockStatus>;
+	supersessions: Supersession[];
+}
+
+export function loadLifecycle(): Lifecycle {
+	try {
+		const m = JSON.parse(readFileSync(p("lifecycle.json"), "utf8"));
+		const ok = (s: unknown): s is BlockStatus => BLOCK_STATUSES.includes(s as BlockStatus);
+		const statuses: Record<string, BlockStatus> = {};
+		for (const [id, s] of Object.entries(m.statuses ?? {})) if (ok(s)) statuses[id] = s;
+		return { statuses, supersessions: Array.isArray(m.supersessions) ? m.supersessions : [] };
+	} catch {
+		return { statuses: {}, supersessions: [] };
+	}
+}
+
+export function saveLifecycle(l: Lifecycle): void {
+	mkdirSync(majordomeDir(), { recursive: true });
+	writeFileSync(p("lifecycle.json"), JSON.stringify(l, null, 1) + "\n");
+}
+
+/** Best-known status for a block: record field first, sidecar fallback. */
+export function effectiveStatus(b: Block, art: Lifecycle): BlockStatus {
+	return b.status ?? art.statuses[b.id] ?? "valid";
 }
 
 export interface RoutingDecision {
@@ -48,7 +94,10 @@ export function loadBlocks(): Block[] {
 	for (const line of readFileSync(f, "utf8").split("\n")) {
 		if (!line.trim()) continue;
 		try {
-			out.push(JSON.parse(line));
+			const b = JSON.parse(line) as Block;
+			// lenient lifecycle parse: unknown/corrupt status values read as valid
+			if (b.status !== undefined && !BLOCK_STATUSES.includes(b.status)) delete b.status;
+			out.push(b);
 		} catch {
 			// skip corrupt line (append-only file: never fatal)
 		}

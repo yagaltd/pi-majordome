@@ -1,0 +1,8 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"for the webhook delivery worker let's retry failed posts 5 times with a fixed 2s delay"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"webhook retries: 5 attempts, fixed 2s delay."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"decision: the webhook retry policy is 5 attempts at fixed 2s delay"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"fixed-delay retry policy locked in."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the delivery worker applies the fixed 2s retry schedule on every 5xx"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"5xx responses follow the fixed retry schedule."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"document the fixed-delay webhook retries for on-call"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"on-call notes cover the fixed-delay retries."}]}}

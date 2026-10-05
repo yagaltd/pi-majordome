@@ -1,0 +1,8 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"legacy-runner is retired — larkspur-exporter integration tests run on the vitest harness now"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"integration tests migrated to vitest."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"vitest is the integration test harness, legacy-runner is deleted"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"vitest confirmed; legacy-runner removed from the repo."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the ci job runs vitest with the fixtures directory"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"ci invokes vitest against fixtures."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"drop the legacy-runner make target"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"legacy target dropped."}]}}

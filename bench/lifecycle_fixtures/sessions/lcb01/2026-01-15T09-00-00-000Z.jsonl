@@ -1,0 +1,8 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"for the larkspur-exporter docs site we should render code previews with the webview panel, it gives live syntax highlighting"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"noted — webview panel as the docs preview renderer."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"confirmed: the webview panel is the docs preview renderer for larkspur-exporter, wiring it into the preview pipeline"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"wiring the webview renderer into the preview pipeline."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the preview pipeline embeds the webview panel behind the docs feature flag"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"webview embeds gated behind the docs flag."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"webview previews ship with the next larkspur-exporter release"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"webview previews scheduled for the release."}]}}

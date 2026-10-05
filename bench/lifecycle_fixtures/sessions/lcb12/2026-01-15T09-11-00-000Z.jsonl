@@ -1,0 +1,16 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"larkspur-exporter cli login uses the device-code grant, users approve in the browser"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"device-code grant for cli login."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"confirmed: cli auth is the device-code grant with a 15-minute polling window"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"device-code grant, 15-minute polling window confirmed."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the refresh flow after device-code approval reuses the stored token"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"refresh reuses the stored token."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"document the device-code login steps for the cli readme"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"cli readme documents device-code login."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"for deploys: the staging cluster in the west region takes the rollout first"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"deploys roll out to the west staging cluster first."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"deploy order is staging cluster, then the east production region"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"deploy order: staging, then east production."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the rollout scripts promote the same artifact through both regions"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"rollout promotes one artifact across regions."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"note the deploy regions in the ops runbook"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"ops runbook lists the deploy regions."}]}}

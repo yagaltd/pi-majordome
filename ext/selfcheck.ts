@@ -194,6 +194,71 @@ if (process.argv.includes("--parity")) {
 	delete process.env.MAJORDOME_KEY_FILE;
 }
 
+// ── v2.4 lifecycle: statuses, recall scope, consolidation verdicts ──
+{
+	process.env.MAJORDOME_KEY_FILE = join(tmp, "no-key-on-purpose"); // hermetic: judges fail open, zero network
+	const { statusOf, loadBlocks, rewriteBlocks, loadLifecycle, saveLifecycle, effectiveStatus } = await import("./store.ts");
+	type Block = import("./store.ts").Block;
+	type BlockStatus = import("./store.ts").BlockStatus;
+	const { scopeByLifecycle, isFailureIntent } = await import("./router.ts");
+	const { inBlockVerdict, runConsolidation } = await import("./consolidate.ts");
+
+	const mk = (id: string, status?: BlockStatus): Block => ({
+		id, session: "s", sessionFile: `/tmp/${id}.jsonl`, firstTurn: 1, lastTurn: 2,
+		gist: null, intent: null, dims: {}, tokensHybrid: [], head: "", closedAt: "", ...(status ? { status } : {}),
+	});
+	check("statusOf: absent reads valid (backward compat)", statusOf(mk("a")) === "valid");
+	check("statusOf: superseded round-trips", statusOf(mk("a", "superseded")) === "superseded");
+
+	// lenient parse: corrupt status never poisons the store
+	process.env.MAJORDOME_DIR = join(tmp, "lifecycle-store");
+	process.env.MAJORDOME_TRAIL_FILE = join(tmp, "lifecycle-trails.jsonl");
+	rewriteBlocks([mk("ok:1", "failed"), mk("bad:1"), { ...mk("junk:1", "valid"), status: "garbage" as unknown as BlockStatus }]);
+	const reloaded = loadBlocks();
+	check("loadBlocks: statuses persist", reloaded.find((b) => b.id === "ok:1")?.status === "failed");
+	check("loadBlocks: corrupt status reads valid (lenient)", reloaded.find((b) => b.id === "junk:1") && statusOf(reloaded.find((b) => b.id === "junk:1")!) === "valid");
+
+	saveLifecycle({ statuses: { "side:1": "superseded" }, supersessions: [{ older: "side:1", newer: "side:2", verdict: "contradicts", source: "heuristic-lexical" }] });
+	const art = loadLifecycle();
+	check("lifecycle.json round-trips", art.statuses["side:1"] === "superseded" && art.supersessions.length === 1);
+	check("effectiveStatus: record wins, sidecar falls back", effectiveStatus({ ...mk("any:1"), status: "failed" }, art) === "failed" && effectiveStatus({ ...mk("side:1") }, art) === "superseded");
+
+	// recall scope: default excludes dead, failure-intent includes
+	const valid = mk("v:1", "valid"), dead1 = mk("d:1", "failed"), dead2 = mk("d:2", "superseded"), spec = mk("sp:1", "speculative");
+	const cands = [valid, dead1, dead2, spec];
+	check("scope: neutral excludes failed+superseded", JSON.stringify(scopeByLifecycle(cands, "which renderer renders previews?").map((b) => b.id)) === JSON.stringify(["v:1", "sp:1"]));
+	check("scope: failure-intent includes dead", scopeByLifecycle(cands, "what did we try that failed?").length === 4);
+	check("isFailureIntent: spec regex hits", isFailureIntent("which approaches did we revert?") && isFailureIntent("show me the wrong path we took") && isFailureIntent("that didn't work"));
+	check("isFailureIntent: neutral queries pass through", !isFailureIntent("how does the webhook retry policy work?") && !isFailureIntent("where does the config file live?"));
+
+	// in-block verdicts (token-exact, hybrid-field based)
+	const tok = (s: string) => tokens(s);
+	check("inBlockVerdict: tried+failed+reverted → failed", inBlockVerdict(tok("tried the redis cache layer it failed under load and we reverted to lru")) === "failed");
+	check("inBlockVerdict: retry-config NOUN attempts never failed", inBlockVerdict(tok("let's retry failed posts 5 times with a fixed 2s delay, 3 attempts")) === null);
+	check("inBlockVerdict: hedged future → speculative", inBlockVerdict(tok("maybe someday we could add a plugin system, no commitment, just ideas floating")) === "speculative");
+	check("inBlockVerdict: plain decision stays valid", inBlockVerdict(tok("confirmed the webview panel is the docs preview renderer")) === null);
+
+	// consolidation end-to-end in the sandbox store: supersession pair assigned
+	const older: Block = {
+		id: "pair:1", session: "pair", sessionFile: "/tmp/a.jsonl", firstTurn: 1, lastTurn: 4,
+		gist: null, intent: null, dims: {},
+		tokensHybrid: [...tok("webview panel is the docs preview renderer for larkspur exporter wiring it into the preview pipeline confirmed embeds gated behind the docs flag ship the webview previews release")].sort(),
+		head: "confirmed: the webview panel is the docs preview renderer, wiring it into the preview pipeline", closedAt: "2026-01-01T09:00:00.000Z",
+	};
+	const newer: Block = {
+		id: "pair:2", session: "pair", sessionFile: "/tmp/b.jsonl", firstTurn: 1, lastTurn: 4,
+		gist: null, intent: null, dims: {},
+		tokensHybrid: [...tok("update docs previews webview panel broke sandboxing switched code previews static html renderer confirmed preview path webview out preview pipeline emits static html only ship static html previews release")].sort(),
+		head: "update on the docs previews: the webview panel broke sandboxing, switched to the static-html renderer", closedAt: "2026-01-02T09:00:00.000Z",
+	};
+	rewriteBlocks([older, newer, valid]);
+	const cr = await runConsolidation();
+	const after = loadBlocks();
+	check("consolidation: older superseded, newer stays valid", statusOf(after.find((b) => b.id === "pair:1")!) === "superseded" && statusOf(after.find((b) => b.id === "pair:2")!) === "valid");
+	check("consolidation: idempotent re-run", (await runConsolidation()).changed === 0);
+	check("consolidation: verdict trail recorded", loadLifecycle().supersessions.some((l) => l.older === "pair:1" && l.newer === "pair:2" && l.source === "heuristic-lexical"));
+}
+
 if (failures) {
 	console.error(`\n${failures} failure(s)`);
 	process.exit(1);

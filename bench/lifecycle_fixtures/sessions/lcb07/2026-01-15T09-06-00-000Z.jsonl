@@ -1,0 +1,8 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"integration tests for larkspur-exporter run through the legacy-runner harness, it already knows the fixture layout"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"integration tests on the legacy-runner harness."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"keep the legacy-runner harness as the integration test runner"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"legacy-runner stays the integration runner."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the ci job invokes legacy-runner with the fixtures directory"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"ci wired to legacy-runner + fixtures."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"add a make target that wraps legacy-runner"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"make target added around legacy-runner."}]}}

@@ -1,0 +1,8 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"moving larkspur-exporter config into settings.yaml so the presets stay readable"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"config home is settings.yaml now."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"decision: settings.yaml is the larkspur-exporter config format, all keys migrate there"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"all config keys migrate to settings.yaml."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"the loader will parse settings.yaml on startup"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"startup parses settings.yaml."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"document that settings.yaml is the single config file"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"docs updated for the yaml config file."}]}}

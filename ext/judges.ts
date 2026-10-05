@@ -317,6 +317,78 @@ export async function contradicts(query: string, gist: string): Promise<boolean>
 	return false;
 }
 
+// ── lifecycle pair verdict (v2.4 consolidation) ────────────────────────────────────
+
+export interface LifecyclePairVerdict {
+	contradicts: boolean; // newer reverses older's decision → older superseded
+	triedAndFailed: boolean; // newer records older's approach as tried-and-failed/reverted → older failed
+}
+
+/** Same-topic pair check for consolidation: does the LATER block reverse or
+ * record-as-failed the EARLIER block's decision/approach? One call, both
+ * verdicts. Null on any failure — caller falls back to its lexical verdict
+ * (never demotes without SOME recorded verdict). */
+export async function lifecycleVerdict(olderText: string, newerText: string): Promise<LifecyclePairVerdict | null> {
+	if (loadKey()) {
+		const r = await generate(
+			`Earlier decision or approach:\n${olderText.slice(0, 600)}\n\nLater work:\n${newerText.slice(0, 600)}`,
+			{
+				contradicts: {
+					type: "string",
+					enum: ["yes", "no", "unsure"],
+					instructions:
+						"Does the LATER work reverse, replace or contradict the EARLIER decision (opposite choice, dropped in favor of an alternative)? A new aspect, extension or documentation of the same decision is no.",
+				},
+				tried_and_failed: {
+					type: "string",
+					enum: ["yes", "no", "unsure"],
+					instructions:
+						"Does the LATER work record the EARLIER approach as tried-and-failed or reverted (attempted, did not work, rolled back)?",
+				},
+			},
+		);
+		const res = r?.result ?? {};
+		const c = res.contradicts, f = res.tried_and_failed;
+		if (c === undefined && f === undefined) {
+			trail("lifecycleVerdict", { judge: "typellm", ok: false });
+			return null;
+		}
+		const out = { contradicts: c === "yes", triedAndFailed: f === "yes" };
+		trail("lifecycleVerdict", { judge: "typellm", ok: true, contradicts: out.contradicts, triedAndFailed: out.triedAndFailed });
+		return out;
+	}
+	if (classifyFn) {
+		try {
+			const res = await classifyFn(
+				{ older: olderText.slice(0, 300), newer: newerText.slice(0, 300) },
+				{
+					contradicts: {
+						type: "noul",
+						instructions:
+							"State has 'older' (an earlier decision) and 'newer' (later work). Does newer reverse, replace or contradict the earlier decision — not merely extend or document it? Answer yes/no.",
+					},
+					tried_and_failed: {
+						type: "noul",
+						instructions:
+							"Does the later work record the earlier approach as tried-and-failed or reverted? Answer yes/no.",
+					},
+				},
+			);
+			const a1 = res?.answers?.contradicts, a2 = res?.answers?.tried_and_failed;
+			if (a1 === undefined && a2 === undefined) return null;
+			const out = {
+				contradicts: a1 === true || (a1 as any)?.noul === true,
+				triedAndFailed: a2 === true || (a2 as any)?.noul === true,
+			};
+			trail("lifecycleVerdict", { judge: "jev", ...out });
+			return out;
+		} catch {
+			return null;
+		}
+	}
+	return null;
+}
+
 // ── CLI: setup | verify (same shape as pi-codemap's typellm.ts) ─────────
 
 export function writeKeyFile(path: string, key: string): void {

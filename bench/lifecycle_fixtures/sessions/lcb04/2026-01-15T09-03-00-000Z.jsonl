@@ -1,0 +1,8 @@
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"we dropped settings.yaml — the yaml indent bugs keep biting, larkspur-exporter config is settings.toml now"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"config format is settings.toml; yaml retired."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"settings.toml is the config file, the yaml loader is removed"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"toml loader in, yaml loader removed."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"keep settings.toml strict: unknown keys error out"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"strict toml parsing, unknown keys rejected."}]}}
+{"type":"message","message":{"role":"user","content":[{"type":"text","text":"note in the readme that config lives in settings.toml"}]}}
+{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"readme points at settings.toml."}]}}
