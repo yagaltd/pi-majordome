@@ -1,9 +1,11 @@
 # Bench
 
 Ladder-test harnesses for majordome's memory pipeline. The live harness is
-**lifecyclebench** (v2) — the other files in this directory (`slice*.py`,
-`cross_eval.py`, `key*.json`, `v1/`, `v2/`, …) are historical study artifacts
-from the retrieval design phase and are kept for provenance only.
+**lifecyclebench** (v2). The sibling study harness (`eval.py`, `cross_eval.py`,
+`slice5*.py`, `typellm_client.py` + their `key*.json` ground truths) is the
+**offline tier** — no-API-key evaluation documented in the root README Quick
+start, and `key.json` feeds `selfcheck --parity`. It stays; git history keeps
+the full retrieval-design provenance.
 
 ## What lifecyclebench measures
 
