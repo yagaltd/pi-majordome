@@ -120,6 +120,7 @@ export function rewriteBlocks(keep: Block[]): void {
 export interface Meta {
 	dims: string[];
 	docsCursor: Record<string, string>; // doc name -> ISO time last touched
+	turns?: number; // cumulative turn counter (judge-cost telemetry denominator; stamped at turn_end)
 	docsProfile?: DocsProfile; // per-repo docs watch — detected at init; .majordome/docs.json overrides at read time
 }
 
@@ -128,6 +129,7 @@ export function loadMeta(): Meta {
 	try {
 		const m = JSON.parse(readFileSync(f, "utf8"));
 		const out: Meta = { dims: m.dims ?? [], docsCursor: m.docsCursor ?? {} };
+		if (typeof m.turns === "number") out.turns = m.turns;
 		if (isValidDocsProfile(m.docsProfile)) out.docsProfile = m.docsProfile; // lenient: junk profile reads as absent
 		return out;
 	} catch {
@@ -137,18 +139,21 @@ export function loadMeta(): Meta {
 
 export function saveMeta(meta: Meta): void {
 	mkdirSync(majordomeDir(), { recursive: true });
-	// docsProfile is adopted at init and long-lived: callers that only rotate
-	// dims/cursors (most saveMeta sites) must not clobber it
+	// docsProfile is adopted at init and long-lived, and the turn counter is
+	// stamped every turn_end: callers that only rotate dims/cursors (most
+	// saveMeta sites) must not clobber either
 	let docsProfile = meta.docsProfile;
-	if (!docsProfile) {
+	let turns = typeof meta.turns === "number" ? meta.turns : undefined;
+	if (!docsProfile || turns === undefined) {
 		try {
 			const prev = JSON.parse(readFileSync(p("index.json"), "utf8"));
-			if (isValidDocsProfile(prev?.docsProfile)) docsProfile = prev.docsProfile;
+			if (!docsProfile && isValidDocsProfile(prev?.docsProfile)) docsProfile = prev.docsProfile;
+			if (turns === undefined && typeof prev?.turns === "number") turns = prev.turns;
 		} catch {
 			/* fresh store */
 		}
 	}
-	writeFileSync(p("index.json"), JSON.stringify({ dims: meta.dims, docsCursor: meta.docsCursor, ...(docsProfile ? { docsProfile } : {}) }, null, 1));
+	writeFileSync(p("index.json"), JSON.stringify({ dims: meta.dims, docsCursor: meta.docsCursor, ...(turns ? { turns } : {}), ...(docsProfile ? { docsProfile } : {}) }, null, 1));
 }
 
 export function loadVocab(): string[] {

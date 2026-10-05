@@ -185,6 +185,7 @@ if (process.argv.includes("--parity")) {
 // ── Jev-only config: intent via classifier choice, no TypeLLM key ──
 {
 	process.env.MAJORDOME_KEY_FILE = "/tmp/definitely-missing-majordome-key";
+	process.env.MAJORDOME_TRAIL_FILE = join(tmp, "jev-only-trails.jsonl"); // hermetic: intent trails land here, never the real store
 	setClassifyFn(async () => ({ model: "fake-jev", answers: { intent: { choice: "definition_recall" } } }));
 	const r = await routingIntent("remind me how the watcher works");
 	check("jev-only: recall routes via classifier", r?.intent === "definition_recall");
@@ -557,6 +558,86 @@ if (process.argv.includes("--parity")) {
 	delete process.env.MAJORDOME_TRAIL_FILE;
 	check("shape: user.md lines read, comments/blanks stripped", lines1.length === 2 && lines1[0].includes("diagram") && !lines1.join("|").includes("personal rules"));
 	check("shape: prefs cached per session until reset", lines2.length === 2 && lines3.length === 1 && lines4.length === 0);
+}
+
+// ── v2.8 judge-cost telemetry: trail aggregation + gap-rule coverage ──
+{
+	process.env.MAJORDOME_DIR = join(tmp, "telemetry-store");
+	const trailPath = join(tmp, "telemetry-trails.jsonl");
+	process.env.MAJORDOME_TRAIL_FILE = trailPath;
+	const { readFileSync: rfs } = await import("node:fs");
+	const { aggregate, judgeStatsLines, JUDGE_LINES, trail, setTrailTurn } = await import("./trail.ts");
+	const st3 = await import("./store.ts");
+	st3.saveMeta({ dims: [], docsCursor: {}, turns: 150 });
+	setTrailTurn(150);
+	// fixture: intent ×3 (one fail-open), shape + docs ok (estTokens reported),
+	// decision records (consolidate/docsNudge) that must NOT count as calls,
+	// one corrupt line the scan must skip
+	writeFileSync(
+		trailPath,
+		[
+			JSON.stringify({ t: "2026-01-01T00:00:00Z", j: "routingIntent", v: 1, judge: "typellm", intent: "definition_recall" }), // old schema: no turn
+			JSON.stringify({ t: "2026-01-01T00:01:00Z", j: "routingIntent", v: 1, judge: "typellm", ok: false, turn: 149 }),
+			JSON.stringify({ t: "2026-01-01T00:02:00Z", j: "routingIntent", v: 1, judge: "jev", ok: true, intent: "continuation", turn: 150 }),
+			JSON.stringify({ t: "2026-01-01T00:03:00Z", j: "shapeVerdict", v: 1, judge: "jev", ok: true, shape: "table", turn: 150, estTokens: 120 }),
+			JSON.stringify({ t: "2026-01-01T00:04:00Z", j: "docsVerdict", v: 1, judge: "typellm", ok: true, docsWorthy: true, kind: "readme", turn: 150, estTokens: 80.4 }),
+			JSON.stringify({ t: "2026-01-01T00:05:00Z", j: "consolidate", v: 1, pair: ["a:1", "a:2"], verdict: "contradicts", source: "heuristic-lexical", turn: 150 }),
+			JSON.stringify({ t: "2026-01-01T00:06:00Z", j: "docsNudge", v: 1, source: "verdict", fired: true, turn: 150 }),
+			"not json at all",
+		].join("\n") + "\n",
+	);
+	const ag = aggregate();
+	check("telemetry: judge lines counted exactly", ag.byJudge.routingIntent?.calls === 3 && ag.byJudge.shapeVerdict?.calls === 1 && ag.byJudge.docsVerdict?.calls === 1 && ag.total === 5);
+	check("telemetry: ok/fail-open split (ok !== false reads ok)", ag.byJudge.routingIntent?.ok === 2 && ag.byJudge.routingIntent?.failOpen === 1 && ag.byJudge.shapeVerdict?.failOpen === 0);
+	check("telemetry: decision records never counted as judge calls", ag.byJudge.consolidate === undefined && ag.byJudge.docsNudge === undefined);
+	check("telemetry: corrupt line skipped, lines scanned counted", ag.lines === 7);
+	check("telemetry: today counts only today's UTC lines", ag.today === 0); // fixture dated 2026-01-01
+	check("telemetry: estTokens summed where reported", ag.estTokens === 200 && ag.byJudge.shapeVerdict?.estTokens === 120 && ag.byJudge.docsVerdict?.estTokens === 80);
+	check("telemetry: turns from meta", ag.turns === 150 && ag.tagged === 4); // judge lines with a turn cursor (decision records excluded)
+	check("telemetry: last-100-turn window (turn > turns-100)", ag.callsLast100 === 4 && ag.avgPerTurn === 0.04); // 4 calls / min(100,150)
+	// new-line turn cursor + sinceTurn windowing
+	setTrailTurn(151);
+	trail("routingIntent", { judge: "typellm", ok: true });
+	const ag2 = aggregate();
+	check("telemetry: turn cursor stamped onto new lines", ag2.tagged === 5 && ag2.callsLast100 === 5 && ag2.total === 6);
+	check("telemetry: sinceTurn cursor windows the scan", aggregate(151).total === 1 && aggregate(151).byJudge.routingIntent?.calls === 1);
+	// stats formatting smoke (the /majordome judge-cost section)
+	const statsLines = judgeStatsLines(ag2);
+	check("telemetry: stats line shape", statsLines.length === 2 && statsLines[0].startsWith("judge calls: 6 total · 1 today · avg 0.05/turn (last 100 turns)") && statsLines[1].startsWith("by judge: intent 4"));
+	check("telemetry: stats tags + ok/fail-open percentages", statsLines[1].includes("shape 1") && statsLines[1].includes("docs 1") && statsLines[1].endsWith("(ok 83% · fail-open 17%)"));
+	check("telemetry: estTokens surfaced in stats", statsLines[0].includes("~200 tok"));
+	check("telemetry: stats section empty on an empty trail", judgeStatsLines({ ...ag2, total: 0 }).length === 0);
+
+	// gap-rule (static): every judge entry point must trail-record inside its
+	// own function body — a judge call site without a trail line fails here
+	const src = rfs(new URL("./judges.ts", import.meta.url), "utf8");
+	const fnSrc = (name: string): string => src.match(new RegExp(`export (async )?function ${name}\\b[\\s\\S]*?\\n}`))?.[0] ?? "";
+	const trailHome: Record<string, string[]> = { shapeVerdict: ["shapeVerdict", "settleShape"] }; // judge → fns that may trail for it
+	const missing = JUDGE_LINES.filter((j) => !(trailHome[j] ?? [j]).some((fn) => fnSrc(fn).includes(`trail("${j}"`)));
+	check("telemetry: gap-rule — every judge line name is trailed in its function", missing.length === 0 && fnSrc("dimVector").includes('trail("dimVector"'));
+
+	// gap-rule (runtime): judges that reach the transport with no key fail open
+	// AND trail-record ok:false — zero network (generate exits before fetch)
+	delete process.env.TYPELLM_API_KEY;
+	process.env.MAJORDOME_KEY_FILE = join(tmp, "no-key-on-purpose");
+	resetClassifyFn();
+	writeFileSync(trailPath, "");
+	const jm = await import("./judges.ts");
+	await jm.blockMeta("segment text about the watcher");
+	await jm.routingIntent("remind me how the watcher works");
+	await jm.dimVector("segment text", ["alpha_beta", "gamma_delta"], "segment");
+	await jm.induceDims("segment text");
+	await jm.rewriteQuery("remind me about the watcher");
+	await jm.keyPhrases("segment text", "watcher query");
+	const openLines = rfs(trailPath, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+	for (const j of ["blockMeta", "routingIntent", "dimVector", "induceDims", "rewriteQuery", "keyPhrases"]) {
+		check(`telemetry: ${j} trails its fail-open call (ok:false)`, openLines.some((l: any) => l.j === j && l.ok === false));
+	}
+	check("telemetry: dimVector records attempts, one line per invocation", openLines.filter((l: any) => l.j === "dimVector").length === 1 && openLines.find((l: any) => l.j === "dimVector")?.attempts === 3);
+	// judges with no transport configured make NO call — correctly no trail line
+	writeFileSync(trailPath, "");
+	check("telemetry: contradicts/docsVerdict/shapeVerdict/lifecycleVerdict make no call when unconfigured", (await jm.contradicts("q", "g")) === false && (await jm.docsVerdict("work")) === null && (await jm.shapeVerdict("msg", [])) === null && (await jm.lifecycleVerdict("a", "b")) === null && rfs(trailPath, "utf8").trim() === "");
+	delete process.env.MAJORDOME_DIR;
 }
 
 if (failures) {

@@ -1,3 +1,14 @@
+## 2026-10-05 — v2 branch: judge-cost telemetry (trail aggregate)
+
+- judge-cost telemetry: the judgment trail is the single source of truth — `/majordome stats` gains a `judge cost (trail aggregate)` section (`judge calls: N total · N today · avg X/turn (last 100 turns) · ~T tok reported` + `by judge:` split with ok/fail-open %), aggregated by new `aggregate()`/`judgeStatsLines()` in ext/trail.ts; zero parallel counters, zero new API calls.
+- trail coverage completion (gap-rule, selfcheck-enforced): every judge call site now trails — routingIntent Jev continuation/error paths, contradicts Jev error, docsVerdict dead-transport paths (TypeLLM + Jev), lifecycleVerdict Jev paths, blockMeta agent-path failures, and dimVector (never trailed; one line per invocation with attempts). Static + runtime hermetic probes in selfcheck fail on an untrailed judge.
+- estTokens on new trail lines where the transport reports usage: live TypeLLM returns `{input_tokens, thinking_tokens}` (no total) — tokensOf() handles bare numbers, OpenAI totals, and part sums; verified live (rewriteQuery → `estTokens:77`). Jev/agent paths count calls only.
+- turn denominator: cumulative turn counter in meta (`index.json.turns`, preserved across dims/cursor-only saves), stamped at turn_end; new trail lines carry `turn` via setTrailTurn so the last-100-turns window is exact.
+- doctor: ONE line, only when notable — `judge creep` when calls/turn > 3 over the last 100 turns; silent otherwise.
+- fixed: trailFile() referenced an unimported majordomeDir — with MAJORDOME_TRAIL_FILE unset (production), every trail write failed open silently and the real trail stayed empty; the trail now actually lands at ~/.pi/majordome/trails.jsonl.
+- hermetic fix: the selfcheck Jev-only section trailed into the real store; now sandboxed.
+- gates: selfcheck 145/145 · selfcheck-governance ✓ · shapebench hermetic PASS · docsbench PASS (a–f) · lifecyclebench 13-gates PASS both tiers. Live-tier shapebench fact-retention (89% vs 95%) fails identically on unmodified HEAD (server-side model drift, not this change — proven by running HEAD code in isolation).
+
 ## 2026-10-03 — v2 branch: dispatch (firstmate orchestrator, surface-agnostic)
 - outputShape routing: pre-turn shape judge (terse/diagram-first/table/walkthrough/artifact; user.md preference context; suggest-only tail hint; fail-open default; trail-recorded) + ext/metrics.ts + shapebench (metric validation, caveman negative control; live: 100% gold accuracy, fact retention ≥ default, −24% mean output tokens).
 - docs adoption: brownfield cursor seeding at init (git log → mtime, absent-keys-only, idempotent) + per-repo docs profiles (code-marker detection → coding/generic watch sets, .majordome/docs.json override, custom watch names like NOTES) — profile-filtered nudges, docsbench gates d/e/f.

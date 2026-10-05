@@ -38,12 +38,14 @@ export function loadKey(): string | null {
 // ── TypeLLM transport ───────────────────────────────────────────────────────
 
 /** Exported for bench seams that must ride the exact judge transport
- * (shapebench live tier: draft/grade shaped-vs-default answers). */
+ * (shapebench live tier: draft/grade shaped-vs-default answers). `usage` is
+ * the transport's token report verbatim (shape handled by tokensOf) when the
+ * response exposes one — cost telemetry only, verdict semantics unchanged. */
 export async function generate(
 	context: string,
 	questions: Record<string, unknown>,
 	recent?: string,
-): Promise<{ result: Record<string, unknown> } | null> {
+): Promise<{ result: Record<string, unknown>; usage?: unknown } | null> {
 	const key = loadKey();
 	if (!key) return null;
 	for (let attempt = 0; attempt < 2; attempt++) {
@@ -56,7 +58,9 @@ export async function generate(
 			});
 			const json: any = await resp.json().catch(() => null);
 			if (!resp.ok) throw new Error(json?.error?.message ?? `HTTP ${resp.status}`);
-			if (json?.result && typeof json.result === "object") return json;
+			if (json?.result && typeof json.result === "object") {
+				return json.usage !== undefined ? { result: json.result, usage: json.usage } : { result: json.result };
+			}
 		} catch {
 			// retry once, then fail open
 		}
@@ -74,6 +78,37 @@ export function parseDims(vals: (number | boolean | null | undefined)[], n: numb
 	if (nums.some((v) => !Number.isFinite(v))) return null;
 	if (nums.every((v) => v === 0) || nums.every((v) => v === 1)) return null;
 	return new Map();
+}
+
+// ── estTokens (judge-cost telemetry) ──────────────────────────────────────
+
+/** Token estimate from a judge transport response; null when none is
+ * reported — the trail line then records the call without an estimate (old
+ * lines and Jev/agent paths count calls only). Shapes handled: bare number,
+ * OpenAI-style {total_tokens}, and part-summed {input_tokens, output_tokens,
+ * thinking_tokens, prompt_tokens, completion_tokens} (the live TypeLLM
+ * transport reports input+thinking with no total). */
+function tokensOf(r: { usage?: unknown } | null | undefined): number | null {
+	const u: any = r?.usage;
+	if (u == null) return null;
+	if (typeof u === "number") return u > 0 ? Math.round(u) : null;
+	if (typeof u.total_tokens === "number") return u.total_tokens > 0 ? Math.round(u.total_tokens) : null;
+	let n = 0;
+	let seen = false;
+	for (const k of ["input_tokens", "prompt_tokens", "output_tokens", "completion_tokens", "thinking_tokens"]) {
+		if (typeof u[k] === "number" && u[k] > 0) {
+			n += u[k];
+			seen = true;
+		}
+	}
+	return seen && n > 0 ? Math.round(n) : null;
+}
+
+/** Spread-ready trail field: `{ estTokens: n }` when the transport reported
+ * usage, `{}` otherwise (keeps trail lines honest and schema-stable). */
+function tkf(r: { usage?: unknown } | null | undefined): Record<string, unknown> {
+	const n = tokensOf(r);
+	return n ? { estTokens: n } : {};
 }
 
 // ── block-close meta (TypeLLM strings) ──────────────────────────────────────
@@ -102,8 +137,11 @@ export async function blockMeta(text: string): Promise<BlockMeta | null> {
 				return { intent: intent && INTENTS.has(intent) ? intent : null, gist };
 			}
 			}
+			// gap-rule: the agent-model call happened but produced no gist — a
+			// fail-open judge call is still a judge call (cost must see it)
+			trail("blockMeta", { judge: "agent", ok: false });
 		} catch {
-			// fall through to null
+			trail("blockMeta", { judge: "agent", ok: false });
 		}
 		return null;
 	}
@@ -117,7 +155,7 @@ export async function blockMeta(text: string): Promise<BlockMeta | null> {
 	});
 	const res = r?.result ?? {};
 	const ok = typeof res.gist === "string" && !!res.gist.trim();
-	trail("blockMeta", { judge: "typellm", ok, intent: typeof res.intent === "string" ? res.intent : null });
+	trail("blockMeta", { judge: "typellm", ok, intent: typeof res.intent === "string" ? res.intent : null, ...tkf(r) });
 	if (!ok) return null;
 	return { intent: typeof res.intent === "string" ? res.intent : null, gist: res.gist.trim() };
 }
@@ -133,7 +171,7 @@ export async function induceDims(text: string): Promise<string[]> {
 	});
 	const v = r?.result?.dims;
 	if (typeof v !== "string") {
-		trail("induceDims", { ok: false });
+		trail("induceDims", { judge: "typellm", ok: false, ...tkf(r) });
 		return [];
 	}
 	const dims = v
@@ -141,7 +179,7 @@ export async function induceDims(text: string): Promise<string[]> {
 		.map((n) => n.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, ""))
 		.filter((n) => n.length >= 3)
 		.slice(0, 6);
-	trail("induceDims", { ok: dims.length > 0, n: dims.length });
+	trail("induceDims", { judge: "typellm", ok: dims.length > 0, n: dims.length, ...tkf(r) });
 	return dims;
 }
 
@@ -156,7 +194,7 @@ export async function rewriteQuery(text: string): Promise<string | null> {
 	});
 	const v = r?.result?.search_terms;
 	const ok = typeof v === "string" && !!v.trim();
-	trail("rewriteQuery", { ok });
+	trail("rewriteQuery", { judge: "typellm", ok, ...tkf(r) });
 	return ok ? (v as string).trim() : null;
 }
 
@@ -172,7 +210,7 @@ export async function keyPhrases(segment: string, query: string): Promise<string
 	});
 	const v = r?.result?.phrases;
 	const ok = typeof v === "string" && !!v.trim();
-	trail("keyPhrases", { ok });
+	trail("keyPhrases", { judge: "typellm", ok, ...tkf(r) });
 	return ok ? (v as string).split(",").map((s) => s.trim()).filter(Boolean).slice(0, 5) : [];
 }
 
@@ -212,10 +250,16 @@ export async function routingIntent(userMessage: string, recentAssistant?: strin
 			);
 			const a = res?.answers?.intent as string | { choice?: string } | undefined;
 			const label = typeof a === "string" ? a : (a as any)?.choice;
-			if (!label || label === "continuation") return null;
+			const tk = tkf(res);
+			if (!label || label === "continuation") {
+				// gap-rule: the judge answered — a continuation verdict routes to no
+				// recall but still costs a call; a missing label failed open
+				trail("routingIntent", { judge: "jev", ok: !!label, intent: label ?? null, continuation: label === "continuation", ...tk });
+				return null;
+			}
 			const nc = res?.answers?.need_clarification as { noul?: boolean } | boolean | undefined;
 			const need = nc === true || (nc as any)?.noul === true;
-			trail("routingIntent", { judge: "jev", intent: label, clarify: need });
+			trail("routingIntent", { judge: "jev", intent: label, clarify: need, ...tk });
 			return {
 				intent: label,
 				searchTerms: "",
@@ -223,6 +267,7 @@ export async function routingIntent(userMessage: string, recentAssistant?: strin
 				clarifyWhy: "",
 			};
 		} catch {
+			trail("routingIntent", { judge: "jev", ok: false }); // gap-rule: classifier raised — fail-open call recorded
 			return null;
 		}
 	}
@@ -259,8 +304,9 @@ export async function routingIntent(userMessage: string, recentAssistant?: strin
 		},
 	}, recentAssistant);
 	const res = r?.result ?? {};
+	const tk = tkf(r);
 	if (typeof res.intent !== "string") {
-		trail("routingIntent", { judge: "typellm", ok: false });
+		trail("routingIntent", { judge: "typellm", ok: false, ...tk });
 		return null;
 	}
 	trail("routingIntent", {
@@ -268,6 +314,7 @@ export async function routingIntent(userMessage: string, recentAssistant?: strin
 		intent: res.intent,
 		rewrite: typeof res.search_terms === "string" && !!res.search_terms,
 		clarify: res.need_clarification === "yes",
+		...tk,
 	});
 	return {
 		intent: res.intent as RoutingIntent["intent"],
@@ -294,7 +341,9 @@ export async function contradicts(query: string, gist: string): Promise<boolean>
 			},
 		);
 		const verdict = r?.result?.contradiction === "yes";
-		trail("contradicts", { judge: "typellm", verdict });
+		// ok here means the transport answered at all — a dead call must not read
+		// as a confident "no"
+		trail("contradicts", { judge: "typellm", ok: !!r?.result, verdict, ...tkf(r) });
 		return verdict;
 	}
 	if (classifyFn) {
@@ -311,9 +360,10 @@ export async function contradicts(query: string, gist: string): Promise<boolean>
 			);
 			const a = res?.answers?.contradiction;
 			const verdict = a === true || (a as any)?.noul === true;
-			trail("contradicts", { judge: "jev", verdict });
+			trail("contradicts", { judge: "jev", ok: !!res?.answers, verdict, ...tkf(res) });
 			return verdict;
 		} catch {
+			trail("contradicts", { judge: "jev", ok: false }); // gap-rule: classifier raised — fail-open call recorded
 			return false;
 		}
 	}
@@ -347,16 +397,16 @@ function docsWorthyOf(v: unknown): boolean | null {
  * judge, error, malformed) → the caller keeps its arithmetic 3-block rule.
  * The verdict lands on the trail either way, never in message text. */
 export async function docsVerdict(work: string): Promise<DocsVerdict | null> {
-	const settle = (res: Record<string, unknown>, judge: string): DocsVerdict | null => {
+	const settle = (res: Record<string, unknown>, judge: string, usage?: unknown): DocsVerdict | null => {
 		const w = docsWorthyOf(res.docs_worthy);
 		if (w === null) {
-			trail("docsVerdict", { judge, ok: false });
+			trail("docsVerdict", { judge, ok: false, ...tkf({ usage }) });
 			return null;
 		}
 		const kRaw = typeof res.kind === "string" ? res.kind : typeof (res.kind as any)?.choice === "string" ? (res.kind as any).choice : "";
 		const kind = DOCS_KINDS.includes(kRaw.toLowerCase() as DocsKind) ? (kRaw.toLowerCase() as DocsKind) : null;
 		const out: DocsVerdict = { docsWorthy: w, kind: w ? kind : null, why: typeof res.why === "string" ? res.why.slice(0, 120) : "" };
-		trail("docsVerdict", { judge, ok: true, docsWorthy: out.docsWorthy, kind: out.kind, why: out.why });
+		trail("docsVerdict", { judge, ok: true, docsWorthy: out.docsWorthy, kind: out.kind, why: out.why, ...tkf({ usage }) });
 		return out;
 	};
 	if (loadKey()) {
@@ -377,7 +427,11 @@ export async function docsVerdict(work: string): Promise<DocsVerdict | null> {
 				why: { type: "string", instructions: "Reason, max 12 words." },
 			},
 		);
-		return r?.result ? settle(r.result, "typellm") : null;
+		if (!r?.result) {
+			trail("docsVerdict", { judge: "typellm", ok: false }); // gap-rule: dead transport is still a judge call
+			return null;
+		}
+		return settle(r.result, "typellm", r.usage);
 	}
 	if (classifyFn) {
 		try {
@@ -396,7 +450,11 @@ export async function docsVerdict(work: string): Promise<DocsVerdict | null> {
 					},
 				},
 			);
-			return res?.answers ? settle(res.answers, "jev") : null;
+			if (!res?.answers) {
+				trail("docsVerdict", { judge: "jev", ok: false }); // gap-rule: unusable answer is still a judge call
+				return null;
+			}
+			return settle(res.answers, "jev", res.usage);
 		} catch {
 			trail("docsVerdict", { judge: "jev", ok: false });
 			return null;
@@ -431,15 +489,15 @@ const SHAPE_INSTRUCTIONS =
 	"walkthrough: a step-by-step procedure or cause-chain narrative (how do I get from A to B, why did X fail, walk me through a concrete how-to). " +
 	"When torn between shapes, choose default.";
 
-function settleShape(res: Record<string, unknown>, judge: string): ShapeVerdict | null {
+function settleShape(res: Record<string, unknown>, judge: string, usage?: unknown): ShapeVerdict | null {
 	const shape = shapeOf(res.shape);
 	if (!shape) {
-		trail("shapeVerdict", { judge, ok: false }); // fail-open: unparseable is null, never a guessed shape
+		trail("shapeVerdict", { judge, ok: false, ...tkf({ usage }) }); // fail-open: unparseable is null, never a guessed shape
 		return null;
 	}
 	const whyRaw = typeof res.why === "string" ? res.why : typeof (res.why as any)?.choice === "string" ? (res.why as any).choice : "";
 	const out: ShapeVerdict = { shape, why: whyRaw.replace(/\s+/g, " ").trim().slice(0, 80) };
-	trail("shapeVerdict", { judge, ok: true, shape: out.shape, why: out.why }); // never message text
+	trail("shapeVerdict", { judge, ok: true, shape: out.shape, why: out.why, ...tkf({ usage }) }); // never message text
 	return out;
 }
 
@@ -489,7 +547,7 @@ export async function shapeVerdict(userMessage: string, prefLines: string[] = us
 			trail("shapeVerdict", { judge: "typellm", ok: false });
 			return null;
 		}
-		return settleShape(r.result, "typellm");
+		return settleShape(r.result, "typellm", r.usage);
 	}
 	if (classifyFn) {
 		try {
@@ -514,7 +572,7 @@ export async function shapeVerdict(userMessage: string, prefLines: string[] = us
 				trail("shapeVerdict", { judge: "jev", ok: false });
 				return null;
 			}
-			return settleShape(res.answers, "jev");
+			return settleShape(res.answers, "jev", res.usage);
 		} catch {
 			trail("shapeVerdict", { judge: "jev", ok: false });
 			return null;
@@ -555,12 +613,13 @@ export async function lifecycleVerdict(olderText: string, newerText: string): Pr
 		);
 		const res = r?.result ?? {};
 		const c = res.contradicts, f = res.tried_and_failed;
+		const tk = tkf(r);
 		if (c === undefined && f === undefined) {
-			trail("lifecycleVerdict", { judge: "typellm", ok: false });
+			trail("lifecycleVerdict", { judge: "typellm", ok: false, ...tk });
 			return null;
 		}
 		const out = { contradicts: c === "yes", triedAndFailed: f === "yes" };
-		trail("lifecycleVerdict", { judge: "typellm", ok: true, contradicts: out.contradicts, triedAndFailed: out.triedAndFailed });
+		trail("lifecycleVerdict", { judge: "typellm", ok: true, contradicts: out.contradicts, triedAndFailed: out.triedAndFailed, ...tk });
 		return out;
 	}
 	if (classifyFn) {
@@ -581,14 +640,18 @@ export async function lifecycleVerdict(olderText: string, newerText: string): Pr
 				},
 			);
 			const a1 = res?.answers?.contradicts, a2 = res?.answers?.tried_and_failed;
-			if (a1 === undefined && a2 === undefined) return null;
+			if (a1 === undefined && a2 === undefined) {
+				trail("lifecycleVerdict", { judge: "jev", ok: false }); // gap-rule: unusable answer is still a judge call
+				return null;
+			}
 			const out = {
 				contradicts: a1 === true || (a1 as any)?.noul === true,
 				triedAndFailed: a2 === true || (a2 as any)?.noul === true,
 			};
-			trail("lifecycleVerdict", { judge: "jev", ...out });
+			trail("lifecycleVerdict", { judge: "jev", ...out, ...tkf(res) });
 			return out;
 		} catch {
+			trail("lifecycleVerdict", { judge: "jev", ok: false }); // gap-rule: classifier raised — fail-open call recorded
 			return null;
 		}
 	}
@@ -656,6 +719,7 @@ if (isMain) {
 export interface ClassifyResult {
 	model: string;
 	answers: Record<string, unknown>;
+	usage?: unknown; // token report when the classifier registry exposes one (cost telemetry)
 }
 export type ClassifyFn = (state: Record<string, unknown>, questions: Record<string, unknown>) => Promise<ClassifyResult | null>;
 
@@ -687,13 +751,22 @@ export async function dimVector(seg: string, dims: string[], segKind: "segment" 
 		segKind === "segment"
 			? `State field 'seg' is a conversation segment from a coding-agent session. Is this segment primarily about '${d}'? Answer yes/no.`
 			: `State field 'seg' is a user chat message from a coding-agent session. Is this message primarily about '${d}'? Answer yes/no.`;
+	// gap-rule telemetry: this judge never trailed — one line per invocation
+	// (retries are the transport's business), so /majordome stats sees the
+	// per-block and per-query dim cost
+	let attempts = 0;
+	let lastJudge = "none";
+	let tokens = 0;
 	if (classifyFn) {
 		for (let attempt = 0; attempt < 2; attempt++) {
+			attempts++;
+			lastJudge = "jev";
 			try {
 				const res = await classifyFn(
 					{ seg: seg.slice(0, 2500) },
 					Object.fromEntries(dims.map((d) => [d, { type: "noul", instructions: instructions(d) }])),
 				);
+				tokens += tokensOf(res) ?? 0;
 				const answers = res?.answers ?? {};
 				const vals = dims.map((d) => {
 					const a = answers[d] as { noul?: boolean } | boolean | undefined;
@@ -703,6 +776,7 @@ export async function dimVector(seg: string, dims: string[], segKind: "segment" 
 				const m = parseDims(vals, dims.length);
 				if (m) {
 					dims.forEach((d, i) => m.set(d, vals[i] === true || (vals[i] as any)?.noul === true ? 1 : 0));
+					trail("dimVector", { judge: "jev", ok: true, attempts, ...(tokens ? { estTokens: tokens } : {}) });
 					return m;
 				}
 			} catch {
@@ -712,6 +786,8 @@ export async function dimVector(seg: string, dims: string[], segKind: "segment" 
 	}
 	// guarded TypeLLM number fallback (the proven config flip, automatic)
 	for (let attempt = 0; attempt < 3; attempt++) {
+		attempts++;
+		lastJudge = "typellm";
 		const r = await generate(
 			seg.slice(0, 2500),
 			Object.fromEntries(
@@ -721,6 +797,7 @@ export async function dimVector(seg: string, dims: string[], segKind: "segment" 
 				]),
 			),
 		);
+		tokens += tokensOf(r) ?? 0;
 		const res = r?.result ?? {};
 		const vals = dims.map((d) => {
 			const v = res[d];
@@ -729,8 +806,10 @@ export async function dimVector(seg: string, dims: string[], segKind: "segment" 
 		const m = parseDims(vals, dims.length);
 		if (m) {
 			dims.forEach((d, i) => m.set(d, Number(vals[i])));
+			trail("dimVector", { judge: "typellm", ok: true, attempts, ...(tokens ? { estTokens: tokens } : {}) });
 			return m;
 		}
 	}
+	trail("dimVector", { judge: lastJudge, ok: false, attempts }); // fail-open null — recorded
 	return null;
 }
