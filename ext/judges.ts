@@ -317,6 +317,91 @@ export async function contradicts(query: string, gist: string): Promise<boolean>
 	return false;
 }
 
+// ── docs verdict (magic-docs v2): the deterministic-value posthook ─────────
+
+export type DocsKind = "readme" | "changelog" | "adr";
+export interface DocsVerdict {
+	docsWorthy: boolean;
+	kind: DocsKind | null;
+	why: string; // ≤120 chars
+}
+
+const DOCS_KINDS: readonly DocsKind[] = ["readme", "changelog", "adr"];
+
+/** docs_worthy answer → true/false, null when malformed (fail-open, not false:
+ * a malformed verdict must fall back to the arithmetic rule, not silence it). */
+function docsWorthyOf(v: unknown): boolean | null {
+	if (v === "yes" || v === true) return true;
+	if (v === "no" || v === false) return false;
+	if (v && typeof v === "object" && typeof (v as any).noul === "boolean") return (v as any).noul;
+	return null;
+}
+
+/** Would this turn's implementation work warrant a repo docs pass (README /
+ * CHANGELOG / ADR)? A separate small per-turn call: blockMeta is per-block and
+ * shared with the init/reindex sweeps, so batching the turn-level verdict
+ * there would spam every sweep and couple two concerns. Fail-open null (no
+ * judge, error, malformed) → the caller keeps its arithmetic 3-block rule.
+ * The verdict lands on the trail either way, never in message text. */
+export async function docsVerdict(work: string): Promise<DocsVerdict | null> {
+	const settle = (res: Record<string, unknown>, judge: string): DocsVerdict | null => {
+		const w = docsWorthyOf(res.docs_worthy);
+		if (w === null) {
+			trail("docsVerdict", { judge, ok: false });
+			return null;
+		}
+		const kRaw = typeof res.kind === "string" ? res.kind : typeof (res.kind as any)?.choice === "string" ? (res.kind as any).choice : "";
+		const kind = DOCS_KINDS.includes(kRaw.toLowerCase() as DocsKind) ? (kRaw.toLowerCase() as DocsKind) : null;
+		const out: DocsVerdict = { docsWorthy: w, kind: w ? kind : null, why: typeof res.why === "string" ? res.why.slice(0, 120) : "" };
+		trail("docsVerdict", { judge, ok: true, docsWorthy: out.docsWorthy, kind: out.kind, why: out.why });
+		return out;
+	};
+	if (loadKey()) {
+		const r = await generate(
+			`Implementation work completed in this turn of a coding-agent session:\n${work.slice(0, 2000)}`,
+			{
+				docs_worthy: {
+					type: "string",
+					enum: ["yes", "no"],
+					instructions:
+						"Would this work warrant a docs pass in the repo (README: usage/API/behavior changed; CHANGELOG: notable change for release notes; ADR: a decision with tradeoffs)? Local renames, comment/typo fixes, tests-only churn, internal refactors with unchanged behavior = no.",
+				},
+				kind: {
+					type: "string",
+					enum: ["readme", "changelog", "adr"],
+					instructions: "Best-fit doc: readme (how to use it / API changed), changelog (release-note-worthy change), adr (architecture or decision record).",
+				},
+				why: { type: "string", instructions: "Reason, max 12 words." },
+			},
+		);
+		return r?.result ? settle(r.result, "typellm") : null;
+	}
+	if (classifyFn) {
+		try {
+			const res = await classifyFn(
+				{ work: work.slice(0, 1200) },
+				{
+					docs_worthy: {
+						type: "noul",
+						instructions:
+							"State field 'work' summarizes a coding-agent turn's implementation work. Does it warrant a repo docs update (README/CHANGELOG/ADR)? Local renames, typo fixes, tests-only churn = no. Answer yes/no.",
+					},
+					kind: {
+						type: "choice",
+						instructions: "If docs-worthy, which doc fits best?",
+						criteria: { readme: "usage or API changed", changelog: "notable change, release-note-worthy", adr: "a decision with tradeoffs was recorded" },
+					},
+				},
+			);
+			return res?.answers ? settle(res.answers, "jev") : null;
+		} catch {
+			trail("docsVerdict", { judge: "jev", ok: false });
+			return null;
+		}
+	}
+	return null;
+}
+
 // ── lifecycle pair verdict (v2.4 consolidation) ────────────────────────────────────
 
 export interface LifecyclePairVerdict {

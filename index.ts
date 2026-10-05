@@ -19,9 +19,9 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { blockCores, detectBoundaries, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
-import { blockMeta, contradicts, dimVector, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev } from "./ext/judges.ts";
-import { docsNudge, injectionText, judgeLine, scanDocsTouched, shouldJudgeLine, route } from "./ext/router.ts";
+import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
+import { blockMeta, contradicts, dimVector, docsVerdict, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev, type DocsVerdict } from "./ext/judges.ts";
+import { cursorForDoc, cursorKey, docsNudge, injectionText, judgeLine, scanDocsTouched, shouldJudgeLine, route, verdictToNudge } from "./ext/router.ts";
 import { composeOnePager } from "./ext/onepager.ts";
 import { compileMap } from "./ext/map.ts";
 import { ingestDocs } from "./ext/ingest_docs.ts";
@@ -29,6 +29,7 @@ import { listKinds, composeKind } from "./ext/docs.ts";
 import { initRepo } from "./ext/init.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch } from "./ext/orch.ts";
+import { trail } from "./ext/trail.ts";
 import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
 interface St {
@@ -118,11 +119,15 @@ function status(): void {
  * stays unindexed until the session moves past it — time-travel's guard). */
 async function indexSession(): Promise<number> {
 	if (!st.sessionFile || !st.on) return 0;
+	// subagent scratch sessions duplicate work already recorded in the main
+	// session — their blocks never enter the index (sweeps exclude them too)
+	if (isSubagentSession(st.sessionFile)) return 0;
 	const turns = parseSession(st.sessionFile);
 	if (turns.length < 2) return 0;
 	const firsts = detectBoundaries(turns, 0.07, 4);
 	const cores = blockCores(turns, firsts);
 	const slug = sessionSlug(st.sessionFile);
+	const closedImpl: Block[] = [];
 	let closed = 0;
 	for (const core of cores) {
 		if (core.lastTurn >= turns.length) continue; // open tail
@@ -173,17 +178,41 @@ async function indexSession(): Promise<number> {
 		}
 		st.blocks.push(block);
 		closed++;
+		if (block.intent === "implementation") closedImpl.push(block);
 	}
-	// docs cursor: advance on docs touches; nudge when implementation drifts
+	// docs cursor (magic-docs v2): advance per-slug on docs touches; the nudge
+	// is verdict-driven when the judge seam answers, falling back to the exact
+	// legacy arithmetic rule (3+ impl blocks since cursor) when it doesn't
+	// (offline/hermetic — behavior preserved byte for byte)
 	try {
 		const touched = scanDocsTouched(readFileSync(st.sessionFile, "utf8"));
-		for (const doc of touched) st.docsCursor[doc] = new Date().toISOString();
+		for (const doc of touched) st.docsCursor[cursorKey(slug, doc)] = new Date().toISOString();
+		const implCount = () => st.blocks.filter((b) => b.sessionFile === st.sessionFile && b.intent === "implementation").length;
 		if (touched.length || closed) {
 			saveMeta({ dims: st.vocab, docsCursor: st.docsCursor });
-			const n = docsNudge(st.blocks, st.sessionFile, st.docsCursor);
-			if (n && st.blocks.filter((b) => b.sessionFile === st.sessionFile && b.intent === "implementation").length > st.lastNudgeCount) {
+			// verdict posthook: asked when this turn closed implementation blocks.
+			// Judge configured → verdict-driven exclusively (docsWorthy=false → no
+			// nudge regardless of count; no impl work this turn → quiet). Arithmetic
+			// fallback ONLY when the judge is unavailable (offline) or the verdict
+			// call failed — the exact legacy rule, behavior preserved byte for byte.
+			let verdict: DocsVerdict | null = null;
+			if (closedImpl.length) verdict = await docsVerdict(closedImpl.map((b) => b.gist ?? b.head).join("\n"));
+			let n: string | null;
+			let source: string;
+			if (verdict) {
+				n = verdictToNudge(verdict, st.docsCursor, slug, closedImpl.map((b) => ({ id: shortId(b), gist: b.gist ?? b.head, closedAt: b.closedAt })));
+				source = "verdict";
+			} else if (!!(loadKey() || hasJev()) && !closedImpl.length) {
+				n = null; // healthy judge, no implementation work this turn — nothing docs-worthy surfaced
+				source = "verdict-not-asked";
+			} else {
+				n = docsNudge(st.blocks, st.sessionFile, st.docsCursor);
+				source = "arithmetic-fallback";
+			}
+			trail("docsNudge", { source, fired: !!n, ...(verdict ? { kind: verdict.kind, docsWorthy: verdict.docsWorthy } : {}) });
+			if (n && implCount() > st.lastNudgeCount) {
 				st.docsNudge = n;
-				st.lastNudgeCount = st.blocks.filter((b) => b.sessionFile === st.sessionFile && b.intent === "implementation").length;
+				st.lastNudgeCount = implCount();
 			} else if (!n) st.docsNudge = null;
 		}
 	} catch { /* docs nudge never breaks indexing */ }
@@ -476,8 +505,9 @@ export default function majordome(pi: ExtensionAPI): void {
 				const scopeArg = b && !["show"].includes(b) ? b : undefined;
 				const showOnly = b === "show" || parts[3] === "show";
 				const meta = loadMeta();
-				const spec = kind === "readme" || kind === "changelog" ? { since: meta.docsCursor[kind === "readme" ? "README" : "CHANGELOG"] ?? "" } : {};
-				const slug = st.sessionFile ? sessionSlug(st.sessionFile) : undefined;
+				const slug = st.sessionFile ? sessionSlug(st.sessionFile) : "";
+				// v2 cursors are per-slug; legacy plain keys read as this session's slug
+				const spec = kind === "readme" || kind === "changelog" ? { since: cursorForDoc(meta.docsCursor, slug, kind === "readme" ? "README" : "CHANGELOG") ?? "" } : {};
 				const scoped = filterBlocks(st.blocks, {
 					tag: scopeArg === "all" ? undefined : scopeArg,
 					slug: scopeArg ? undefined : slug,
@@ -601,6 +631,8 @@ export default function majordome(pi: ExtensionAPI): void {
 					try {
 						const { readdirSync } = await import("node:fs");
 						for (const d of readdirSync(dir)) {
+							// subagent scratch sessions duplicate the main session's work — never swept
+							if (isSubagentSession(d)) continue;
 							const sub = join(dir, d);
 							try {
 								for (const f of readdirSync(sub)) if (f.endsWith(".jsonl")) files.push(join(sub, f));
