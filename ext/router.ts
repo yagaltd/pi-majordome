@@ -15,6 +15,7 @@
 import { bm25Rank, federatedOrder, cosineVec, sessionSlug, shortTag, tokens } from "./core.ts";
 import type { RoutingIntent, DocsKind } from "./judges.ts";
 import { statusOf, type Block } from "./store.ts";
+import { BUILTIN_DOC_WATCH, watchRegexFor } from "./docsprofile.ts";
 
 export type Arm = "dims" | "lex";
 
@@ -258,13 +259,15 @@ export function shouldJudgeLine(r: RouteResult | null, recentAssistant?: string)
 	return !(recentAssistant ?? "").trimEnd().endsWith("?");
 }
 
-/** Docs cursor: has README/CHANGELOG/docs been touched in the session file,
- * and how many implementation blocks closed since the last touch?
- * Pure — wired by index.ts at turn_end. */
-export function scanDocsTouched(raw: string): string[] {
+/** Docs cursor: which docs (per the repo's watch profile) were touched in the
+ * session file? Built-ins keep their exact regexes; a custom watch name N
+ * matches N.md at a path boundary, case-insensitively (watchRegexFor).
+ * Pure — wired by index.ts at turn_end with the resolved profile's watch. */
+export function scanDocsTouched(raw: string, watch: readonly string[] = BUILTIN_DOC_WATCH): string[] {
 	const out: string[] = [];
-	for (const [name, re] of [["README", /[/"\\]readme\.md/i], ["CHANGELOG", /[/"\\]changelog\.md/i], ["docs/", /[/"\\]docs\//i]] as const) {
-		if (re.test(raw)) out.push(name);
+	for (const name of watch) {
+		if (out.includes(name)) continue;
+		if (watchRegexFor(name).test(raw)) out.push(name);
 	}
 	return out;
 }
@@ -303,10 +306,16 @@ export function docsNudge(
 	blocks: { sessionFile: string; intent: string | null; gist: string | null; closedAt: string }[],
 	sessionFile: string,
 	cursor: Record<string, string>,
+	watch: readonly string[] = BUILTIN_DOC_WATCH,
 ): string | null {
+	// profile-driven (v2.7): the arithmetic fallback speaks only for the docs
+	// it names — a repo whose profile watches neither README nor CHANGELOG
+	// (e.g. generic docs-only) never gets this nudge
+	if (!watch.includes("README") && !watch.includes("CHANGELOG")) return null;
 	const scoped = blocks.filter((b) => b.sessionFile === sessionFile && b.intent === "implementation" && b.gist);
 	// v2: per-slug cursor view — other repos' doc touches never cover this session's work
-	const own = cursorForSession(cursor, sessionSlug(sessionFile));
+	// v2.7: only watched docs count as covering touches (unwatched cursors are inert)
+	const own = Object.fromEntries(Object.entries(cursorForSession(cursor, sessionSlug(sessionFile))).filter(([k]) => watch.includes(k)));
 	const oldestTouch = Object.values(own).sort()[0];
 	const since = oldestTouch ? scoped.filter((b) => b.closedAt > oldestTouch) : scoped;
 	if (since.length < 3) return null;
@@ -336,8 +345,12 @@ export function verdictToNudge(
 	cursor: Record<string, string>,
 	slug: string,
 	turnWork: { id: string; gist: string; closedAt: string }[],
+	watch: readonly string[] = BUILTIN_DOC_WATCH,
 ): string | null {
 	if (!verdict.docsWorthy || !verdict.kind || !turnWork.length) return null;
+	// profile-driven (v2.7): a changelog-worthy verdict in a generic-profile
+	// repo (CHANGELOG not watched) stays quiet — only watched docs nudge
+	if (!watch.includes(KIND_DOC[verdict.kind])) return null;
 	const cur = cursorForDoc(cursor, slug, KIND_DOC[verdict.kind]);
 	const newestWork = turnWork.map((b) => b.closedAt).sort().at(-1) ?? "";
 	if (cur && cur >= newestWork) return null; // the kind's cursor already covers this work

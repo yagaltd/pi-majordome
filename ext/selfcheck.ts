@@ -402,6 +402,89 @@ if (process.argv.includes("--parity")) {
 	if (savedApiKey !== undefined) process.env.TYPELLM_API_KEY = savedApiKey;
 }
 
+// ── magic-docs v2.7: docs profiles + brownfield seeding (TASK D) ──
+{
+	process.env.MAJORDOME_KEY_FILE = join(tmp, "no-key-on-purpose"); // hermetic
+	delete process.env.TYPELLM_API_KEY;
+	const { watchRegexFor, detectDocsProfile, readDocsOverride, resolveDocsProfile, seedDocsCursor, brownfieldDocDates, adoptionLine, profileNoteLine, BUILTIN_DOC_WATCH, isValidDocsProfile } = await import("./docsprofile.ts");
+	const { mkdirSync: mkd, writeFileSync, utimesSync } = await import("node:fs");
+
+	// 1. generalized touch matcher: built-ins byte-identical, custom names bounded
+	check("watch: built-in matcher unchanged by profiles", JSON.stringify(scanDocsTouched('"path":"docs/README.md" "path":"CHANGELOG.md" "path":"docs/x.md"')) === JSON.stringify(["README", "CHANGELOG", "docs/"]));
+	check("watch: custom name N → /N\\.md at a path boundary, case-insensitive", scanDocsTouched("edited src/Notes.MD today", ["NOTES"]).join(",") === "NOTES" && scanDocsTouched("see vendor/notes.md", ["NOTES"]).length === 1 && scanDocsTouched("footer-notes.md and prompts/notes.txt untouched", ["NOTES"]).length === 0);
+	check("watch: regex metachars in custom names are escaped", scanDocsTouched("a/docs/b(c).md edited", ["b(c)"]).length === 1);
+	check("watch: built-in regex behavior preserved verbatim", (() => {
+		const wr = watchRegexFor("README");
+		return wr.test('"path":"docs/README.md"') && wr.test('"repo\\\\README.md"') && !wr.test("plain README.md prose") && !wr.test('"x/footer-readme.md"') && watchRegexFor("docs/").test('"path":"docs/api"') && !watchRegexFor("docs/").test('"path":"docsx/api"');
+	})());
+
+	// 2. profile resolution precedence: override > stored > detected
+	const repoC = join(tmp, "prof-coding");
+	const repoG = join(tmp, "prof-generic");
+	mkd(join(repoC, "lib"), { recursive: true });
+	writeFileSync(join(repoC, "Cargo.toml"), "[package]\n");
+	mkd(join(repoG, "docs"), { recursive: true });
+	check("profile: code manifest → coding (README+CHANGELOG+docs/)", JSON.stringify(detectDocsProfile(repoC)) === JSON.stringify({ watch: [...BUILTIN_DOC_WATCH], source: "detected-coding" }));
+	const repoCabal = join(tmp, "prof-cabal");
+	mkd(repoCabal, { recursive: true });
+	writeFileSync(join(repoCabal, "majordome.cabal"), "cabal-version: 3.0\n");
+	check("profile: glob manifests (*.cabal, *.csproj) count as code markers", detectDocsProfile(repoCabal).source === "detected-coding");
+	check("profile: no manifest → generic (docs/)", detectDocsProfile(repoG).source === "detected-generic" && detectDocsProfile(repoG).watch.join(",") === "docs/");
+	mkd(join(repoG, ".majordome"), { recursive: true });
+	writeFileSync(join(repoG, ".majordome", "docs.json"), '{"watch":["README","CHANGELOG","docs/"]}');
+	check("profile: override > stored > detected", resolveDocsProfile(repoG, { watch: ["NOTES"], source: "stored" }).source === "override" && resolveDocsProfile(repoG, null).watch.join(",") === "README,CHANGELOG,docs/" && resolveDocsProfile(repoC, null).source === "detected-coding");
+	writeFileSync(join(repoG, ".majordome", "docs.json"), "not json at all");
+	check("profile: invalid override fails open to stored/detected", resolveDocsProfile(repoG, { watch: ["NOTES"], source: "stored" }).watch.join(",") === "NOTES" && resolveDocsProfile(repoG, null).source === "detected-generic" && readDocsOverride(repoG) === "invalid");
+	check("profile: watch shape validation rejects junk", !isValidDocsProfile({ watch: [] }) && !isValidDocsProfile({ watch: [42] }) && !isValidDocsProfile("watch") && isValidDocsProfile({ watch: ["README"], source: "x" }));
+	check("profile: init note lines format headless-safe", profileNoteLine({ watch: ["docs/"], source: "detected-generic" }, false).includes('docs profile: generic (no code markers) — override: .majordome/docs.json {"watch":[...]}') && profileNoteLine({ watch: ["NOTES"], source: "override" }, false).includes("override .majordome/docs.json"));
+
+	// 3. brownfield seeding: absent keys only → idempotent
+	const seedCur = { "code-parser:README": "2026-10-20T00:00:00Z" };
+	const findings = [{ doc: "README", date: "2026-10-01T00:00:00Z" }, { doc: "CHANGELOG", date: "2026-09-01T00:00:00Z" }];
+	const s1 = seedDocsCursor(seedCur, "code-parser", findings);
+	check("seed: absent keys seeded with the real dates", s1.seeded.length === 1 && s1.next["code-parser:README"] === "2026-10-20T00:00:00Z" && s1.next["code-parser:CHANGELOG"] === "2026-09-01T00:00:00Z");
+	const s2 = seedDocsCursor(s1.next, "code-parser", findings);
+	check("seed: idempotent — second run changes nothing", s2.seeded.length === 0 && JSON.stringify(s2.next) === JSON.stringify(s1.next));
+	check("seed: per-slug isolation (other slugs untouched)", !("termaid:CHANGELOG" in s1.next));
+
+	// 4. real file dates (mtime path — fixture has no .git) + docs/ dir newest
+	const bfRepo = join(tmp, "brownfield");
+	mkd(join(bfRepo, "docs", "deep"), { recursive: true });
+	writeFileSync(join(bfRepo, "README.md"), "# x");
+	writeFileSync(join(bfRepo, "docs", "a.md"), "a");
+	writeFileSync(join(bfRepo, "docs", "deep", "b.md"), "b");
+	const old = new Date("2026-05-05T05:05:05.000Z");
+	const fresh = new Date("2026-10-01T00:00:00.000Z");
+	utimesSync(join(bfRepo, "README.md"), old, old);
+	utimesSync(join(bfRepo, "docs", "a.md"), old, old);
+	utimesSync(join(bfRepo, "docs", "deep", "b.md"), fresh, fresh);
+	const found = brownfieldDocDates(bfRepo);
+	check("seed: file mtime used verbatim (git-free fixture invents nothing)", found.find((f) => f.doc === "README")?.date === old.toISOString());
+	check("seed: docs/ dir takes the NEWEST *.md within depth ≤2", found.find((f) => f.doc === "docs/")?.date === fresh.toISOString());
+	check("seed: adoption line format", adoptionLine(found.slice(0, 1)).startsWith("docs adopted: README ← 2026-05-05") && adoptionLine(found.slice(0, 1)).endsWith("(cursors seeded)"));
+
+	// 5. profile-filtered nudges (both paths) — generic repos stay quiet
+	const SFZ = "/h/.pi/agent/sessions/--home-u-repoz--/s.jsonl";
+	const implZ = ["a", "b", "c"].map((g, i) => ({ sessionFile: SFZ, intent: "implementation", gist: `built ${g}`, closedAt: `2026-10-0${i + 1}T12:00:00Z` }));
+	check("nudge: generic profile → no README/CHANGELOG arithmetic nudge", docsNudge(implZ as any, SFZ, {}, ["docs/"]) === null);
+	check("nudge: coding profile → fires at 3 (default byte-identical)", (docsNudge(implZ as any, SFZ, {}) ?? "").startsWith("[majordome docs] 3 implementation blocks"));
+	check("nudge: unwatched cursor entries never suppress", docsNudge(implZ as any, SFZ, { "--home-u-repoz--:CHANGELOG": "2026-10-31T00:00:00Z" }, ["docs/"]) === null);
+	const { verdictToNudge } = await import("./router.ts");
+	const zw = [{ id: "z:1", gist: "shipped the exporter", closedAt: "2026-10-03T00:00:00Z" }];
+	check("nudge: changelog verdict quiet in generic repo, adr still fires", verdictToNudge({ docsWorthy: true, kind: "changelog" }, {}, "z", zw, ["docs/"]) === null && !!verdictToNudge({ docsWorthy: true, kind: "adr" }, {}, "z", zw, ["docs/"]));
+
+	// 6. meta round-trip: docsProfile persists and survives dims/cursor-only saves
+	process.env.MAJORDOME_DIR = join(tmp, "profile-store");
+	process.env.MAJORDOME_TRAIL_FILE = join(tmp, "profile-trails.jsonl");
+	const st2 = await import("./store.ts");
+	st2.saveMeta({ dims: ["a"], docsCursor: {}, docsProfile: { watch: ["NOTES"], source: "detected-generic" } });
+	check("meta: docsProfile round-trips through the store", st2.loadMeta().docsProfile?.watch.join(",") === "NOTES");
+	st2.saveMeta({ dims: ["b"], docsCursor: { "z:README": "t" } }); // dims/cursor callers must not clobber
+	const kept = st2.loadMeta();
+	check("meta: dims/cursor saves preserve docsProfile", kept.docsProfile?.watch.join(",") === "NOTES" && kept.docsCursor["z:README"] === "t" && kept.dims.join(",") === "b");
+	delete process.env.MAJORDOME_DIR;
+}
+
 if (failures) {
 	console.error(`\n${failures} failure(s)`);
 	process.exit(1);

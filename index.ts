@@ -22,6 +22,7 @@ import { join } from "node:path";
 import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
 import { blockMeta, contradicts, dimVector, docsVerdict, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev, type DocsVerdict } from "./ext/judges.ts";
 import { cursorForDoc, cursorKey, docsNudge, injectionText, judgeLine, scanDocsTouched, shouldJudgeLine, route, verdictToNudge } from "./ext/router.ts";
+import { BUILTIN_DOC_WATCH, resolveDocsProfile } from "./ext/docsprofile.ts";
 import { composeOnePager } from "./ext/onepager.ts";
 import { compileMap } from "./ext/map.ts";
 import { ingestDocs } from "./ext/ingest_docs.ts";
@@ -45,6 +46,7 @@ interface St {
 	judgeMode: "off" | "soft" | "strict";
 	docsNudge: string | null;
 	docsCursor: Record<string, string>;
+	docsWatch: string[]; // resolved per-repo docs profile watch (session-scoped)
 	lastNudgeCount: number;
 }
 
@@ -61,6 +63,7 @@ const st: St = {
 	judgeMode: (process.env.MAJORDOME_JUDGE as St["judgeMode"]) || "soft",
 	docsNudge: null,
 	docsCursor: {},
+	docsWatch: [...BUILTIN_DOC_WATCH],
 	lastNudgeCount: 0,
 };
 
@@ -185,7 +188,7 @@ async function indexSession(): Promise<number> {
 	// legacy arithmetic rule (3+ impl blocks since cursor) when it doesn't
 	// (offline/hermetic — behavior preserved byte for byte)
 	try {
-		const touched = scanDocsTouched(readFileSync(st.sessionFile, "utf8"));
+		const touched = scanDocsTouched(readFileSync(st.sessionFile, "utf8"), st.docsWatch);
 		for (const doc of touched) st.docsCursor[cursorKey(slug, doc)] = new Date().toISOString();
 		const implCount = () => st.blocks.filter((b) => b.sessionFile === st.sessionFile && b.intent === "implementation").length;
 		if (touched.length || closed) {
@@ -200,13 +203,13 @@ async function indexSession(): Promise<number> {
 			let n: string | null;
 			let source: string;
 			if (verdict) {
-				n = verdictToNudge(verdict, st.docsCursor, slug, closedImpl.map((b) => ({ id: shortId(b), gist: b.gist ?? b.head, closedAt: b.closedAt })));
+				n = verdictToNudge(verdict, st.docsCursor, slug, closedImpl.map((b) => ({ id: shortId(b), gist: b.gist ?? b.head, closedAt: b.closedAt })), st.docsWatch);
 				source = "verdict";
 			} else if (!!(loadKey() || hasJev()) && !closedImpl.length) {
 				n = null; // healthy judge, no implementation work this turn — nothing docs-worthy surfaced
 				source = "verdict-not-asked";
 			} else {
-				n = docsNudge(st.blocks, st.sessionFile, st.docsCursor);
+				n = docsNudge(st.blocks, st.sessionFile, st.docsCursor, st.docsWatch);
 				source = "arithmetic-fallback";
 			}
 			trail("docsNudge", { source, fired: !!n, ...(verdict ? { kind: verdict.kind, docsWorthy: verdict.docsWorthy } : {}) });
@@ -233,6 +236,13 @@ export default function majordome(pi: ExtensionAPI): void {
 		const meta = loadMeta();
 		st.vocab = meta.dims;
 		st.docsCursor = meta.docsCursor;
+		// per-repo docs profile (v2.7): .majordome/docs.json override > stored
+		// (init-detected) > detected now. Never prompts — init may be headless.
+		try {
+			st.docsWatch = resolveDocsProfile(process.cwd(), meta.docsProfile ?? null).watch;
+		} catch {
+			/* detection failure keeps the built-in watch */
+		}
 		if (!st.on) st.reason = st.reason || "MAJORDOME_OFF";
 		if (!loadKey()) st.reason = "no TypeLLM key (npx tsx ext/judges.ts setup; TYPELLM_API_KEY env works too)";
 

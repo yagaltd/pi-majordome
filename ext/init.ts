@@ -20,7 +20,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug } from "./core.ts";
 import { blockMeta, dimVector, induceDims } from "./judges.ts";
-import { appendBlock, loadBlocks, loadVocab, saveVocab, type Block } from "./store.ts";
+import { adoptionLine, brownfieldDocDates, detectDocsProfile, profileNoteLine, readDocsOverride, resolveDocsProfile, seedDocsCursor } from "./docsprofile.ts";
+import { appendBlock, loadBlocks, loadMeta, loadVocab, saveMeta, saveVocab, type Block } from "./store.ts";
 
 const SESSIONS_DIR = join(homedir(), ".pi", "agent", "sessions");
 const CONCURRENCY = 4;
@@ -108,6 +109,32 @@ export async function initRepo(opts: InitOpts): Promise<string> {
 	}
 
 	const existing = new Set(loadBlocks().map((b) => b.id));
+
+	// ── brownfield docs adoption (v2.7) ──
+	// Existing doc files seed per-slug cursors from their REAL dates — git
+	// last-commit date when .git answers, else the file mtime; docs/ dirs take
+	// the newest *.md mtime (depth ≤2). Absent keys ONLY (never overwrite), so
+	// re-running init changes nothing → idempotent. Seeded dates are the
+	// files' own history, never ingest-time stamps (that stamping was a caught
+	// bug — see the closedAt comment in the block loop below). Also detects +
+	// stores the repo's docs profile (coding vs generic — never prompts; init
+	// may run headless in worker cold-starts); .majordome/docs.json overrides
+	// at every read, invalid overrides fail open (doctor reports them).
+	const meta0 = loadMeta();
+	const overrideState = readDocsOverride(opts.cwd);
+	let storedProfile = meta0.docsProfile ?? null;
+	if (!storedProfile) {
+		storedProfile = detectDocsProfile(opts.cwd);
+		saveMeta({ dims: meta0.dims, docsCursor: meta0.docsCursor, docsProfile: storedProfile });
+	}
+	const profile = resolveDocsProfile(opts.cwd, storedProfile);
+	const seed = seedDocsCursor(meta0.docsCursor, current, brownfieldDocDates(opts.cwd));
+	if (seed.seeded.length) saveMeta({ dims: meta0.dims, docsCursor: seed.next, docsProfile: storedProfile });
+	const adoptionNote = [
+		profileNoteLine(profile, overrideState === "invalid"),
+		seed.seeded.length ? adoptionLine(seed.seeded) : null, // omitted when nothing to seed
+	].filter(Boolean).join(" · ");
+
 	let vocab = loadVocab();
 	let indexed = 0;
 	let calls = 0;
@@ -218,5 +245,5 @@ export async function initRepo(opts: InitOpts): Promise<string> {
 			/* consolidation is maintenance, never a reason to fail init */
 		}
 	}
-	return `majordome init complete: +${indexed} blocks from ${newDone.length} sessions.${lifecycleNote} ${parkedCount} other project(s) parked (map-only) — /majordome init --lineage <slug> to index one.`;
+	return `majordome init complete: +${indexed} blocks from ${newDone.length} sessions.${lifecycleNote} ${parkedCount} other project(s) parked (map-only) — /majordome init --lineage <slug> to index one.` + (adoptionNote ? `\n${adoptionNote}` : "");
 }

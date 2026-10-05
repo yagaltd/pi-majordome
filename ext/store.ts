@@ -8,6 +8,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { isValidDocsProfile, type DocsProfile } from "./docsprofile.ts";
 
 /** Lifecycle state (v2.4). Absent reads as "valid" — pre-v2.4 records and
  * hand-written store lines stay first-class without migration. Assigned only
@@ -119,13 +120,16 @@ export function rewriteBlocks(keep: Block[]): void {
 export interface Meta {
 	dims: string[];
 	docsCursor: Record<string, string>; // doc name -> ISO time last touched
+	docsProfile?: DocsProfile; // per-repo docs watch — detected at init; .majordome/docs.json overrides at read time
 }
 
 export function loadMeta(): Meta {
 	const f = p("index.json");
 	try {
 		const m = JSON.parse(readFileSync(f, "utf8"));
-		return { dims: m.dims ?? [], docsCursor: m.docsCursor ?? {} };
+		const out: Meta = { dims: m.dims ?? [], docsCursor: m.docsCursor ?? {} };
+		if (isValidDocsProfile(m.docsProfile)) out.docsProfile = m.docsProfile; // lenient: junk profile reads as absent
+		return out;
 	} catch {
 		return { dims: [], docsCursor: {} };
 	}
@@ -133,7 +137,18 @@ export function loadMeta(): Meta {
 
 export function saveMeta(meta: Meta): void {
 	mkdirSync(majordomeDir(), { recursive: true });
-	writeFileSync(p("index.json"), JSON.stringify(meta, null, 1));
+	// docsProfile is adopted at init and long-lived: callers that only rotate
+	// dims/cursors (most saveMeta sites) must not clobber it
+	let docsProfile = meta.docsProfile;
+	if (!docsProfile) {
+		try {
+			const prev = JSON.parse(readFileSync(p("index.json"), "utf8"));
+			if (isValidDocsProfile(prev?.docsProfile)) docsProfile = prev.docsProfile;
+		} catch {
+			/* fresh store */
+		}
+	}
+	writeFileSync(p("index.json"), JSON.stringify({ dims: meta.dims, docsCursor: meta.docsCursor, ...(docsProfile ? { docsProfile } : {}) }, null, 1));
 }
 
 export function loadVocab(): string[] {

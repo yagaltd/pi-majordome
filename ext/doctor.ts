@@ -12,6 +12,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadBlocks, loadLifecycle, loadMeta, loadVocab, majordomeDir, effectiveStatus } from "./store.ts";
 import { isSubagentSession } from "./core.ts";
+import { readDocsOverride, resolveDocsProfile } from "./docsprofile.ts";
 
 const dir = majordomeDir();
 
@@ -98,6 +99,18 @@ export async function doctor(): Promise<string> {
 		if (missing.length) bad(`orchestrator worker cwd missing: ${missing.map((w: any) => w.name).join(", ")}`);
 		else if (oc.workers?.length) ok(`orchestrator: ${oc.workers.length} workers, all cwd exist`);
 	} catch { L.push("· orchestrator.json: absent (optional)"); }
+
+	// 8. docs profile (v2.7): override parse health + resolved watch list.
+	// An invalid .majordome/docs.json is the one profile failure mode — session
+	// time fails open to the stored/detected default; here it gets its note.
+	try {
+		const ov = readDocsOverride(process.cwd());
+		const prof = resolveDocsProfile(process.cwd(), loadMeta().docsProfile ?? null);
+		if (ov === "invalid") bad('.majordome/docs.json is invalid (need {"watch":[...]}, e.g. "README", "CHANGELOG", "docs/", or custom doc names like "NOTES") — failing open to the detected profile');
+		else ok(`docs profile: ${prof.source} — watching ${prof.watch.join(", ")}${ov ? " (override)" : ""}`);
+	} catch (e) {
+		bad(`docs profile check failed: ${(e as Error).message}`);
+	}
 
 	L.push(warns ? `\n${warns} issue(s) found — fixes are actions you choose (see hints above).` : "\nall clear.");
 	return L.join("\n");
