@@ -118,30 +118,43 @@ const INTENTS = new Set(["implementation", "investigation", "evaluation", "docum
 export interface BlockMeta {
 	intent: string | null;
 	gist: string | null;
+	lesson: boolean; // fail-open false: only a confident yes classifies a lesson
 }
 
-/** intent + gist, one batched call. Null on any failure — block indexes
- * without meta and the next reindex can backfill. */
+/** Lesson verdict parser (fail-open false): yes/true only; missing, malformed
+ * or junk reads "not a lesson" — a lesson class that grew by accident would
+ * poison recall boosts, the one-pager section and consolidation pairing. */
+function lessonOf(v: unknown): boolean {
+	if (v === true) return true;
+	return typeof v === "string" && /^(yes|true)$/i.test(v.trim());
+}
+
+/** intent + gist + lesson classification, ONE batched call. The lesson
+ * question rides the existing block-close seam ("does this block record a
+ * mistake/error/lesson worth remembering as guidance?") — no new call, no
+ * new judge. Null on any failure — block indexes without meta and the next
+ * reindex can backfill; lesson rides the trail either way (fail-open false). */
 export async function blockMeta(text: string): Promise<BlockMeta | null> {
 	if (!loadKey() && streamFn) {
 		// divert to the agent's own model: extraction without TypeLLM
 		try {
 			const out = await streamFn(
-				`You will be given a segment of a coding-agent session. Reply with EXACTLY two lines and nothing else:\nintent: <one of implementation, investigation, evaluation, documentation, discussion>\ngist: <one sentence: what was done or decided>\n\nSegment:\n${text.slice(0, 6000)}`,
+				`You will be given a segment of a coding-agent session. Reply with EXACTLY three lines and nothing else:\nintent: <one of implementation, investigation, evaluation, documentation, discussion>\ngist: <one sentence: what was done or decided>\nlesson: <yes|no — does this block record a mistake, error or lesson worth remembering as guidance (a gotcha, a fix worth remembering, a don't-do-that learning)? Pure feature work with no lesson = no>\n\nSegment:\n${text.slice(0, 6000)}`,
 			);
 			if (out) {
 				const intent = out.match(/intent:\s*([a-z]+)/i)?.[1]?.toLowerCase() ?? null;
 				const gist = out.match(/gist:\s*(.+)/i)?.[1]?.trim();
 				if (gist) {
-				trail("blockMeta", { judge: "agent", ok: true, intent: intent ?? null });
-				return { intent: intent && INTENTS.has(intent) ? intent : null, gist };
-			}
+					const lesson = lessonOf(out.match(/lesson:\s*(.+)/i)?.[1]);
+					trail("blockMeta", { judge: "agent", ok: true, intent: intent ?? null, lesson });
+					return { intent: intent && INTENTS.has(intent) ? intent : null, gist, lesson };
+				}
 			}
 			// gap-rule: the agent-model call happened but produced no gist — a
 			// fail-open judge call is still a judge call (cost must see it)
-			trail("blockMeta", { judge: "agent", ok: false });
+			trail("blockMeta", { judge: "agent", ok: false, lesson: false });
 		} catch {
-			trail("blockMeta", { judge: "agent", ok: false });
+			trail("blockMeta", { judge: "agent", ok: false, lesson: false });
 		}
 		return null;
 	}
@@ -152,12 +165,19 @@ export async function blockMeta(text: string): Promise<BlockMeta | null> {
 			instructions: "Primary intent of this segment.",
 		},
 		gist: { type: "string", instructions: "One sentence: what was done or decided." },
+		lesson: {
+			type: "string",
+			enum: ["yes", "no"],
+			instructions:
+				"Does this block record a mistake, error or lesson worth remembering as guidance — a gotcha, a fix worth remembering, a don't-do-that learning? Pure feature work, progress notes and plain decisions = no.",
+		},
 	});
 	const res = r?.result ?? {};
 	const ok = typeof res.gist === "string" && !!res.gist.trim();
-	trail("blockMeta", { judge: "typellm", ok, intent: typeof res.intent === "string" ? res.intent : null, ...tkf(r) });
+	const lesson = lessonOf(res.lesson);
+	trail("blockMeta", { judge: "typellm", ok, intent: typeof res.intent === "string" ? res.intent : null, lesson, ...tkf(r) });
 	if (!ok) return null;
-	return { intent: typeof res.intent === "string" ? res.intent : null, gist: res.gist.trim() };
+	return { intent: typeof res.intent === "string" ? res.intent : null, gist: res.gist.trim(), lesson };
 }
 
 /** 4-6 induced dim names for a segment (slice-three induction). */

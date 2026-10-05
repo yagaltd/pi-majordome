@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug } from "./core.ts";
 import { blockMeta, dimVector, induceDims } from "./judges.ts";
 import { adoptionLine, brownfieldDocDates, detectDocsProfile, profileNoteLine, readDocsOverride, resolveDocsProfile, seedDocsCursor } from "./docsprofile.ts";
-import { appendBlock, loadBlocks, loadMeta, loadVocab, saveMeta, saveVocab, type Block } from "./store.ts";
+import { appendBlock, blockDims, loadBlocks, loadMeta, loadVocab, saveMeta, saveVocab, type Block } from "./store.ts";
 
 const SESSIONS_DIR = join(homedir(), ".pi", "agent", "sessions");
 const CONCURRENCY = 4;
@@ -166,6 +166,7 @@ export async function initRepo(opts: InitOpts): Promise<string> {
 					const m = await blockMeta(fresh[i].text);
 					metas[i] = m?.gist ?? null;
 					intents[i] = m?.intent ?? null;
+					lessons[i] = m?.lesson === true;
 					calls++;
 				} catch {
 					failed = true; // live recipe: skip on judge error
@@ -174,6 +175,7 @@ export async function initRepo(opts: InitOpts): Promise<string> {
 			}
 		}
 		const intents: (string | null)[] = new Array(fresh.length).fill(null);
+		const lessons: boolean[] = new Array(fresh.length).fill(false); // block-close lesson class (v2.9)
 		await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 		if (failed) continue; // file stays un-done → retried next run
 		if (!opts.noDims) {
@@ -194,7 +196,7 @@ export async function initRepo(opts: InitOpts): Promise<string> {
 			if (!opts.noDims && vocab.length) {
 				try {
 					const vec = await dimVector(c.text, vocab, "segment");
-					dims = vec ? Object.fromEntries(vec) : {};
+					dims = blockDims(vec, lessons[i]); // judged dims + `lessons` topic dim on lesson blocks
 					calls++;
 				} catch {
 					/* dims fail open */
@@ -212,6 +214,7 @@ export async function initRepo(opts: InitOpts): Promise<string> {
 				tokensHybrid: [...c.tokensHybrid].sort(),
 				head: (turns[c.firstTurn - 1] as any)?.user?.slice(0, 200) ?? "",
 				closedAt: statSync(f).mtime.toISOString(), // ORIGINAL time — ingest-time stamping floods recency sections (caught by the one-pager A/B: 4/6 → 3/6)
+				lesson: lessons[i], // block-close judge, fail-open false
 			};
 			try {
 				appendBlock(b);

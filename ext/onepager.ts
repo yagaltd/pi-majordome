@@ -9,6 +9,11 @@
  *
  * Upgrade bar: bench/results/resume-baseline.json — hit@3 ≥ baseline per class.
  */
+/** One-pager (v2.1, composed — never maintained prose). v2.9 adds a Lessons
+ * section derived at compose time from the lesson class (Block.lesson, judged
+ * at block close): top lesson blocks by recency, every line cited — the
+ * section is a PROJECTION of the index, so re-composing after new lessons
+ * rewrites it; nothing accumulates as hand-mainted text. */
 import { shortTag } from "./core.ts";
 import type { Block } from "./store.ts";
 
@@ -16,7 +21,7 @@ const DECISION = /\b(decid|cho[os]e|shipped|dropped|removed|replaced|default|ren
 
 export interface OnePager {
 	md: string;
-	stats: { blocks: number; now: number; decisions: number; open: number };
+	stats: { blocks: number; now: number; decisions: number; open: number; lessons: number };
 }
 
 const cite = (b: Block) => `[${shortTag(b.session)}:${b.firstTurn}–${b.lastTurn}]`;
@@ -32,6 +37,10 @@ export function composeOnePager(blocks: Block[], tag?: string): OnePager {
 		: blocks;
 	const sorted = [...scope].sort((a, b) => (a.closedAt < b.closedAt ? 1 : -1));
 	const decisions = scope.filter((b) => b.gist && DECISION.test(b.gist)).sort((a, b) => (a.closedAt < b.closedAt ? 1 : -1));
+	// lessons: the index class, derived at compose time — recency first, capped
+	// (a lesson block that also carries decision vocabulary stays in BOTH
+	// sections: a decision that records the lesson is the lesson)
+	const lessons = scope.filter((b) => b.lesson === true).sort((a, b) => (a.closedAt < b.closedAt ? 1 : -1));
 	const decisionIds = new Set(decisions.map((b) => b.id));
 	const now = sorted.filter((b) => !decisionIds.has(b.id)).slice(0, 6);
 	const open = sorted.filter((b) => !decisionIds.has(b.id) && !now.includes(b)).slice(0, 5);
@@ -58,6 +67,9 @@ export function composeOnePager(blocks: Block[], tag?: string): OnePager {
 		"## Decisions & commitments",
 		...(decisions.slice(0, 10).map(line) || ["- (none recorded)"]),
 		"",
+		"## Lessons",
+		...(lessons.length ? lessons.slice(0, 6).map(line) : ["- (none recorded — lesson-class blocks appear here as the index classifies them)"]),
+		"",
 		"## Open threads",
 		...(open.length ? open.map(line) : ["- (none)"]),
 		"",
@@ -69,5 +81,5 @@ export function composeOnePager(blocks: Block[], tag?: string): OnePager {
 		"",
 		`_Grounded: ${scope.length} blocks · detail on demand: /majordome recall · record is append-only._`,
 	];
-	return { md: L.join("\n"), stats: { blocks: scope.length, now: now.length, decisions: decisions.length, open: open.length } };
+	return { md: L.join("\n"), stats: { blocks: scope.length, now: now.length, decisions: decisions.length, open: open.length, lessons: lessons.length } };
 }

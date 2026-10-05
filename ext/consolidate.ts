@@ -186,7 +186,12 @@ export async function runConsolidation(
 			if (affinity < PAIR_JACCARD && !(da && db && affinity >= PAIR_DIMS_COSINE)) continue;
 			const rareShared = [...a].filter((t) => bv.has(t) && (df.get(t) ?? 0) <= rareCap);
 			if (!rareShared.length) continue;
-			if (!hasReversal(bv) && !(newer.gist ?? "").match(/\b(no longer|instead of|replaced by|supersed\w*)\b/i)) continue;
+			// lesson pairs (v2.9) skip the reversal-vocabulary gate: a repeat of
+			// the same mistake IS the supersession evidence — the newer lesson
+			// record is the guidance that counts (the same-mistake-twice rule).
+			// The topic-overlap + rare-shared-terms gates still apply in full.
+			const lessonPair = older.lesson === true && newer.lesson === true;
+			if (!hasReversal(bv) && !lessonPair && !(newer.gist ?? "").match(/\b(no longer|instead of|replaced by|supersed\w*)\b/i)) continue;
 			candidates.push({ older, newer, affinity, rareShared });
 		}
 	}
@@ -199,21 +204,31 @@ export async function runConsolidation(
 		if (status.get(c.older.id) !== "valid") continue;
 		if (status.get(c.newer.id) !== "valid") continue;
 
-		// judge seam first (TypeLLM → Jev, fail-open null) — lexical fallback
-		let verdict = "contradicts";
+		// judge seam first (TypeLLM → Jev, fail-open null) — lexical fallback.
+		// Lesson pairs start at the same-mistake-twice verdict: a duplicate
+		// lesson supersedes the older guidance record even when the judge reads
+		// the pair as compatible (the recurrence is the supersession evidence);
+		// contradicts/tried-and-failed verdicts still override.
+		const lessonPair = c.older.lesson === true && c.newer.lesson === true;
+		let verdict = lessonPair ? "duplicate-lesson" : "contradicts";
 		let source: Supersession["source"] = "heuristic-lexical";
 		let failedToo = false;
+		let judgeCompatible = false;
 		try {
 			const jv = await lifecycleVerdict(judgeText(c.older), judgeText(c.newer));
 			if (jv) {
 				if (!jv.contradicts && !jv.triedAndFailed) {
-					trail("consolidate", { pair: [c.older.id, c.newer.id], verdict: "compatible", source: "judge", affinity: Math.round(c.affinity * 100) / 100 });
-					continue; // the judge actively cleared this pair — no demotion
+					if (!lessonPair) {
+						trail("consolidate", { pair: [c.older.id, c.newer.id], verdict: "compatible", source: "judge", affinity: Math.round(c.affinity * 100) / 100 });
+						continue; // the judge actively cleared this pair — no demotion
+					}
+					judgeCompatible = true; // lesson pair: rule verdict below, judge answer recorded on the trail
+				} else {
+					verdict = jv.triedAndFailed ? "tried-and-failed" : "contradicts";
+					failedToo = jv.triedAndFailed;
+					source = "typellm";
+					result.verdictSources.typellm++;
 				}
-				verdict = jv.triedAndFailed ? "tried-and-failed" : "contradicts";
-				failedToo = jv.triedAndFailed;
-				source = "typellm";
-				result.verdictSources.typellm++;
 			}
 		} catch {
 			// judge seam failed open → lexical verdict below
@@ -225,7 +240,7 @@ export async function runConsolidation(
 		result.changed++;
 		const link: Supersession = { older: c.older.id, newer: c.newer.id, verdict, source };
 		result.supersessions.push(link);
-		trail("consolidate", { pair: [c.older.id, c.newer.id], status: newStatus, verdict, source, affinity: Math.round(c.affinity * 100) / 100, shared: c.rareShared.slice(0, 4) });
+		trail("consolidate", { pair: [c.older.id, c.newer.id], status: newStatus, verdict, source, affinity: Math.round(c.affinity * 100) / 100, shared: c.rareShared.slice(0, 4), ...(lessonPair && source === "heuristic-lexical" ? { rule: "same-mistake-twice", judge: judgeCompatible ? "compatible" : "fail-open" } : {}) });
 	}
 
 	// ── persist: stamp records + sidecar artifact ─────────────────────────────

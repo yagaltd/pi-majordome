@@ -31,7 +31,7 @@ import { initRepo } from "./ext/init.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
-import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
+import { appendBlock, appendDecision, blockDims, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
 interface St {
 	on: boolean;
@@ -168,10 +168,11 @@ async function indexSession(): Promise<number> {
 			lastTurn: core.lastTurn,
 			gist: meta?.gist ?? null,
 			intent: meta?.intent ?? null,
-			dims: vec ? Object.fromEntries(vec) : {},
+			dims: blockDims(vec, meta?.lesson === true),
 			tokensHybrid: [...core.tokensHybrid].sort(),
 			head: turns[core.firstTurn - 1].user.slice(0, 200),
 			closedAt: new Date().toISOString(),
+			lesson: meta?.lesson === true, // block-close judge, fail-open false
 		};
 		try {
 			appendBlock(block);
@@ -612,7 +613,7 @@ export default function majordome(pi: ExtensionAPI): void {
 				const dir = join(process.cwd(), ".majordome");
 				mkdirSync(dir, { recursive: true });
 				writeFileSync(join(dir, "one-pager.md"), op.md);
-				notify(a === "show" ? op.md : `one-pager \u2192 ${join(dir, "one-pager.md")} (${op.stats.blocks} blocks: ${op.stats.decisions} decisions, ${op.stats.now} now, ${op.stats.open} open)`);
+				notify(a === "show" ? op.md : `one-pager \u2192 ${join(dir, "one-pager.md")} (${op.stats.blocks} blocks: ${op.stats.decisions} decisions, ${op.stats.lessons} lessons, ${op.stats.now} now, ${op.stats.open} open)`);
 				return;
 			}
 			if (cmd === "map") {

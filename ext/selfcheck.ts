@@ -687,6 +687,125 @@ if (process.argv.includes("--parity")) {
 	delete process.env.MAJORDOME_TRAIL_FILE;
 }
 
+// ── v2.9 slice 2: lessons as an index class (judged at block close) ──
+{
+	process.env.MAJORDOME_KEY_FILE = join(tmp, "no-key-on-purpose");
+	delete process.env.TYPELLM_API_KEY;
+	resetClassifyFn();
+	process.env.MAJORDOME_TRAIL_FILE = join(tmp, "lesson-trails.jsonl");
+	const jm2 = await import("./judges.ts");
+	const store2 = await import("./store.ts");
+	const { isLessonIntent, LESSON_INTENT_RE } = await import("./router.ts");
+	const { blockDims, rewriteBlocks: rwBlocks } = store2;
+	const { readFileSync: rfs2 } = await import("node:fs");
+
+	// dims: judged vector preserved, lesson adds the `lessons` topic dim
+	const vec2 = new Map([["renderer", 1], ["previews", 0.5]]);
+	check("blockDims: judged dims preserved verbatim", JSON.stringify(blockDims(vec2, false)) === JSON.stringify({ renderer: 1, previews: 0.5 }));
+	check("blockDims: lesson adds the lessons topic dim", blockDims(vec2, true).lessons === 1 && blockDims(vec2, true).renderer === 1);
+	check("blockDims: null vec + lesson = lessons only", JSON.stringify(blockDims(null, true)) === JSON.stringify({ lessons: 1 }));
+
+	// intent regex: hits + neutral misses
+	check("lesson intent: spec regex hits", LESSON_INTENT_RE.test("any lessons about the watcher?") && LESSON_INTENT_RE.test("the mistake we made with retries") && LESSON_INTENT_RE.test("how do we avoid the flake?") && LESSON_INTENT_RE.test("don't repeat the same mistake"));
+	check("lesson intent: learned-from + gotcha hit, neutrals miss", isLessonIntent("anything learned from the migration?") && isLessonIntent("gotchas with the office parser?") && !isLessonIntent("how does the webhook retry policy work?") && !isLessonIntent("which renderer renders the previews?"));
+
+	// block-close classification: canned agent-model transport parses lesson
+	process.env.MAJORDOME_DIR = join(tmp, "lesson-store");
+	writeFileSync(process.env.MAJORDOME_TRAIL_FILE, "");
+	jm2.setStreamFn(async () => "intent: implementation\ngist: queued the watcher renames to stop the iframe crash\nlesson: yes");
+	const metaYes = await jm2.blockMeta("segment text");
+	jm2.setStreamFn(async () => "intent: implementation\ngist: shipped the pricing tiers\nlesson: no");
+	const metaNo = await jm2.blockMeta("segment text");
+	jm2.setStreamFn(async () => "intent: implementation\ngist: two-line legacy answer has no lesson line");
+	const metaMissing = await jm2.blockMeta("segment text");
+	jm2.setStreamFn(null as any);
+	const lessonLines = rfs2(process.env.MAJORDOME_TRAIL_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+	check("blockMeta: lesson: yes classifies", metaYes?.lesson === true && metaYes?.gist.includes("watcher"));
+	check("blockMeta: lesson: no + missing line fail open false", metaNo?.lesson === false && metaMissing?.lesson === false);
+	check("blockMeta: lesson rides the trail (no new judge call)", lessonLines.filter((l: any) => l.j === "blockMeta").length === 3 && lessonLines.filter((l: any) => l.j === "blockMeta" && l.lesson === true).length === 1);
+
+	// recall: boost on lesson-intent AND failure-intent, never exclusion
+	const lessonB = { ...mkBlock("LS", 1, 4, ["renderer", "previews", "debounce", "iframe"]), id: "LS:1", gist: "lesson: queue the watcher renames — direct renames crash the iframe preview" } as Block;
+	(lessonB as any).lesson = true;
+	const plainB = { ...mkBlock("LS", 5, 9, ["renderer", "previews"]), id: "LS:5", gist: "shipped the renderer previews pipeline" };
+	(plainB as any).lesson = false;
+	const routeOpts2 = (userMessage: string) => ({
+		userMessage,
+		blocks: [lessonB, plainB],
+		currentSession: "__selfcheck__",
+		currentTurn: 99999,
+		routingIntent: async () => ({ intent: "incident_specific", searchTerms: userMessage, needClarification: false, clarifyWhy: "" }),
+		queryDims: async () => null,
+		tokens: (s: string) => tokens(s),
+	});
+	const rNeutral = await route(routeOpts2("renderer previews"));
+	const rLesson = await route(routeOpts2("any lessons about the renderer previews?"));
+	const rFail = await route(routeOpts2("what did we try that failed with the renderer?"));
+	check("lesson boost: neutral query keeps plain-first (no boost without intent)", rNeutral !== null && rNeutral.ranked[0].block.id === "LS:5" && rNeutral.ranked.length === 2);
+	check("lesson boost: lesson-intent flips lesson first, other still ranked", rLesson !== null && rLesson.ranked[0].block.id === "LS:1" && rLesson.ranked.some((s) => s.block.id === "LS:5"));
+	check("lesson boost: failure-intent boosts lesson blocks too", rFail !== null && rFail.ranked[0].block.id === "LS:1");
+	// zero-evidence lesson block still reachable on lesson queries (intent is
+	// the retrieval evidence), zero-evidence non-lesson blocks stay excluded
+	const offB = { ...lessonB, tokensHybrid: ["iframe", "debounce", "renames"], id: "LS:off", head: "off-topic lesson" };
+	const offPlain = { ...plainB, tokensHybrid: ["kubernetes", "helmcharts"], id: "LS:kp" };
+	const rOff = await route({ ...routeOpts2("what lessons did we record?"), blocks: [offB, offPlain] });
+	check("lesson boost: zero-evidence lesson reachable on lesson query, non-lesson still floored", rOff !== null && rOff.ranked.some((s) => s.block.id === "LS:off") && !rOff.ranked.some((s) => s.block.id === "LS:kp"));
+
+	// one-pager: derived Lessons section (recency first), stats count
+	const { composeOnePager } = await import("./onepager.ts");
+	const l1 = { ...mkBlock("LS", 1, 2, ["a"]), id: "LS:1", gist: "lesson: debounce the queue", closedAt: "2026-01-01T00:00:00Z" };
+	(l1 as any).lesson = true;
+	const l2 = { ...mkBlock("LS", 3, 4, ["b"]), id: "LS:3", gist: "lesson: never ship the flag on Friday", closedAt: "2026-02-01T00:00:00Z" };
+	(l2 as any).lesson = true;
+	const op = composeOnePager([l2, l1, plainB]);
+	const opNone = composeOnePager([plainB]);
+	check("one-pager: Lessons section derived from the class, recency first", op.md.includes("## Lessons") && op.md.indexOf("Friday") < op.md.indexOf("debounce") && op.md.includes("[LS:3") && op.md.includes("[LS:1"));
+	check("one-pager: lessons counted in stats, empty scope says none recorded", op.stats.lessons === 2 && opNone.md.includes("(none recorded") && opNone.stats.lessons === 0);
+
+	// consolidation: duplicate lessons supersede (same-mistake-twice), while a
+	// same-topic non-lesson pair WITHOUT reversal vocabulary stays untouched
+	process.env.MAJORDOME_DIR = join(tmp, "lesson-consolidation");
+	writeFileSync(process.env.MAJORDOME_TRAIL_FILE, "");
+	const tok2 = (s: string) => [...tokens(s)].sort();
+	const lessonOlder: Block = {
+		id: "dup:1", session: "dup", sessionFile: "/tmp/la.jsonl", firstTurn: 1, lastTurn: 4,
+		gist: "the iframe preview panel crashes when the watcher queue renames", intent: "implementation", dims: {},
+		tokensHybrid: tok2("iframe preview panel crash watcher queue rename debounce"),
+		head: "", closedAt: "2026-01-01T09:00:00.000Z", lesson: true,
+	};
+	const lessonNewer: Block = {
+		id: "dup:2", session: "dup", sessionFile: "/tmp/lb.jsonl", firstTurn: 1, lastTurn: 4,
+		gist: "same iframe preview crash resurfaced — the debounce queue rename fix is the guidance now", intent: "implementation", dims: {},
+		tokensHybrid: tok2("iframe preview crash rename debounce redo handoff"),
+		head: "", closedAt: "2026-01-02T09:00:00.000Z", lesson: true,
+	};
+	const ctrlOlder: Block = {
+		id: "ctl:1", session: "ctl", sessionFile: "/tmp/ca.jsonl", firstTurn: 1, lastTurn: 4,
+		gist: "toolbar ribbon layout spacing grid chosen", intent: "implementation", dims: {},
+		tokensHybrid: tok2("toolbar ribbon layout spacing grid"),
+		head: "", closedAt: "2026-01-03T09:00:00.000Z",
+	};
+	const ctrlNewer: Block = {
+		id: "ctl:2", session: "ctl", sessionFile: "/tmp/cb.jsonl", firstTurn: 1, lastTurn: 4,
+		gist: "toolbar ribbon layout spacing alignment polished", intent: "implementation", dims: {},
+		tokensHybrid: tok2("toolbar ribbon layout spacing alignment"),
+		head: "", closedAt: "2026-01-04T09:00:00.000Z",
+	};
+	rwBlocks([lessonOlder, lessonNewer, ctrlOlder, ctrlNewer]);
+	const { runConsolidation } = await import("./consolidate.ts");
+	const { statusOf: stOf, loadLifecycle: llc } = await import("./store.ts");
+	const cr2 = await runConsolidation();
+	const after2 = store2.loadBlocks();
+	check("consolidation: duplicate lesson supersedes (same-mistake-twice)", stOf(after2.find((b) => b.id === "dup:1")!) === "superseded" && stOf(after2.find((b) => b.id === "dup:2")!) === "valid");
+	check("consolidation: non-lesson same-topic pair without reversal stays valid", stOf(after2.find((b) => b.id === "ctl:1")!) === "valid" && stOf(after2.find((b) => b.id === "ctl:2")!) === "valid");
+	check("consolidation: duplicate-lesson verdict recorded + trail rule", llc().supersessions.some((l) => l.older === "dup:1" && l.newer === "dup:2" && l.verdict === "duplicate-lesson") && rfs2(process.env.MAJORDOME_TRAIL_FILE, "utf8").includes("same-mistake-twice"));
+	check("consolidation: lesson pairing idempotent re-run", (await runConsolidation()).changed === 0);
+	void cr2;
+
+	delete process.env.MAJORDOME_DIR;
+	delete process.env.MAJORDOME_TRAIL_FILE;
+}
+
 if (failures) {
 	console.error(`\n${failures} failure(s)`);
 	process.exit(1);

@@ -36,6 +36,14 @@ export interface Block {
 	 * this flag covers the recall-amplification channel — content that never
 	 * passed through a judged session turn). Lenient parse below. */
 	fromUntrusted?: boolean;
+	/** Lesson classification (v2.9): the block-close judge (blockMeta seam —
+	 * the SAME batched call, no extra call) answered "does this block record a
+	 * mistake/error/lesson worth remembering as guidance?". Fail-open: absent
+	 * or malformed reads false — only a confident yes makes a lesson. Lessons
+	 * are an index class, NOT a doc: recall boosts them, the one-pager derives
+	 * a Lessons section from them, consolidation pairs them (same-mistake-twice
+	 * rule). Lenient parse below. */
+	lesson?: boolean;
 }
 
 export function statusOf(b: { status?: BlockStatus }): BlockStatus {
@@ -105,14 +113,24 @@ export function loadBlocks(): Block[] {
 			const b = JSON.parse(line) as Block;
 			// lenient lifecycle parse: unknown/corrupt status values read as valid
 			if (b.status !== undefined && !BLOCK_STATUSES.includes(b.status)) delete b.status;
-			// lenient provenance parse: non-boolean junk reads as absent
+			// lenient provenance/classification parse: non-boolean junk reads as absent
 			if (b.fromUntrusted !== undefined && typeof b.fromUntrusted !== "boolean") delete b.fromUntrusted;
+			if (b.lesson !== undefined && typeof b.lesson !== "boolean") delete b.lesson;
 			out.push(b);
 		} catch {
 			// skip corrupt line (append-only file: never fatal)
 		}
 	}
 	return out;
+}
+
+/** Dim vector for a NEW block record: the judged dims, plus the `lessons`
+ * topic dim when the block-close judge classified the block as a lesson
+ * (v2.9). Lessons ride the SAME dims arm as every other topic — a lesson
+ * block is retrievable on 'lessons' dim queries exactly like any induced
+ * topic, and the one-pager/consolidation class off Block.lesson. */
+export function blockDims(vec: Map<string, number> | null, lesson: boolean): Record<string, number> {
+	return { ...(vec ? Object.fromEntries(vec) : {}), ...(lesson ? { lessons: 1 } : {}) };
 }
 
 export function appendBlock(b: Block): void {

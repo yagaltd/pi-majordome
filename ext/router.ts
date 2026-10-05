@@ -43,6 +43,17 @@ export function isFailureIntent(query: string): boolean {
 	return FAILURE_INTENT_RE.test(query);
 }
 
+/** Lesson-intent queries (v2.9) ask for the guidance learned from past
+ * mistakes — lesson-class blocks (Block.lesson, judged at block close) are
+ * the answer. BOOST-only: never excludes other blocks, never changes the
+ * lifecycle scope — a lesson query still recalls ordinary blocks that share
+ * the query's content terms. */
+export const LESSON_INTENT_RE = /lesson|mistake|avoid|don'?t repeat|learned from|gotcha/i;
+
+export function isLessonIntent(query: string): boolean {
+	return LESSON_INTENT_RE.test(query);
+}
+
 /** Temporal queries (LongMemEval ability) ask what held BEFORE the current
  * decision — the superseded blocks are the answer, not noise. Failures stay
  * failure-intent-only: "used to" never resurrects tried-and-failed work. */
@@ -164,6 +175,7 @@ export async function route(opts: {
 	let terms = dag.searchTerms || opts.userMessage;
 	const failureIntent = isFailureIntent(opts.userMessage);
 	const temporalIntent = isTemporalIntent(opts.userMessage);
+	const lessonIntent = isLessonIntent(opts.userMessage);
 	const past = timeTravel(opts.blocks, opts.currentSession, opts.currentTurn, opts.currentSessionFile);
 	// @slug hard scope (v2.6): known @slugs override the scope priors — the
 	// candidate pool narrows to exactly those slugs' blocks (union for multiple;
@@ -199,19 +211,22 @@ export async function route(opts: {
 	ranked = ranked.filter((s) => {
 		if (s.score > 0) return true;
 		const st = statusOf(s.block);
-		return (failureIntent && st === "failed") || (temporalIntent && st === "superseded");
+		return (failureIntent && st === "failed") || (temporalIntent && st === "superseded") || (lessonIntent && s.block.lesson === true);
 	});
-	if (failureIntent || temporalIntent) {
+	if (failureIntent || temporalIntent || lessonIntent) {
 		// intent priors lift only blocks with lexical evidence (floor first):
-		// failure-intent prefers the dead approaches themselves, temporal
-		// prefers the superseded generation the query is asking about
+		// failure-intent prefers the dead approaches themselves (and the lessons
+		// learned from them — same failure, recorded guidance), temporal prefers
+		// the superseded generation, lesson-intent prefers lesson-class blocks.
+		// Boost, never exclude: non-member blocks keep their ranked scores.
 		ranked = ranked
 			.map((s) => ({
 				block: s.block,
 				score:
 					s.score +
 					(failureIntent && statusOf(s.block) === "failed" ? 0.25 : 0) +
-					(temporalIntent && statusOf(s.block) === "superseded" ? 0.25 : 0),
+					(temporalIntent && statusOf(s.block) === "superseded" ? 0.25 : 0) +
+					((failureIntent || lessonIntent) && s.block.lesson === true ? 0.25 : 0),
 			}))
 			.sort((a, b) => b.score - a.score);
 	}
