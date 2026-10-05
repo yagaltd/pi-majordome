@@ -1,4 +1,5 @@
 ## 2026-10-03 — v2 branch: dispatch (firstmate orchestrator, surface-agnostic)
+- magic-docs v2: docsVerdict judge (value-driven nudge by kind; arithmetic fallback offline; trail-recorded) + per-slug doc cursors (slug:doc, legacy-migrated) + docsbench gates + subagent scratch sessions excluded from sweeps.
 - @slug: hard-scope recall by repo slug (`@office-parser …` — overrides priors, lifecycle+intent scopes still apply) + orch slug aliases (`orch @slug`); cross-slug bench gates (0-leak) — 13/13 green.
 
 - tools/dispatch.ts: headless (pi -p) + pane (herdr agent) modes, cold-start guard, status

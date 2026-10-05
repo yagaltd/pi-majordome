@@ -117,6 +117,12 @@ repo's artifacts fresh.
 /majordome docs <custom> …               your template from ~/.pi/majordome/templates/
 ```
 
+**Nudges are value-driven (v2)**: a per-turn `docsVerdict` judge decides
+whether the turn's work adds doc-worthy value — and which kind
+(readme/changelog/adr). Verdict-driven when judges are configured; the
+arithmetic 3-block fallback applies only offline. Cursors are per-repo
+(`slug:doc`) — a docs touch in one repo never advances another's.
+
 Digests are doc-worthy blocks **since that doc's cursor** — the exact
 undocumented work, traceable to a block. Generated docs are stamped
 `generated_by: majordome`; `verified:` is human-only.
