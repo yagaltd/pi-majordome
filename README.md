@@ -194,6 +194,29 @@ flowchart LR
   NO --> LOG
 ```
 
+## Benchmarks
+
+`lifecyclebench` (see [bench/README.md](bench/README.md)) gates every change to
+the memory lifecycle and recall pipeline with pre-registered bars. Current
+results on master — verified by running `npx tsx tools/lifecyclebench.ts`:
+
+| gate | bar | small tier (18 blocks) | scale tier (759 blocks) |
+|---|---|---|---|
+| state accuracy / class | ≥90% | **100%** (valid · superseded · failed · speculative) | 100% |
+| false demotions | 0 | **0** | 0 |
+| supersession pair recall | ≥80% | **100%** (4/4) | 100% |
+| default-recall leak | ≤10% | **0%** | 0% |
+| IR Recall@5 / @10 | ≥0.80 / ≥0.70 | **0.972** | R@10 **1.000** |
+| IR MRR | ≥0.60 | **0.894** | 0.873 |
+| IR nDCG@10 | ≥0.70 | **0.925** | 0.910 |
+| temporal (old refs surfaced) | 100% | **4/4** | — |
+| aggregation (both refs top-5) | 100% | **3/3** | — |
+| abstention (false hits) | 0 | **0** (4 absent-topic probes) | — |
+
+Runtime ≈2.6s for both tiers. The bench found and fixed a real recall bug
+(score-0 winners — now the evidence floor in `route()`). Machine-readable:
+`bench/results/lifecyclebench-last.json`.
+
 ## Status
 
 - **v1 (this build)**: `turn_end` EMA indexer (tau 0.07 / min 4, the measured

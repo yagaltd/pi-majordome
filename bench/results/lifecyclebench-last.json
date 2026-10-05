@@ -1,8 +1,8 @@
 {
- "date": "2026-10-05T05:55:52.021Z",
+ "date": "2026-10-05T05:57:40.854Z",
  "version": "v2.5-ir-longmemeval-scale",
  "verdict": "pass",
- "isolatedDir": "/tmp/lifecyclebench-KlQ5aA/home/majordome",
+ "isolatedDir": "/tmp/lifecyclebench-PsRkv8/home/majordome",
  "tiers": [
   {
    "name": "small (mechanism corpus, untouched)",
@@ -888,7 +888,7 @@
    "name": "scale (distractor corpus)",
    "scale": 60,
    "blocks": 759,
-   "wallMs": 1526,
+   "wallMs": 1511,
    "consolidation": {
     "status": "ran",
     "file": "consolidate.ts",
