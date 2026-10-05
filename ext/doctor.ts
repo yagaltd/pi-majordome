@@ -11,6 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadBlocks, loadLifecycle, loadMeta, loadVocab, majordomeDir, effectiveStatus } from "./store.ts";
+import { aggregate } from "./trail.ts";
 import { isSubagentSession } from "./core.ts";
 import { readDocsOverride, resolveDocsProfile } from "./docsprofile.ts";
 
@@ -111,6 +112,16 @@ export async function doctor(): Promise<string> {
 	} catch (e) {
 		bad(`docs profile check failed: ${(e as Error).message}`);
 	}
+
+	// 9. judge-cost creep (trail aggregate): ONE line, only when notable —
+	// calls/turn above 3 over the last 100 turns smells like judge creep.
+	// Silent otherwise; a telemetry failure never fails the doctor.
+	try {
+		const ag = aggregate();
+		if (ag.turns > 0 && ag.avgPerTurn > 3) {
+			L.push(`· judge creep: ${ag.avgPerTurn} judge calls/turn (last 100 turns, > 3) across ${ag.total} trail-recorded calls — per-judge split in /majordome stats`);
+		}
+	} catch { /* ignore */ }
 
 	L.push(warns ? `\n${warns} issue(s) found — fixes are actions you choose (see hints above).` : "\nall clear.");
 	return L.join("\n");

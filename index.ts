@@ -30,7 +30,7 @@ import { listKinds, composeKind } from "./ext/docs.ts";
 import { initRepo } from "./ext/init.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch } from "./ext/orch.ts";
-import { trail } from "./ext/trail.ts";
+import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
 import { appendBlock, appendDecision, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
 interface St {
@@ -238,6 +238,7 @@ export default function majordome(pi: ExtensionAPI): void {
 		const meta = loadMeta();
 		st.vocab = meta.dims;
 		st.docsCursor = meta.docsCursor;
+		setTrailTurn(meta.turns ?? 0); // judge-cost telemetry: new trail lines carry the turn they happened on
 		// per-repo docs profile (v2.7): .majordome/docs.json override > stored
 		// (init-detected) > detected now. Never prompts — init may be headless.
 		try {
@@ -271,7 +272,9 @@ export default function majordome(pi: ExtensionAPI): void {
 				if (jev) {
 					setClassifyFn(async (state, questions) => {
 						const res = await reg.classify(jev, { state, questions });
-						return res ? { model: String(jev.id ?? "jev"), answers: (res as any).answers ?? (res as any) } : null;
+						return res
+							? { model: String(jev.id ?? "jev"), answers: (res as any).answers ?? (res as any), ...((res as any)?.usage !== undefined ? { usage: (res as any).usage } : {}) }
+							: null;
 					});
 				}
 			} catch {
@@ -284,6 +287,13 @@ export default function majordome(pi: ExtensionAPI): void {
 	pi.on("turn_end", async () => {
 		if (!st.on) return;
 		try {
+			// cumulative turn counter — the denominator for judge-cost telemetry
+			// (calls/turn); also stamps the turn cursor onto new trail lines
+			try {
+				const turns = (loadMeta().turns ?? 0) + 1;
+				saveMeta({ dims: st.vocab, docsCursor: st.docsCursor, turns });
+				setTrailTurn(turns);
+			} catch { /* telemetry never breaks a turn */ }
 			await indexSession();
 				if (process.env.MJDX_WORKER) {
 					// push half: one line to the deck inbox — the orchestrator learns we finished
@@ -696,7 +706,8 @@ export default function majordome(pi: ExtensionAPI): void {
 			}
 			if (cmd === "stats") {
 				const all = lastDecisions(100000).reverse(); // oldest → newest
-				if (!all.length) return notify("no routing decisions logged yet");
+				const judge = judgeStatsLines(aggregate()); // trail is the single source of truth — no parallel counters
+				if (!all.length && !judge.length) return notify("no routing decisions logged yet");
 				const inj = all.filter((d) => d.injected);
 				const sup = all.filter((d) => !d.injected && d.winner);
 				const none = all.filter((d) => !d.injected && !d.winner);
@@ -711,6 +722,7 @@ export default function majordome(pi: ExtensionAPI): void {
 					`│ injected        ${inj.length}  (avg score ${avg(inj)})`,
 					`│ suppressed      ${sup.length}  (avg score ${avg(sup)} — gate rejects below it)`,
 					`│ arms (injected) ${[...arms].map(([a2, n]) => `${a2} ${n}`).join(" · ") || "-"}`,
+					...(judge.length ? ["├─ judge cost (trail aggregate)", ...judge.map((l) => `│ ${l}`)] : []),
 					"├─ reading the gate",
 					`│ recall precision proxy: injected avg (${avg(inj)}) vs suppressed avg (${avg(sup)})`,
 					`│ gate keeps injecting when the gap stays wide; if it narrows, raise MAJORDOME_MIN_SCORE`,
