@@ -15,7 +15,7 @@ import { homedir } from "node:os";
 const TRAIL_VERSION = 1;
 
 export function trailFile(): string {
-	return process.env.MAJORDOME_TRAIL_FILE?.trim() || join(homedir(), ".config", "pi-majordome", "trails.jsonl");
+	return process.env.MAJORDOME_TRAIL_FILE?.trim() || join(majordomeDir(), "trails.jsonl");
 }
 
 export function trail(judge: string, fields: Record<string, unknown>): void {

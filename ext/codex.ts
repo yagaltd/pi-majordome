@@ -7,7 +7,7 @@
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { majordomeDir } from "./store.ts";
 
 export const CODEX = `# majordome codex — invariants (push layer)
 
@@ -20,14 +20,14 @@ export const CODEX = `# majordome codex — invariants (push layer)
 `;
 
 export function codexFile(): string {
-	return join(homedir(), ".config", "pi-majordome", "codex.md");
+	return join(majordomeDir(), "codex.md");
 }
 
 /** Write the default codex on first run; an existing file always wins. */
 export function ensureCodex(): string {
 	const f = codexFile();
 	if (!existsSync(f)) {
-		mkdirSync(join(homedir(), ".config", "pi-majordome"), { recursive: true });
+		mkdirSync(majordomeDir(), { recursive: true });
 		writeFileSync(f, CODEX);
 	}
 	return f;
