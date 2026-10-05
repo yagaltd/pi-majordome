@@ -53,7 +53,7 @@ export function trail(judge: string, fields: Record<string, unknown>): void {
  * nothing and are excluded from cost totals by design. */
 export const JUDGE_LINES: readonly string[] = [
 	"blockMeta", "induceDims", "rewriteQuery", "keyPhrases", "routingIntent",
-	"contradicts", "docsVerdict", "shapeVerdict", "lifecycleVerdict", "dimVector",
+	"contradicts", "docsVerdict", "shapeVerdict", "lifecycleVerdict", "dimVector", "simplifyVerdict",
 ];
 
 /** Compact display tags for the stats line (routingIntent → intent, …). */
@@ -68,6 +68,7 @@ export const JUDGE_TAGS: Record<string, string> = {
 	keyPhrases: "keys",
 	contradicts: "contra",
 	dimVector: "dimvec",
+	simplifyVerdict: "simpl",
 };
 
 export interface JudgeCalls {

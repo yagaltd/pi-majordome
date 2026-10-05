@@ -20,7 +20,8 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
-import { blockMeta, contradicts, dimVector, docsVerdict, hasJev, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, shapeVerdict, userPrefLines, type DocsVerdict } from "./ext/judges.ts";
+import { blockMeta, contradicts, dimVector, docsVerdict, hasJev, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, shapeVerdict, simplifyVerdict, userPrefLines, type DocsVerdict } from "./ext/judges.ts";
+import { pushInbox, shouldAskSimplify, simplifyHintText } from "./ext/inbox.ts";
 import { cursorForDoc, cursorKey, docsNudge, injectionText, judgeLine, scanDocsTouched, shapeHintLine, shouldJudgeLine, route, verdictToNudge } from "./ext/router.ts";
 import { BUILTIN_DOC_WATCH, resolveDocsProfile } from "./ext/docsprofile.ts";
 import { composeOnePager } from "./ext/onepager.ts";
@@ -49,6 +50,7 @@ interface St {
 	docsCursor: Record<string, string>;
 	docsWatch: string[]; // resolved per-repo docs profile watch (session-scoped)
 	lastNudgeCount: number;
+	simplifyAsked: boolean; // simplifyVerdict once-per-worker-run guard (MJDX_WORKER sessions)
 }
 
 const st: St = {
@@ -67,6 +69,7 @@ const st: St = {
 	docsCursor: {},
 	docsWatch: [...BUILTIN_DOC_WATCH],
 	lastNudgeCount: 0,
+	simplifyAsked: false,
 };
 
 
@@ -300,7 +303,21 @@ export default function majordome(pi: ExtensionAPI): void {
 					// push half: one line to the deck inbox — the orchestrator learns we finished
 					const mine = loadBlocks().filter((x) => x.sessionFile === st.sessionFile);
 					const last = mine.at(-1);
-					pushInbox({ worker: process.env.MJDX_WORKER, note: last?.gist ?? "session ended", sessionFile: st.sessionFile ?? undefined });
+					// simplifyVerdict worker gate (v2.9): ONCE per worker run, only when
+					// this run closed implementation blocks — judged on their gists, the
+					// verdict rides the completion line as a SUGGEST-ONLY note ('simplify
+					// hint: …'). The deck decides; never an auto send-back. Fail-open:
+					// judge absent/error → the note ships unchanged; the guard spends
+					// itself on the attempt either way (no retry storms on flaky calls).
+					const implGists = mine.filter((x) => x.intent === "implementation" && x.gist).map((x) => x.gist!);
+					let simplifyHint: string | null = null;
+					if (shouldAskSimplify(st.simplifyAsked, implGists) && st.judgeMode !== "off" && (loadKey() || hasJev())) {
+						st.simplifyAsked = true;
+						try {
+							simplifyHint = simplifyHintText(await simplifyVerdict(implGists.map((g) => g.slice(0, 300)).join("\n")));
+						} catch { /* fail open — completion ships regardless */ }
+					}
+					pushInbox({ worker: process.env.MJDX_WORKER, note: last?.gist ?? "session ended", sessionFile: st.sessionFile ?? undefined, ...(simplifyHint ? { simplifyHint } : {}) });
 				}
 		} catch (e) {
 			st.reason = `index error: ${String((e as Error).message ?? e).slice(0, 60)}`;

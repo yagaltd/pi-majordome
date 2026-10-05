@@ -9,6 +9,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { majordomeDir } from "./store.ts";
+import type { SimplifyVerdict } from "./judges.ts";
 
 export interface InboxLine {
 	t: string;
@@ -16,6 +17,10 @@ export interface InboxLine {
 	note: string;
 	log?: string;
 	sessionFile?: string;
+	/** SUGGEST-ONLY simplification hint (v2.9): the simplifyVerdict judge's
+	 * rendered note, appended by the deck at drain time. Advice to the agent —
+	 * the deck decides; never an auto send-back. */
+	simplifyHint?: string;
 }
 
 export function inboxFile(): string {
@@ -31,6 +36,21 @@ export function pushInbox(line: Omit<InboxLine, "t">): void {
 	}
 }
 
+/** Render the simplify verdict as the suggest-only note text ('simplify
+ * hint: …'). Null when there is nothing to say: no verdict, simpler=false,
+ * or empty hints — the completion line ships byte-identical to before. */
+export function simplifyHintText(v: SimplifyVerdict | null): string | null {
+	if (!v || !v.simpler || !v.hints.trim()) return null;
+	return `simplify hint: ${v.kind ?? "simpler shape"} — ${v.hints.trim()}`;
+}
+
+/** Frequency guard (pure, bench-checkable): asked already this worker run →
+ * no; no implementation blocks closed by the run → no; else yes (first
+ * completion carrying implementation work gets the one judged hint). */
+export function shouldAskSimplify(asked: boolean, implGists: string[]): boolean {
+	return !asked && implGists.length > 0;
+}
+
 /** Return and clear all pending notices (drain = inject + delete, atomically enough). */
 export function drainInbox(): InboxLine[] {
 	const f = inboxFile();
@@ -44,9 +64,14 @@ export function drainInbox(): InboxLine[] {
 	}
 }
 
-/** One-line notice per pending worker completion, for injection. */
+/** One-line notice per pending worker completion, for injection. The
+ * simplify hint (when present) rides the same line — still one line per
+ * worker, still suggest-only. */
 export function drainNotices(): string {
 	const lines = drainInbox();
 	if (!lines.length) return "";
-	return "📬 majordome workers:\n" + lines.map((l) => `- worker ${l.worker}: ${(l.note || "session ended").slice(0, 110)}${l.log ? ` (log: ${l.log})` : ""}`).join("\n");
+	return "📬 majordome workers:\n" + lines.map((l) => {
+		const base = `- worker ${l.worker}: ${(l.note || "session ended").slice(0, 110)}${l.log ? ` (log: ${l.log})` : ""}`;
+		return l.simplifyHint ? `${base} · ${l.simplifyHint}` : base;
+	}).join("\n");
 }

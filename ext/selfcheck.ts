@@ -806,6 +806,73 @@ if (process.argv.includes("--parity")) {
 	delete process.env.MAJORDOME_TRAIL_FILE;
 }
 
+// ── v2.9 slice 3: simplifyVerdict worker completion gate ──
+{
+	process.env.MAJORDOME_KEY_FILE = join(tmp, "no-key-on-purpose");
+	delete process.env.TYPELLM_API_KEY;
+	resetClassifyFn();
+	process.env.MAJORDOME_TRAIL_FILE = join(tmp, "simplify-trails.jsonl");
+	writeFileSync(process.env.MAJORDOME_TRAIL_FILE, "");
+	const jm3 = await import("./judges.ts");
+	const { simplifyHintText, shouldAskSimplify, pushInbox: pushLine, drainNotices: drainLines } = await import("./inbox.ts");
+	const { readFileSync: rfs3 } = await import("node:fs");
+
+	// fail-open: unconfigured → null, no call, trail untouched
+	check("simplify: unconfigured fail-open null, no judge call", (await jm3.simplifyVerdict("gists of the run")) === null && rfs3(process.env.MAJORDOME_TRAIL_FILE, "utf8").trim() === "");
+
+	// canned Jev verdicts parse through the SAME settle path; estTokens reported
+	setClassifyFn(async () => ({ model: "canned", answers: { simpler: { noul: true }, kind: { choice: "delete" }, hints: "drop the legacy flag path — one flag already covers it" }, usage: { total_tokens: 321 } }));
+	const vOk = await jm3.simplifyVerdict("gist one\ngist two");
+	setClassifyFn(async () => ({ model: "canned", answers: { simpler: { noul: false }, kind: { choice: "merge" }, hints: "nothing to simplify" } }));
+	const vNo = await jm3.simplifyVerdict("gists");
+	setClassifyFn(async () => ({ model: "canned", answers: { simpler: "maybe", kind: "delete", hints: "x" } }));
+	const vBad = await jm3.simplifyVerdict("gists");
+	setClassifyFn(async () => ({ model: "canned", answers: { simpler: { noul: true }, kind: { choice: "refactor" }, hints: "shrink it" } }));
+	const vKind = await jm3.simplifyVerdict("gists");
+	setClassifyFn(async () => ({ model: "canned", answers: { simpler: { noul: true }, kind: "inline", hints: "w ".repeat(150) } }));
+	const vLong = await jm3.simplifyVerdict("gists");
+	resetClassifyFn();
+	const lines3 = rfs3(process.env.MAJORDOME_TRAIL_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+	check("simplify: canned verdict parses (simpler, kind, hints)", vOk?.simpler === true && vOk?.kind === "delete" && vOk?.hints.includes("legacy flag"));
+	check("simplify: simpler=false → kind nulled, still a verdict", vNo?.simpler === false && vNo?.kind === null);
+	check("simplify: malformed simpler → null (fail-open, not false)", vBad === null);
+	check("simplify: kind outside enum → null kind, verdict kept", vKind?.simpler === true && vKind?.kind === null);
+	check("simplify: hints capped at 200 chars", (vLong?.hints.length ?? 0) <= 200);
+	check("simplify: trail records verdicts incl. estTokens", lines3.some((l: any) => l.j === "simplifyVerdict" && l.ok === true && l.simpler === true && l.kind === "delete" && l.estTokens === 321) && lines3.filter((l: any) => l.j === "simplifyVerdict").length === 5);
+
+	// transport throw → ok:false trail + null (never throws into the worker)
+	process.env.MAJORDOME_TRAIL_FILE = join(tmp, "simplify-trails2.jsonl");
+	writeFileSync(process.env.MAJORDOME_TRAIL_FILE, "");
+	setClassifyFn(async () => {
+		throw new Error("transport down");
+	});
+	let threw3 = false;
+	let vThrow3: unknown = "sentinel";
+	try {
+		vThrow3 = await jm3.simplifyVerdict("gists");
+	} catch {
+		threw3 = true;
+	}
+	resetClassifyFn();
+	const throwLine3 = JSON.parse(rfs3(process.env.MAJORDOME_TRAIL_FILE, "utf8").trim());
+	check("simplify: transport throw → null, fail-open call trailed", !threw3 && vThrow3 === null && throwLine3.j === "simplifyVerdict" && throwLine3.ok === false);
+
+	// routing: suggest-only hint text + once-per-run guard
+	check("simplify hint: suggest-only text only when simpler + hints", simplifyHintText(vOk)?.startsWith("simplify hint: delete — ") === true && simplifyHintText(vNo) === null && simplifyHintText(null) === null && simplifyHintText({ simpler: true, kind: "inline", hints: "  " }) === null);
+	check("simplify guard: once per run, skipped with no impl blocks", shouldAskSimplify(false, []) === false && shouldAskSimplify(true, ["g"]) === false && shouldAskSimplify(false, ["g1", "g2"]) === true);
+
+	// inbox: hint rides the completion line at drain time, drain clears
+	process.env.MAJORDOME_INBOX = join(tmp, "simplify-inbox.jsonl");
+	pushLine({ worker: "w1", note: "shipped the office parser flags", simplifyHint: "simplify hint: delete — drop the legacy flag path" });
+	pushLine({ worker: "w2", note: "session ended" });
+	const notice1 = drainLines();
+	const notice2 = drainLines();
+	check("simplify inbox: hint rides the worker line (suggest-only)", notice1.includes("worker w1") && notice1.includes("shipped the office parser flags") && notice1.includes("· simplify hint: delete — drop the legacy flag path"));
+	check("simplify inbox: hintless workers render unchanged; drain clears", notice1.includes("worker w2: session ended") && !notice1.split("worker w2")[1].includes("simplify hint") && notice2 === "");
+	delete process.env.MAJORDOME_INBOX;
+	delete process.env.MAJORDOME_TRAIL_FILE;
+}
+
 if (failures) {
 	console.error(`\n${failures} failure(s)`);
 	process.exit(1);

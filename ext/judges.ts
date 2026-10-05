@@ -601,6 +601,113 @@ export async function shapeVerdict(userMessage: string, prefLines: string[] = us
 	return null;
 }
 
+// ── simplify verdict (worker completion gate) ───────────────────────────
+
+export type SimplifyKind = "delete" | "merge" | "inline";
+export interface SimplifyVerdict {
+	simpler: boolean;
+	kind: SimplifyKind | null;
+	hints: string; // ≤200 chars
+}
+
+const SIMPLIFY_KINDS: readonly SimplifyKind[] = ["delete", "merge", "inline"];
+
+function simplifyKindOf(v: unknown): SimplifyKind | null {
+	const s = typeof v === "string" ? v : typeof (v as any)?.choice === "string" ? (v as any).choice : "";
+	const t = s.trim().toLowerCase();
+	return (SIMPLIFY_KINDS as readonly string[]).includes(t) ? (t as SimplifyKind) : null;
+}
+
+/** simpler answer → true/false, null when malformed (fail-open, not false:
+ * a malformed verdict must produce NO hint, never a confident "nothing to
+ * simplify"). */
+function simplerOf(v: unknown): boolean | null {
+	if (v === "yes" || v === true) return true;
+	if (v === "no" || v === false) return false;
+	if (v && typeof v === "object" && typeof (v as any).noul === "boolean") return (v as any).noul;
+	return null;
+}
+
+/** Is there a simpler shape: what to DELETE / MERGE / INLINE in the work this
+ * worker just completed? Judged ONCE per worker completion on that run's
+ * closed implementation blocks (gists) — a separate small judge in the
+ * docsVerdict/shapeVerdict pattern, NOT a routingIntent field (workers run
+ * headless: the completion push is the only seam where the report exists as a
+ * unit). SUGGEST-ONLY downstream: the verdict rides the worker's inbox line
+ * as a hint the deck decides about — never auto-sends work back. Fail-open
+ * null (no judges, error, malformed simpler/kind) → no hint, completion ships
+ * unchanged. Verdict lands on the trail, never message text. */
+export async function simplifyVerdict(work: string): Promise<SimplifyVerdict | null> {
+	const settle = (res: Record<string, unknown>, judge: string, usage?: unknown): SimplifyVerdict | null => {
+		const s = simplerOf(res.simpler);
+		if (s === null) {
+			trail("simplifyVerdict", { judge, ok: false, ...tkf({ usage }) });
+			return null;
+		}
+		const kind = simplifyKindOf(res.kind);
+		const out: SimplifyVerdict = {
+			simpler: s,
+			kind: s ? kind : null,
+			hints: typeof res.hints === "string" ? res.hints.replace(/\s+/g, " ").trim().slice(0, 200) : "",
+		};
+		trail("simplifyVerdict", { judge, ok: true, simpler: out.simpler, kind: out.kind, ...tkf({ usage }) });
+		return out;
+	};
+	if (loadKey()) {
+		const r = await generate(
+			`Implementation work completed by a coding-agent worker this run (gists of the closed blocks):\n${work.slice(0, 2000)}`,
+			{
+				simpler: {
+					type: "string",
+					enum: ["yes", "no"],
+					instructions:
+						"Is there a SIMPLER SHAPE for this completed work — something to delete (dead paths, speculative flags, unused branches), merge (near-duplicate modules/handlers), or inline (one-use abstractions, single-caller indirection)? Fresh simple scaffolding with nothing to simplify = no.",
+				},
+				kind: {
+					type: "string",
+					enum: ["delete", "merge", "inline"],
+					instructions: "The dominant simplification, if simpler=yes.",
+				},
+				hints: { type: "string", instructions: "One actionable hint naming what to simplify, max 30 words." },
+			},
+		);
+		if (!r?.result) {
+			trail("simplifyVerdict", { judge: "typellm", ok: false }); // gap-rule: dead transport is still a judge call
+			return null;
+		}
+		return settle(r.result, "typellm", r.usage);
+	}
+	if (classifyFn) {
+		try {
+			const res = await classifyFn(
+				{ work: work.slice(0, 1200) },
+				{
+					simpler: {
+						type: "noul",
+						instructions:
+							"State field 'work' summarizes implementation work a coding-agent worker just completed. Is there a simpler shape — something to delete (dead paths, speculative flags), merge (near-duplicates), or inline (one-use abstractions)? Fresh simple scaffolding = no. Answer yes/no.",
+					},
+					kind: {
+						type: "choice",
+						instructions: "The dominant simplification, if simpler=yes.",
+						criteria: { delete: "dead paths / speculative flags / unused branches to remove", merge: "near-duplicate modules or handlers to fold together", inline: "one-use abstractions or single-caller indirection to inline" },
+					},
+					hints: { type: "string", instructions: "One actionable hint naming what to simplify, max 30 words." },
+				},
+			);
+			if (!res?.answers) {
+				trail("simplifyVerdict", { judge: "jev", ok: false }); // gap-rule: unusable answer is still a judge call
+				return null;
+			}
+			return settle(res.answers, "jev", res.usage);
+		} catch {
+			trail("simplifyVerdict", { judge: "jev", ok: false });
+			return null;
+		}
+	}
+	return null;
+}
+
 // ── lifecycle pair verdict (v2.4 consolidation) ────────────────────────────────────
 
 export interface LifecyclePairVerdict {
