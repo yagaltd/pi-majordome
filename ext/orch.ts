@@ -11,11 +11,12 @@
  * Same core as tools/dispatch.ts (the optional manual CLI) — one action set,
  * two surfaces. Cold repos init on first start; warm ones are noted.
  */
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { majordomeDir, loadBlocks } from "./store.ts";
 import { sessionSlug } from "./core.ts";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { homedir } from "node:os";
 import { initRepo } from "./init.ts";
 
 type Worker = { name: string; cwd: string };
@@ -101,8 +102,11 @@ export async function orch(arg?: string): Promise<string> {
 	}
 	if (trim.startsWith("add ")) {
 		const parts = trim.slice(4).trim().split(/\s+/);
-		const cwd = parts[0];
-		if (!existsSync(cwd)) return `add failed: ${cwd} does not exist`;
+		// shell habits: expand ~ and relative paths — chat commands arrive unexpanded
+		let cwd = parts[0];
+		if (cwd.startsWith("~")) cwd = join(homedir(), cwd.slice(1));
+		cwd = resolve(cwd);
+		if (!existsSync(cwd) || !statSync(cwd).isDirectory()) return `add failed: ${parts[0]} does not exist (resolved: ${cwd})`;
 		const w: Worker = { name: parts[1] ?? cwd.split("/").filter(Boolean).pop()!, cwd };
 		if (conf.workers.some((x) => x.cwd === cwd)) return `already registered: ${cwd}`;
 		conf.workers.push(w);
