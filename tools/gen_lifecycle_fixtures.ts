@@ -1,6 +1,7 @@
 /**
- * Lifecycle fixtures generator (v2.4 bench-before-build) — deterministic
- * synthetic session transcripts with PLANTED ground-truth lifecycle states:
+ * Lifecycle fixtures generator (v2.4 bench-before-build; v2.5 IR + LongMemEval
+ * + scale) — deterministic synthetic session transcripts with PLANTED
+ * ground-truth lifecycle states:
  *
  *   valid (default) | superseded | failed | speculative
  *
@@ -12,6 +13,22 @@
  *                           plants in one session live in DIFFERENT blocks —
  *                           the generator asserts that)
  *   2 speculative          — hedged future talk → speculative
+ *
+ * v2.5 LongMemEval ability probes (2-4 each):
+ *   temporal    — the expected answer is the OLD (superseded) block
+ *                 ("what did we decide before the X switch?"); routed via
+ *                 TEMPORAL_INTENT_RE: include superseded, never failed
+ *   aggregation — the answer spans TWO valid blocks from DIFFERENT sessions
+ *                 (the federated per-session top-3 round-robin is the
+ *                 mechanism); both refs must appear in top-k
+ *   abstention  — topics that DO NOT exist in the corpus; expected: zero hits
+ *                 above the score floor (generator asserts the probe shares
+ *                 zero tokens with the whole corpus)
+ *
+ * v2.5 scale knob: --scale N emits N deterministic filler sessions (index-
+ * driven template rotation — no randomness, no clocks) around the planted
+ * corpus as plausible-but-unrelated engineering distractors. Default 0 keeps
+ * the small corpus byte-identical.
  *
  * Plus a hardcoded SANITY section with 2 REAL historical pairs from this
  * repo (markmap→termaid renderer switch; /majordome dashboard→dash rename).
@@ -34,7 +51,8 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { detectBoundaries, parseSession } from "../ext/core.ts";
+import { detectBoundaries, parseSession, tokens } from "../ext/core.ts";
+import { FAILURE_INTENT_RE, TEMPORAL_INTENT_RE } from "../ext/router.ts";
 
 export type LifecycleStatus = "valid" | "superseded" | "failed" | "speculative";
 
@@ -83,6 +101,11 @@ export interface LifecycleManifest {
 		neutral: { id: string; query: string; excludedRefs: string[]; expectValidRefs: string[] }[];
 		failureIntent: { id: string; query: string; requiredRefs: string[] }[];
 	};
+	temporalProbes: { id: string; query: string; expectedOldRefs: string[] }[];
+	aggregationProbes: { id: string; query: string; expectedRefs: string[]; sessions: [string, string] }[];
+	abstentionProbes: { id: string; query: string; topic: string }[];
+	scale: number;
+	filler: { count: number; turnsPerSession: number; slugs: string[] };
 	sanity: {
 		note: string;
 		realPairs: {
@@ -388,24 +411,171 @@ const RECALL_PROBES: LifecycleManifest["recallProbes"] = {
 		{ id: "fail-iframe", query: "did the iframe embed attempt go wrong?", requiredRefs: ["lcb10@t2"] },
 		{ id: "fail-migrate", query: "show me the wrong path we took with the schema migration", requiredRefs: ["lcb11@t2"] },
 		{ id: "fail-deadend", query: "which attempts turned out to be dead ends?", requiredRefs: ["lcb09@t2", "lcb10@t2", "lcb11@t2"] },
-		{ id: "fail-brittle", query: "did the export caching prove brittle?", requiredRefs: ["lcb09@t2"] },
+		{ id: "fail-brittle", query: "which attempt proved brittle on export caching?", requiredRefs: ["lcb09@t2"] },
 		{ id: "fail-flop", query: "which experiment flopped on the embeds?", requiredRefs: ["lcb10@t2"] },
 		{ id: "fail-abandon", query: "what did we abandon during the migration work?", requiredRefs: ["lcb11@t2"] },
 	],
 };
 
-// ── generation + self-validation ────────────────────────────────────────────
+// ── v2.5 LongMemEval ability probes ──────────────────────────────────────────
+// TEMPORAL: the expected answer is the OLD (superseded) generation. Queries
+// deliberately avoid failure vocabulary (failures stay failure-intent-only)
+// and carry TEMPORAL_INTENT_RE markers so routing includes + prefers the
+// superseded block. Gate: ≥1 specific old ref appears in the ranked results.
+const TEMPORAL_PROBES: LifecycleManifest["temporalProbes"] = [
+	{ id: "temp-renderer", query: "what did we decide before the static-html renderer switch?", expectedOldRefs: ["lcb01@t3"] },
+	{ id: "temp-config", query: "which config format did we use previously?", expectedOldRefs: ["lcb03@t3"] },
+	{ id: "temp-retry", query: "what was the webhook retry policy before the backoff change?", expectedOldRefs: ["lcb05@t3"] },
+	{ id: "temp-harness", query: "what's the history of the integration test harness?", expectedOldRefs: ["lcb07@t2"] },
+];
 
-function transcriptLines(spec: SessionSpec): string {
+// AGGREGATION: the answer spans two valid blocks from DIFFERENT sessions —
+// exactly what the federated per-session top-3 round-robin merge exists for.
+// Gate: BOTH refs appear in top-k (k pre-registered in the bench).
+const AGGREGATION_PROBES: LifecycleManifest["aggregationProbes"] = [
+	{ id: "agg-auth-logging", query: "how do cli login and the log pipeline work?", expectedRefs: ["lcb12@t3", "lcb13@t3"], sessions: ["lcb12", "lcb13"] },
+	{ id: "agg-config-retry", query: "what did we settle for the config format and the webhook retry policy?", expectedRefs: ["lcb04@t2", "lcb06@t2"], sessions: ["lcb04", "lcb06"] },
+	{ id: "agg-preview-tests", query: "which preview renderer ships, and what runs the integration tests?", expectedRefs: ["lcb02@t3", "lcb08@t2"], sessions: ["lcb02", "lcb08"] },
+];
+
+// ABSTENTION: topics that DO NOT exist anywhere in the corpus. Expected: zero
+// ranked hits above the score floor. The generator asserts zero token overlap
+// with the whole corpus (planted + filler) — any hit is definitionally false.
+const ABSTENTION_PROBES: LifecycleManifest["abstentionProbes"] = [
+	{ id: "abs-kubernetes", query: "anything about kubernetes?", topic: "kubernetes orchestration (absent)" },
+	{ id: "abs-billing", query: "did billing invoices surface anywhere?", topic: "billing / invoicing (absent)" },
+	{ id: "abs-darktheme", query: "was the dark theme ever discussed?", topic: "dark theme (absent)" },
+	{ id: "abs-websocket", query: "any mention of websocket presence?", topic: "websocket presence channels (absent)" },
+];
+
+// ── scale knob: deterministic filler sessions (v2.5) ─────────────────────────// Index-driven template rotation — NO randomness, NO clocks. Plausible-but-
+// unrelated engineering turns act as retrieval distractors around the planted
+// corpus. Vocabulary rules (asserted below):
+//   · no hedge/attempt/outcome/reversal tokens → filler blocks stay valid and
+//     are never paired by consolidation (kept in sync with ext/consolidate.ts)
+//   · no temporal/failure/abstention vocabulary → routing intents and the
+//     abstention gate stay clean at scale
+const FILLER_TOPICS: string[][] = [
+	// cron scheduler
+	["the nightly cron job should run in each tenant's timezone, not a global midnight", "nightly cron will follow tenant timezones.", "stagger the scheduler starts so the batch window never piles up", "scheduler starts are staggered.", "missed cron runs appear in the morning counters", "missed runs counted for the morning report.", "give the cron console a dry tick button for testing", "dry tick button on the cron console."],
+	// rate limiter
+	["gate the search endpoint with a token bucket limiter", "token bucket limiter guards the search endpoint.", "burst traffic gets a short grace window from the throttle", "throttle allows short bursts.", "when the quota is exhausted the api replies with a plain backpressure notice", "exhausted quota answers with backpressure.", "per-tenant ceilings live in the plan table", "ceilings keyed per tenant in the plan table."],
+	// avatar uploads
+	["profile avatars upload straight to object storage", "avatars land in object storage.", "generate a thumbnail at upload time, sized for cards and lists", "thumbnails generated on upload.", "strip location metadata from every avatar", "avatar metadata stripped.", "fall back to the initial monogram when no avatar exists", "monogram fallback for missing avatars."],
+	// digest email
+	["the weekly digest email summarizes unread activity per workspace", "weekly digest covers unread workspace activity.", "digest recipients can pause it from the preferences pane", "digest pausable from preferences.", "the smtp provider notifies bounces through a callback", "bounce callbacks handled.", "unsubscribe takes effect immediately, never on the next send", "unsubscribes apply immediately."],
+	// typo tolerance
+	["search should tolerate one typo per word on product names", "one-typo tolerance for product names.", "the fuzzy matcher scores candidates with a cheap distance heuristic", "fuzzy matcher uses a cheap distance heuristic.", "synonym pairs come from a curated list, not mined guesses", "synonyms curated, not mined.", "typo tolerance stays off for part numbers", "part numbers keep exact matching."],
+	// onboarding
+	["new workspaces get a first-run checklist with five steps", "five-step first-run checklist.", "the checklist skeleton stays visible until every step is complete", "checklist visible until complete.", "skip the wizard for invited teammates, they inherit setup", "invited teammates skip the wizard.", "onboarding progress persists across devices", "onboarding progress synced."],
+	// audit trail
+	["admin actions write to an append-only audit ledger", "audit ledger is append-only.", "each ledger row carries the actor, the object, and a content hash", "ledger rows carry actor, object, hash.", "the audit view paginates by month", "audit view paginated monthly.", "tamper detection re-hashes the chain nightly", "nightly re-hash guards the chain."],
+	// gradual ramp
+	["new features reach cohorts through a gradual ramp", "features ramp out by cohort.", "start cohorts at five percent, then widen twice daily", "ramp starts at five percent.", "a kill toggle yanks a feature from every cohort instantly", "kill toggle yanks features from every cohort.", "cohort assignment sticks per account, not per request", "cohort assignment sticky per account."],
+	// receipts
+	["paying accounts get a downloadable pdf receipt", "pdf receipts for paying accounts.", "the receipt footer carries the legal entity and vat id", "footer lists entity and vat id.", "receipts use a fixed layout so the printer-friendly version stays clean", "fixed layout for printer-friendly receipts.", "email the receipt within a minute of payment", "receipts emailed within a minute."],
+	// push notifications
+	["mobile push badges clear when the inbox opens", "push badges clear on inbox open.", "silent pushes refresh widgets without a banner", "silent pushes refresh widgets quietly.", "deeplinks from a push land on the exact thread", "push deeplinks land on the thread.", "quiet hours mute handset alerts overnight", "quiet hours mute overnight alerts."],
+	// translations
+	["the interface carries locales for five languages at launch", "five locales at launch.", "plural rules come from the locale data, never hardcoded", "plurals from locale data.", "the glossary keeps product names untranslated", "glossary protects product names.", "rtl layouts mirror the sidebar and breadcrumbs", "rtl mirrors sidebar and breadcrumbs."],
+	// api spec
+	["publish an openapi spec generated from the route table", "openapi spec generated from routes.", "codegen clients refresh whenever the spec changes", "codegen regenerates on spec changes.", "mark unstable paths with a dedicated stability marker", "unstable paths carry a stability marker.", "contract tests guard the published spec against drift", "contract tests catch spec drift."],
+	// session expiry
+	["idle workspaces expire after fourteen days of inactivity", "fourteen-day idleness expiry.", "expiry warnings appear three days ahead", "expiry warned three days ahead.", "reauth prompts keep the draft state intact", "reauth preserves drafts.", "kicked sessions end cleanly, with a grace window to reopen", "kicks end sessions with a reopen grace window."],
+	// hotkeys
+	["a command palette opens with a single chord", "palette opens on one chord.", "hotkey hints sit beside their menu items", "hints beside menu items.", "keybind remapping lives in preferences", "keybinds remappable in preferences.", "the palette fuzzy-matches commands with the same heuristic as typo tolerance", "palette reuses the fuzzy heuristic."],
+	// csv import
+	["bulk imports accept csv with a configurable delimiter", "csv imports with configurable delimiter.", "the importer maps header names to fields, remembering the mapping", "header mapping remembered.", "row-level problems land in a downloadable rejects file", "rejects downloadable per row.", "imports run asynchronously with a progress readout", "imports async with progress."],
+	// uptime pinger
+	["a lightweight pinger checks the public heartbeat every minute", "pinger checks the heartbeat each minute.", "downtime longer than two minutes pages the on-call rotation", "two-minute downtime pages on-call.", "the uptime readout keeps ninety days of samples", "ninety days of uptime samples.", "maintenance windows suppress pager noise", "maintenance windows silence the pager."],
+	// emoji reactions
+	["message reactions use the standard unicode set", "reactions on the standard unicode set.", "the picker groups emoji by category with a recents row", "picker groups by category, recents row.", "skin-tone choices persist per account", "skin tones persisted.", "reaction counts collapse past ten distinct choices", "counts collapse after ten choices."],
+	// query planner
+	["slow reads traced to a mis-estimated planner choice", "planner mis-estimates traced.", "a covering btree removes the sort from the hot path", "covering btree skips the sort.", "nightly vacuum keeps the bloat bounded", "vacuum bounds bloat nightly.", "explain output attached to slow-read reports", "explain attached to slow reads."],
+	// print styles
+	["the printable stylesheet hides chrome and fits a4 margins", "print stylesheet strips chrome, a4 margins.", "paginated output keeps table headers on every page", "headers repeat on every printed page.", "widow lines get a minimum of two", "widow minimum of two lines.", "a dedicated print button bypasses the app shell", "print button bypasses the shell."],
+	// announcements feed
+	["an announcements feed condenses weekly highlights per workspace", "announcements feed condenses weekly highlights.", "each recap links the items it mentions", "recaps link their items.", "subscribers choose a delivery day", "subscribers pick the delivery day.", "the feed archives older recaps for a year", "recaps archived for a year."],
+];
+const FILLER_TURNS_PER_SESSION = 16; // 4 topics × 4 turns
+
+function fillerSessionSpec(index: number): { slug: string; file: string; turns: Turn[] } {
+	// rotation: (index*3 + topicSlot*5) mod 20 — every session gets 4 distinct
+	// topics; across 60 sessions all 20 topics appear in shifting company
+	const turns: Turn[] = [];
+	for (let k = 0; k < 4; k++) {
+		const topic = FILLER_TOPICS[(index * 3 + k * 5) % FILLER_TOPICS.length];
+		for (let t = 0; t < topic.length; t += 2) {
+			turns.push(u(topic[t]), a(topic[t + 1]));
+		}
+	}
+	const file = `2026-01-16T10-${String(10 + (index % 50)).padStart(2, "0")}-${String((index * 7) % 60).padStart(2, "0")}-000Z.jsonl`;
+	return { slug: `filler${String(index).padStart(2, "0")}`, file, turns };
+}
+
+/** Pollution guards: filler must never trip consolidation's status heuristics
+ * (kept in sync with ext/consolidate.ts token sets) nor the router's intent
+ * regexes, nor collide with abstention probe vocabulary. */
+const POLLUTION_TOKENS = new Set([
+	// HEDGE_TOKENS
+	"maybe", "someday", "perhaps", "possibly", "potentially", "explore", "exploring", "explored", "consider", "considering", "consideration", "idea", "ideas", "commitment", "plans", "floating", "tentative",
+	// ATTEMPT_TOKENS
+	"try", "tried", "trying", "attempt", "attempted", "attempting",
+	// OUTCOME_TOKENS
+	"failed", "revert", "reverts", "reverted", "reverting", "rolled", "rollback", "broke", "broken", "abandon", "abandoned",
+	// REVERSAL_TOKENS
+	"switched", "switching", "switch", "replaced", "replaces", "replace", "replacing", "dropped", "drop", "retired", "retire", "removed", "remove", "deprecated", "moved", "instead", "obsolete",
+]);
+
+function validateFiller(scale: number, abstentionQueries: string[]): void {
+	const abstentionTok = new Set<string>();
+	for (const q of abstentionQueries) for (const t of tokens(q)) abstentionTok.add(t);
+	for (let i = 1; i <= scale; i++) {
+		const spec = fillerSessionSpec(i);
+		for (const turn of spec.turns) {
+			for (const tok of tokens(turn.text)) {
+				if (POLLUTION_TOKENS.has(tok)) throw new Error(`filler ${spec.slug}: pollution token "${tok}" (consolidation/intent would misread it) — reword: "${turn.text.slice(0, 60)}"`);
+				if (abstentionTok.has(tok)) throw new Error(`filler ${spec.slug}: token "${tok}" collides with an abstention probe — reword: "${turn.text.slice(0, 60)}"`);
+			}
+		}
+	}
+}
+
+// ── generation + self-validation ──────────────────────────────────────────────
+
+function transcriptLines(spec: { turns: Turn[] }): string {
 	return spec.turns
 		.map((t) => JSON.stringify({ type: "message", message: { role: t.role, content: [{ type: "text", text: t.text }] } }))
 		.join("\n") + "\n";
 }
 
-/** Generate the corpus into targetDir. Returns the validated manifest. */
-export function generateLifecycleFixtures(targetDir: string): LifecycleManifest {
+/** Generate the corpus (scale = number of filler distractor sessions, 0 =
+ * small corpus only). Returns the validated manifest. */
+export function generateLifecycleFixtures(targetDir: string, scale = 0): LifecycleManifest {
 	const sessionsDir = join(targetDir, "sessions");
 	mkdirSync(sessionsDir, { recursive: true });
+
+	// early validation: probe regexes must not bleed across intent classes, and
+	// filler (which is checked against abstention vocabulary) must be clean
+	for (const p of RECALL_PROBES.neutral) {
+		if (FAILURE_INTENT_RE.test(p.query)) throw new Error(`neutral probe ${p.id} reads as failure-intent`);
+		if (TEMPORAL_INTENT_RE.test(p.query)) throw new Error(`neutral probe ${p.id} reads as temporal-intent`);
+	}
+	for (const p of RECALL_PROBES.failureIntent) {
+		if (TEMPORAL_INTENT_RE.test(p.query)) throw new Error(`failure probe ${p.id} also reads as temporal-intent`);
+	}
+	for (const p of TEMPORAL_PROBES) {
+		if (FAILURE_INTENT_RE.test(p.query)) throw new Error(`temporal probe ${p.id} also reads as failure-intent — failures stay failure-intent-only`);
+	}
+	for (const p of AGGREGATION_PROBES) {
+		if (FAILURE_INTENT_RE.test(p.query) || TEMPORAL_INTENT_RE.test(p.query)) throw new Error(`aggregation probe ${p.id} reads as failure/temporal-intent`);
+	}
+	// abstention probes are neutral-intent by construction — if one ever matched
+	// an intent regex, the intent-targeted floor bypass would defeat the gate
+	for (const p of ABSTENTION_PROBES) {
+		if (FAILURE_INTENT_RE.test(p.query) || TEMPORAL_INTENT_RE.test(p.query)) throw new Error(`abstention probe ${p.id} reads as failure/temporal-intent`);
+	}
+	validateFiller(scale, ABSTENTION_PROBES.map((p) => p.query));
 
 	const plants: PlantEntry[] = [];
 	const sessionRows: LifecycleManifest["sessions"] = [];
@@ -454,16 +624,46 @@ export function generateLifecycleFixtures(targetDir: string): LifecycleManifest 
 		sessionRows.push({ slug: spec.slug, file: `sessions/${spec.slug}/${file}`, userTurns: turns.length, blocks: bounds.length });
 	}
 
+	// filler distractor sessions (scale tier) — plain transcripts, no plants
+	const fillerSlugs: string[] = [];
+	for (let i = 1; i <= scale; i++) {
+		const f = fillerSessionSpec(i);
+		const dir = join(sessionsDir, f.slug);
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(join(dir, f.file), transcriptLines({ turns: f.turns }));
+		fillerSlugs.push(f.slug);
+	}
+
 	// cross-checks: every probe ref exists; every pair member exists
 	const refs = new Set(plants.map((p) => p.ref));
-	for (const q of [...RECALL_PROBES.neutral, ...RECALL_PROBES.failureIntent]) {
-		const list = [...("excludedRefs" in q ? (q as any).excludedRefs ?? [] : []), ...("requiredRefs" in q ? (q as any).requiredRefs : []), ...((q as any).expectValidRefs ?? [])];
+	for (const q of [...RECALL_PROBES.neutral, ...RECALL_PROBES.failureIntent, ...TEMPORAL_PROBES.map((t) => ({ ...t, excludedRefs: [], requiredRefs: t.expectedOldRefs })), ...AGGREGATION_PROBES.map((t) => ({ ...t, excludedRefs: [], requiredRefs: t.expectedRefs }))]) {
+		const list = [...("excludedRefs" in q ? (q as any).excludedRefs ?? [] : []), ...((q as any).requiredRefs ?? []), ...((q as any).expectValidRefs ?? [])];
 		for (const r of list) if (!refs.has(r)) throw new Error(`probe ${q.id}: unknown ref ${r}`);
+	}
+	// aggregation members: two DIFFERENT sessions, both valid plants
+	for (const p of AGGREGATION_PROBES) {
+		const [sa, sb] = p.sessions;
+		if (sa === sb) throw new Error(`aggregation probe ${p.id}: refs must come from different sessions`);
+		for (const r of p.expectedRefs) if (plants.find((x) => x.ref === r)?.expectedStatus !== "valid") throw new Error(`aggregation probe ${p.id}: ${r} must be a valid plant`);
+	}
+	// temporal targets: expected-old refs must be planted superseded
+	for (const p of TEMPORAL_PROBES) {
+		for (const r of p.expectedOldRefs) if (plants.find((x) => x.ref === r)?.expectedStatus !== "superseded") throw new Error(`temporal probe ${p.id}: ${r} must be a superseded plant`);
+	}
+	// abstention: zero token overlap with the ENTIRE corpus (planted + filler)
+	{
+		const corpusTok = new Set<string>();
+		for (const spec of SESSIONS) for (const t of spec.turns) for (const tok of tokens(t.text)) corpusTok.add(tok);
+		for (let i = 1; i <= scale; i++) for (const t of fillerSessionSpec(i).turns) for (const tok of tokens(t.text)) corpusTok.add(tok);
+		for (const p of ABSTENTION_PROBES) {
+			const hit = [...tokens(p.query)].filter((t) => corpusTok.has(t));
+			if (hit.length) throw new Error(`abstention probe ${p.id}: tokens ${hit.join(",")} exist in the corpus — pick a truly absent topic`);
+		}
 	}
 
 	const manifest: LifecycleManifest = {
 		name: "lifecycle-fixtures",
-		version: "v2.4-bench-before-build",
+		version: "v2.5-ir-longmemeval-scale",
 		corpus: "synthetic larkspur-exporter sessions with planted lifecycle ground truth (deterministic)",
 		sessions: sessionRows,
 		plants,
@@ -474,6 +674,11 @@ export function generateLifecycleFixtures(targetDir: string): LifecycleManifest 
 			{ id: "ss-harness", topic: "integration test harness", older: "lcb07@t2", newer: "lcb08@t2" },
 		],
 		recallProbes: RECALL_PROBES,
+		temporalProbes: TEMPORAL_PROBES,
+		aggregationProbes: AGGREGATION_PROBES,
+		abstentionProbes: ABSTENTION_PROBES,
+		scale,
+		filler: { count: scale, turnsPerSession: FILLER_TURNS_PER_SESSION, slugs: fillerSlugs },
 		sanity: {
 			note: "REAL historical pairs from this repo — hardcoded ground truth, no fixture files, excluded from numeric grading",
 			realPairs: REAL_SANITY_PAIRS,
@@ -497,12 +702,14 @@ export function generateLifecycleFixtures(targetDir: string): LifecycleManifest 
 
 const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 if (isMain) {
-	const target = process.argv[2] || join(import.meta.dirname ?? "tools", "..", "bench", "lifecycle_fixtures");
-	const manifest = generateLifecycleFixtures(target);
+	const scaleFlag = process.argv.indexOf("--scale");
+	const scale = scaleFlag >= 0 ? Number(process.argv[scaleFlag + 1] ?? 0) || 0 : 0;
+	const target = process.argv[2] && !process.argv[2].startsWith("--") ? process.argv[2] : join(import.meta.dirname ?? "tools", "..", "bench", "lifecycle_fixtures");
+	const manifest = generateLifecycleFixtures(target, scale);
 	const counts = manifest.plants.reduce<Record<string, number>>((m, p) => ({ ...m, [p.expectedStatus]: (m[p.expectedStatus] ?? 0) + 1 }), {});
-	console.log(`lifecycle fixtures → ${target}`);
-	console.log(`sessions: ${manifest.sessions.length}, plants: ${manifest.plants.length} (${Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(", ")})`);
-	console.log(`supersession pairs: ${manifest.supersessionPairs.length}, recall probes: ${manifest.recallProbes.neutral.length} neutral / ${manifest.recallProbes.failureIntent.length} failure-intent`);
+	console.log(`lifecycle fixtures → ${target}${scale ? ` (scale: +${scale} filler sessions)` : ""}`);
+	console.log(`sessions: ${manifest.sessions.length}, plants: ${manifest.plants.length} (${Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(", ")}), filler: ${manifest.filler.count}`);
+	console.log(`supersession pairs: ${manifest.supersessionPairs.length}, probes: ${manifest.recallProbes.neutral.length} neutral / ${manifest.recallProbes.failureIntent.length} failure / ${manifest.temporalProbes.length} temporal / ${manifest.aggregationProbes.length} aggregation / ${manifest.abstentionProbes.length} abstention`);
 	console.log(`sanity real pairs: ${manifest.sanity.realPairs.map((p) => p.id).join(", ")}`);
 	console.log(`manifest: ${join(target, "fixtures_manifest.json")}`);
 }

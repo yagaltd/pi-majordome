@@ -1,392 +1,1774 @@
 {
- "date": "2026-10-05T05:13:05.535Z",
+ "date": "2026-10-05T05:55:52.021Z",
+ "version": "v2.5-ir-longmemeval-scale",
  "verdict": "pass",
- "isolatedDir": "/tmp/lifecyclebench-Tpi1bc/home/majordome",
- "consolidation": {
-  "status": "ran",
-  "file": "consolidate.ts",
-  "exportName": "runConsolidation"
- },
- "metrics": {
-  "stateAccuracy": {
-   "valid": {
-    "correct": 8,
-    "total": 8,
-    "accuracy": 1
-   },
-   "superseded": {
-    "correct": 4,
-    "total": 4,
-    "accuracy": 1
-   },
-   "failed": {
-    "correct": 3,
-    "total": 3,
-    "accuracy": 1
-   },
-   "speculative": {
-    "correct": 2,
-    "total": 2,
-    "accuracy": 1
-   }
-  },
-  "falseDemotions": 0,
-  "validDemotedAllValidPlants": 0,
-  "supersessionPairRecall": 1,
-  "pairResults": [
-   {
-    "id": "ss-renderer",
-    "older": "lcb01@t3",
-    "newer": "lcb02@t3",
-    "recalled": true,
-    "linked": true
-   },
-   {
-    "id": "ss-config",
-    "older": "lcb03@t3",
-    "newer": "lcb04@t2",
-    "recalled": true,
-    "linked": true
-   },
-   {
-    "id": "ss-retry",
-    "older": "lcb05@t3",
-    "newer": "lcb06@t2",
-    "recalled": true,
-    "linked": true
-   },
-   {
-    "id": "ss-harness",
-    "older": "lcb07@t2",
-    "newer": "lcb08@t2",
-    "recalled": true,
-    "linked": true
-   }
-  ],
-  "leakRate": 0,
-  "neutralLeaks": 0,
-  "neutralRanked": 140,
-  "failureAppearance": 0.875,
-  "neutralRows": [
-   {
-    "id": "neut-renderer",
-    "query": "which renderer renders the docs previews?",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-config",
-    "query": "where does the config file live?",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-retry",
-    "query": "how does the webhook retry policy work?",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-harness",
-    "query": "how do the integration tests run?",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-cache",
-    "query": "what cache layer is in place for the export pipeline?",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-embed",
-    "query": "how do portal pages embed external dashboards?",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-migrate",
-    "query": "how do we run schema migrations?",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-login",
-    "query": "how does cli login work?",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-http",
-    "query": "what http client do outbound gateway calls use?",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-render2",
-    "query": "how are preview documents displayed?",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-cache2",
-    "query": "is there any caching on exports?",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-login2",
-    "query": "authentication flow for the cli",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-http2",
-    "query": "which library handles outbound gateway requests?",
-    "returned": 10,
-    "leakedRefs": []
-   },
-   {
-    "id": "neut-embed2",
-    "query": "external dashboards inside portal pages — supported?",
-    "returned": 10,
-    "leakedRefs": []
-   }
-  ],
-  "failureRows": [
-   {
-    "id": "fail-tried",
-    "query": "what did we try that failed?",
-    "requiredRefs": [
-     "lcb09@t2",
-     "lcb10@t2",
-     "lcb11@t2"
-    ],
-    "foundRefs": [
-     "lcb09@t2",
-     "lcb10@t2",
-     "lcb11@t2"
-    ]
-   },
-   {
-    "id": "fail-reverted",
-    "query": "which approaches did we revert?",
-    "requiredRefs": [
-     "lcb09@t2",
-     "lcb10@t2",
-     "lcb11@t2"
-    ],
-    "foundRefs": [
-     "lcb09@t2",
-     "lcb10@t2",
-     "lcb11@t2"
-    ]
-   },
-   {
-    "id": "fail-iframe",
-    "query": "did the iframe embed attempt go wrong?",
-    "requiredRefs": [
-     "lcb10@t2"
-    ],
-    "foundRefs": [
-     "lcb10@t2"
-    ]
-   },
-   {
-    "id": "fail-migrate",
-    "query": "show me the wrong path we took with the schema migration",
-    "requiredRefs": [
-     "lcb11@t2"
-    ],
-    "foundRefs": [
-     "lcb11@t2"
-    ]
-   },
-   {
-    "id": "fail-deadend",
-    "query": "which attempts turned out to be dead ends?",
-    "requiredRefs": [
-     "lcb09@t2",
-     "lcb10@t2",
-     "lcb11@t2"
-    ],
-    "foundRefs": [
-     "lcb09@t2",
-     "lcb10@t2",
-     "lcb11@t2"
-    ]
-   },
-   {
-    "id": "fail-brittle",
-    "query": "did the export caching prove brittle?",
-    "requiredRefs": [
-     "lcb09@t2"
-    ],
-    "foundRefs": []
-   },
-   {
-    "id": "fail-flop",
-    "query": "which experiment flopped on the embeds?",
-    "requiredRefs": [
-     "lcb10@t2"
-    ],
-    "foundRefs": [
-     "lcb10@t2"
-    ]
-   },
-   {
-    "id": "fail-abandon",
-    "query": "what did we abandon during the migration work?",
-    "requiredRefs": [
-     "lcb11@t2"
-    ],
-    "foundRefs": [
-     "lcb11@t2"
-    ]
-   }
-  ],
-  "gradedBlocks": [
-   {
-    "ref": "lcb01@t3",
-    "expected": "superseded",
-    "actual": "superseded",
-    "control": false,
-    "blockId": "lcb01:1"
-   },
-   {
-    "ref": "lcb02@t3",
-    "expected": "valid",
-    "actual": "valid",
-    "control": false,
-    "blockId": "lineage:lcb02:1"
-   },
-   {
-    "ref": "lcb03@t3",
-    "expected": "superseded",
-    "actual": "superseded",
-    "control": false,
-    "blockId": "lineage:lcb03:1"
-   },
-   {
-    "ref": "lcb04@t2",
-    "expected": "valid",
-    "actual": "valid",
-    "control": false,
-    "blockId": "lineage:lcb04:1"
-   },
-   {
-    "ref": "lcb05@t3",
-    "expected": "superseded",
-    "actual": "superseded",
-    "control": false,
-    "blockId": "lineage:lcb05:1"
-   },
-   {
-    "ref": "lcb06@t2",
-    "expected": "valid",
-    "actual": "valid",
-    "control": false,
-    "blockId": "lineage:lcb06:1"
-   },
-   {
-    "ref": "lcb07@t2",
-    "expected": "superseded",
-    "actual": "superseded",
-    "control": false,
-    "blockId": "lineage:lcb07:1"
-   },
-   {
-    "ref": "lcb08@t2",
-    "expected": "valid",
-    "actual": "valid",
-    "control": false,
-    "blockId": "lineage:lcb08:1"
-   },
-   {
-    "ref": "lcb09@t2",
-    "expected": "failed",
-    "actual": "failed",
-    "control": false,
-    "blockId": "lineage:lcb09:1"
-   },
-   {
-    "ref": "lcb10@t2",
-    "expected": "failed",
-    "actual": "failed",
-    "control": false,
-    "blockId": "lineage:lcb10:1"
-   },
-   {
-    "ref": "lcb11@t2",
-    "expected": "failed",
-    "actual": "failed",
-    "control": false,
-    "blockId": "lineage:lcb11:1"
-   },
-   {
-    "ref": "lcb12@t3",
-    "expected": "valid",
-    "actual": "valid",
-    "control": true,
-    "blockId": "lineage:lcb12:1"
-   },
-   {
-    "ref": "lcb12@t6",
-    "expected": "valid",
-    "actual": "valid",
-    "control": true,
-    "blockId": "lineage:lcb12:5"
-   },
-   {
-    "ref": "lcb13@t3",
-    "expected": "valid",
-    "actual": "valid",
-    "control": true,
-    "blockId": "lineage:lcb13:3"
-   },
-   {
-    "ref": "lcb13@t6",
-    "expected": "valid",
-    "actual": "valid",
-    "control": true,
-    "blockId": "lineage:lcb13:5"
-   },
-   {
-    "ref": "lcb14@t2",
-    "expected": "speculative",
-    "actual": "speculative",
-    "control": false,
-    "blockId": "lineage:lcb14:1"
-   },
-   {
-    "ref": "lcb14@t3",
-    "expected": "speculative",
-    "actual": "speculative",
-    "control": false,
-    "blockId": "lineage:lcb14:1"
-   }
-  ]
- },
- "gates": [
+ "isolatedDir": "/tmp/lifecyclebench-KlQ5aA/home/majordome",
+ "tiers": [
   {
-   "name": "state accuracy ≥90% per class",
-   "value": "valid=100% superseded=100% failed=100% speculative=100%",
-   "pass": true
+   "name": "small (mechanism corpus, untouched)",
+   "scale": 0,
+   "blocks": 18,
+   "wallMs": 24,
+   "consolidation": {
+    "status": "ran",
+    "file": "consolidate.ts",
+    "exportName": "runConsolidation"
+   },
+   "metrics": {
+    "stateAccuracy": {
+     "valid": {
+      "correct": 8,
+      "total": 8,
+      "accuracy": 1
+     },
+     "superseded": {
+      "correct": 4,
+      "total": 4,
+      "accuracy": 1
+     },
+     "failed": {
+      "correct": 3,
+      "total": 3,
+      "accuracy": 1
+     },
+     "speculative": {
+      "correct": 2,
+      "total": 2,
+      "accuracy": 1
+     }
+    },
+    "falseDemotions": 0,
+    "validDemotedAllValidPlants": 0,
+    "supersessionPairRecall": 1,
+    "pairResults": [
+     {
+      "id": "ss-renderer",
+      "older": "lcb01@t3",
+      "newer": "lcb02@t3",
+      "recalled": true,
+      "linked": true
+     },
+     {
+      "id": "ss-config",
+      "older": "lcb03@t3",
+      "newer": "lcb04@t2",
+      "recalled": true,
+      "linked": true
+     },
+     {
+      "id": "ss-retry",
+      "older": "lcb05@t3",
+      "newer": "lcb06@t2",
+      "recalled": true,
+      "linked": true
+     },
+     {
+      "id": "ss-harness",
+      "older": "lcb07@t2",
+      "newer": "lcb08@t2",
+      "recalled": true,
+      "linked": true
+     }
+    ],
+    "leakRate": 0,
+    "neutralLeaks": 0,
+    "neutralRanked": 19,
+    "failureAppearance": 1,
+    "neutralRows": [
+     {
+      "id": "neut-renderer",
+      "query": "which renderer renders the docs previews?",
+      "returned": 1,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-config",
+      "query": "where does the config file live?",
+      "returned": 3,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-retry",
+      "query": "how does the webhook retry policy work?",
+      "returned": 2,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-harness",
+      "query": "how do the integration tests run?",
+      "returned": 1,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-cache",
+      "query": "what cache layer is in place for the export pipeline?",
+      "returned": 4,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-embed",
+      "query": "how do portal pages embed external dashboards?",
+      "returned": 0,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-migrate",
+      "query": "how do we run schema migrations?",
+      "returned": 1,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-login",
+      "query": "how does cli login work?",
+      "returned": 1,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-http",
+      "query": "what http client do outbound gateway calls use?",
+      "returned": 1,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-render2",
+      "query": "how are preview documents displayed?",
+      "returned": 3,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-cache2",
+      "query": "is there any caching on exports?",
+      "returned": 0,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-login2",
+      "query": "authentication flow for the cli",
+      "returned": 1,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-http2",
+      "query": "which library handles outbound gateway requests?",
+      "returned": 1,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-embed2",
+      "query": "external dashboards inside portal pages — supported?",
+      "returned": 0,
+      "leakedRefs": []
+     }
+    ],
+    "failureRows": [
+     {
+      "id": "fail-tried",
+      "query": "what did we try that failed?",
+      "requiredRefs": [
+       "lcb09@t2",
+       "lcb10@t2",
+       "lcb11@t2"
+      ],
+      "foundRefs": [
+       "lcb09@t2",
+       "lcb10@t2",
+       "lcb11@t2"
+      ]
+     },
+     {
+      "id": "fail-reverted",
+      "query": "which approaches did we revert?",
+      "requiredRefs": [
+       "lcb09@t2",
+       "lcb10@t2",
+       "lcb11@t2"
+      ],
+      "foundRefs": [
+       "lcb09@t2",
+       "lcb10@t2",
+       "lcb11@t2"
+      ]
+     },
+     {
+      "id": "fail-iframe",
+      "query": "did the iframe embed attempt go wrong?",
+      "requiredRefs": [
+       "lcb10@t2"
+      ],
+      "foundRefs": [
+       "lcb10@t2"
+      ]
+     },
+     {
+      "id": "fail-migrate",
+      "query": "show me the wrong path we took with the schema migration",
+      "requiredRefs": [
+       "lcb11@t2"
+      ],
+      "foundRefs": [
+       "lcb11@t2"
+      ]
+     },
+     {
+      "id": "fail-deadend",
+      "query": "which attempts turned out to be dead ends?",
+      "requiredRefs": [
+       "lcb09@t2",
+       "lcb10@t2",
+       "lcb11@t2"
+      ],
+      "foundRefs": [
+       "lcb09@t2",
+       "lcb10@t2",
+       "lcb11@t2"
+      ]
+     },
+     {
+      "id": "fail-brittle",
+      "query": "which attempt proved brittle on export caching?",
+      "requiredRefs": [
+       "lcb09@t2"
+      ],
+      "foundRefs": [
+       "lcb09@t2"
+      ]
+     },
+     {
+      "id": "fail-flop",
+      "query": "which experiment flopped on the embeds?",
+      "requiredRefs": [
+       "lcb10@t2"
+      ],
+      "foundRefs": [
+       "lcb10@t2"
+      ]
+     },
+     {
+      "id": "fail-abandon",
+      "query": "what did we abandon during the migration work?",
+      "requiredRefs": [
+       "lcb11@t2"
+      ],
+      "foundRefs": [
+       "lcb11@t2"
+      ]
+     }
+    ],
+    "ir": {
+     "probes": 24,
+     "recall5": 0.9722222222222223,
+     "recall10": 1,
+     "mrr": 0.8937499999999999,
+     "ndcg10": 0.9249026897803104,
+     "perProbe": [
+      {
+       "id": "neut-renderer",
+       "expected": [
+        "lcb02@t3"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-config",
+       "expected": [
+        "lcb04@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-retry",
+       "expected": [
+        "lcb06@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-harness",
+       "expected": [
+        "lcb08@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-login",
+       "expected": [
+        "lcb12@t3"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-http",
+       "expected": [
+        "lcb13@t6"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-render2",
+       "expected": [
+        "lcb02@t3"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-login2",
+       "expected": [
+        "lcb12@t3"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-http2",
+       "expected": [
+        "lcb13@t6"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "fail-tried",
+       "expected": [
+        "lcb09@t2",
+        "lcb10@t2",
+        "lcb11@t2"
+       ],
+       "ranks": [
+        1,
+        2,
+        3
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "fail-reverted",
+       "expected": [
+        "lcb09@t2",
+        "lcb10@t2",
+        "lcb11@t2"
+       ],
+       "ranks": [
+        1,
+        2,
+        3
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "fail-iframe",
+       "expected": [
+        "lcb10@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "fail-migrate",
+       "expected": [
+        "lcb11@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "fail-deadend",
+       "expected": [
+        "lcb09@t2",
+        "lcb10@t2",
+        "lcb11@t2"
+       ],
+       "ranks": [
+        5,
+        6,
+        7
+       ],
+       "recall5": 0.3333333333333333,
+       "recall10": 1,
+       "mrr": 0.2,
+       "ndcg10": 0.5051284895111403
+      },
+      {
+       "id": "fail-brittle",
+       "expected": [
+        "lcb09@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "fail-flop",
+       "expected": [
+        "lcb10@t2"
+       ],
+       "ranks": [
+        4
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 0.25,
+       "ndcg10": 0.43067655807339306
+      },
+      {
+       "id": "fail-abandon",
+       "expected": [
+        "lcb11@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "temp-renderer",
+       "expected": [
+        "lcb01@t3"
+       ],
+       "ranks": [
+        2
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 0.5,
+       "ndcg10": 0.6309297535714575
+      },
+      {
+       "id": "temp-config",
+       "expected": [
+        "lcb03@t3"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "temp-retry",
+       "expected": [
+        "lcb05@t3"
+       ],
+       "ranks": [
+        2
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 0.5,
+       "ndcg10": 0.6309297535714575
+      },
+      {
+       "id": "temp-harness",
+       "expected": [
+        "lcb07@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "agg-auth-logging",
+       "expected": [
+        "lcb12@t3",
+        "lcb13@t3"
+       ],
+       "ranks": [
+        2,
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "agg-config-retry",
+       "expected": [
+        "lcb04@t2",
+        "lcb06@t2"
+       ],
+       "ranks": [
+        2,
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "agg-preview-tests",
+       "expected": [
+        "lcb02@t3",
+        "lcb08@t2"
+       ],
+       "ranks": [
+        2,
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      }
+     ]
+    },
+    "temporal": {
+     "rows": [
+      {
+       "id": "temp-renderer",
+       "query": "what did we decide before the static-html renderer switch?",
+       "expectedOldRefs": [
+        "lcb01@t3"
+       ],
+       "found": [
+        "lcb01@t3"
+       ]
+      },
+      {
+       "id": "temp-config",
+       "query": "which config format did we use previously?",
+       "expectedOldRefs": [
+        "lcb03@t3"
+       ],
+       "found": [
+        "lcb03@t3"
+       ]
+      },
+      {
+       "id": "temp-retry",
+       "query": "what was the webhook retry policy before the backoff change?",
+       "expectedOldRefs": [
+        "lcb05@t3"
+       ],
+       "found": [
+        "lcb05@t3"
+       ]
+      },
+      {
+       "id": "temp-harness",
+       "query": "what's the history of the integration test harness?",
+       "expectedOldRefs": [
+        "lcb07@t2"
+       ],
+       "found": [
+        "lcb07@t2"
+       ]
+      }
+     ],
+     "passRate": 1
+    },
+    "aggregation": {
+     "rows": [
+      {
+       "id": "agg-auth-logging",
+       "query": "how do cli login and the log pipeline work?",
+       "expectedRefs": [
+        "lcb12@t3",
+        "lcb13@t3"
+       ],
+       "ranks": [
+        2,
+        1
+       ],
+       "bothInTop5": true
+      },
+      {
+       "id": "agg-config-retry",
+       "query": "what did we settle for the config format and the webhook retry policy?",
+       "expectedRefs": [
+        "lcb04@t2",
+        "lcb06@t2"
+       ],
+       "ranks": [
+        2,
+        1
+       ],
+       "bothInTop5": true
+      },
+      {
+       "id": "agg-preview-tests",
+       "query": "which preview renderer ships, and what runs the integration tests?",
+       "expectedRefs": [
+        "lcb02@t3",
+        "lcb08@t2"
+       ],
+       "ranks": [
+        2,
+        1
+       ],
+       "bothInTop5": true
+      }
+     ],
+     "passRate": 1,
+     "maxRankNeeded": 2
+    },
+    "abstention": {
+     "rows": [
+      {
+       "id": "abs-kubernetes",
+       "query": "anything about kubernetes?",
+       "hits": 0
+      },
+      {
+       "id": "abs-billing",
+       "query": "did billing invoices surface anywhere?",
+       "hits": 0
+      },
+      {
+       "id": "abs-darktheme",
+       "query": "was the dark theme ever discussed?",
+       "hits": 0
+      },
+      {
+       "id": "abs-websocket",
+       "query": "any mention of websocket presence?",
+       "hits": 0
+      }
+     ],
+     "falseHits": 0,
+     "floorPresent": true
+    },
+    "gradedBlocks": [
+     {
+      "ref": "lcb01@t3",
+      "expected": "superseded",
+      "actual": "superseded",
+      "control": false,
+      "blockId": "lcb01:1"
+     },
+     {
+      "ref": "lcb02@t3",
+      "expected": "valid",
+      "actual": "valid",
+      "control": false,
+      "blockId": "lineage:lcb02:1"
+     },
+     {
+      "ref": "lcb03@t3",
+      "expected": "superseded",
+      "actual": "superseded",
+      "control": false,
+      "blockId": "lineage:lcb03:1"
+     },
+     {
+      "ref": "lcb04@t2",
+      "expected": "valid",
+      "actual": "valid",
+      "control": false,
+      "blockId": "lineage:lcb04:1"
+     },
+     {
+      "ref": "lcb05@t3",
+      "expected": "superseded",
+      "actual": "superseded",
+      "control": false,
+      "blockId": "lineage:lcb05:1"
+     },
+     {
+      "ref": "lcb06@t2",
+      "expected": "valid",
+      "actual": "valid",
+      "control": false,
+      "blockId": "lineage:lcb06:1"
+     },
+     {
+      "ref": "lcb07@t2",
+      "expected": "superseded",
+      "actual": "superseded",
+      "control": false,
+      "blockId": "lineage:lcb07:1"
+     },
+     {
+      "ref": "lcb08@t2",
+      "expected": "valid",
+      "actual": "valid",
+      "control": false,
+      "blockId": "lineage:lcb08:1"
+     },
+     {
+      "ref": "lcb09@t2",
+      "expected": "failed",
+      "actual": "failed",
+      "control": false,
+      "blockId": "lineage:lcb09:1"
+     },
+     {
+      "ref": "lcb10@t2",
+      "expected": "failed",
+      "actual": "failed",
+      "control": false,
+      "blockId": "lineage:lcb10:1"
+     },
+     {
+      "ref": "lcb11@t2",
+      "expected": "failed",
+      "actual": "failed",
+      "control": false,
+      "blockId": "lineage:lcb11:1"
+     },
+     {
+      "ref": "lcb12@t3",
+      "expected": "valid",
+      "actual": "valid",
+      "control": true,
+      "blockId": "lineage:lcb12:1"
+     },
+     {
+      "ref": "lcb12@t6",
+      "expected": "valid",
+      "actual": "valid",
+      "control": true,
+      "blockId": "lineage:lcb12:5"
+     },
+     {
+      "ref": "lcb13@t3",
+      "expected": "valid",
+      "actual": "valid",
+      "control": true,
+      "blockId": "lineage:lcb13:3"
+     },
+     {
+      "ref": "lcb13@t6",
+      "expected": "valid",
+      "actual": "valid",
+      "control": true,
+      "blockId": "lineage:lcb13:5"
+     },
+     {
+      "ref": "lcb14@t2",
+      "expected": "speculative",
+      "actual": "speculative",
+      "control": false,
+      "blockId": "lineage:lcb14:1"
+     },
+     {
+      "ref": "lcb14@t3",
+      "expected": "speculative",
+      "actual": "speculative",
+      "control": false,
+      "blockId": "lineage:lcb14:1"
+     }
+    ]
+   },
+   "gates": [
+    {
+     "name": "state accuracy ≥90% per class",
+     "value": "valid=100% superseded=100% failed=100% speculative=100%",
+     "pass": true
+    },
+    {
+     "name": "false demotions = 0",
+     "value": "0 (valid controls)",
+     "pass": true
+    },
+    {
+     "name": "supersession pair recall ≥80%",
+     "value": "100% (4/4)",
+     "pass": true
+    },
+    {
+     "name": "leak rate ≤10%",
+     "value": "0% (0/19 ranked results)",
+     "pass": true
+    },
+    {
+     "name": "IR Recall@5 ≥0.80",
+     "value": "0.972 (24 probes w/ expected refs)",
+     "pass": true
+    },
+    {
+     "name": "IR MRR ≥0.60",
+     "value": "0.894",
+     "pass": true
+    },
+    {
+     "name": "IR nDCG@10 ≥0.70",
+     "value": "0.925",
+     "pass": true
+    },
+    {
+     "name": "temporal: ≥1 old ref surfaced =100%",
+     "value": "100% (4/4)",
+     "pass": true
+    },
+    {
+     "name": "aggregation: both refs in top-5 =100%",
+     "value": "100% (3/3)",
+     "pass": true
+    },
+    {
+     "name": "abstention: 0 false hits",
+     "value": "0 hits across 4 absent-topic probes (score floor: present)",
+     "pass": true
+    }
+   ]
   },
   {
-   "name": "false demotions = 0",
-   "value": "0 (valid controls)",
-   "pass": true
-  },
-  {
-   "name": "supersession pair recall ≥80%",
-   "value": "100% (4/4)",
-   "pass": true
-  },
-  {
-   "name": "leak rate ≤10%",
-   "value": "0% (0/140 ranked results)",
-   "pass": true
+   "name": "scale (distractor corpus)",
+   "scale": 60,
+   "blocks": 759,
+   "wallMs": 1526,
+   "consolidation": {
+    "status": "ran",
+    "file": "consolidate.ts",
+    "exportName": "runConsolidation"
+   },
+   "metrics": {
+    "stateAccuracy": {
+     "valid": {
+      "correct": 8,
+      "total": 8,
+      "accuracy": 1
+     },
+     "superseded": {
+      "correct": 4,
+      "total": 4,
+      "accuracy": 1
+     },
+     "failed": {
+      "correct": 3,
+      "total": 3,
+      "accuracy": 1
+     },
+     "speculative": {
+      "correct": 2,
+      "total": 2,
+      "accuracy": 1
+     }
+    },
+    "falseDemotions": 0,
+    "validDemotedAllValidPlants": 0,
+    "supersessionPairRecall": 1,
+    "pairResults": [
+     {
+      "id": "ss-renderer",
+      "older": "lcb01@t3",
+      "newer": "lcb02@t3",
+      "recalled": true,
+      "linked": true
+     },
+     {
+      "id": "ss-config",
+      "older": "lcb03@t3",
+      "newer": "lcb04@t2",
+      "recalled": true,
+      "linked": true
+     },
+     {
+      "id": "ss-retry",
+      "older": "lcb05@t3",
+      "newer": "lcb06@t2",
+      "recalled": true,
+      "linked": true
+     },
+     {
+      "id": "ss-harness",
+      "older": "lcb07@t2",
+      "newer": "lcb08@t2",
+      "recalled": true,
+      "linked": true
+     }
+    ],
+    "leakRate": 0,
+    "neutralLeaks": 0,
+    "neutralRanked": 175,
+    "failureAppearance": 1,
+    "neutralRows": [
+     {
+      "id": "neut-renderer",
+      "query": "which renderer renders the docs previews?",
+      "returned": 1,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-config",
+      "query": "where does the config file live?",
+      "returned": 27,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-retry",
+      "query": "how does the webhook retry policy work?",
+      "returned": 2,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-harness",
+      "query": "how do the integration tests run?",
+      "returned": 49,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-cache",
+      "query": "what cache layer is in place for the export pipeline?",
+      "returned": 4,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-embed",
+      "query": "how do portal pages embed external dashboards?",
+      "returned": 12,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-migrate",
+      "query": "how do we run schema migrations?",
+      "returned": 37,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-login",
+      "query": "how does cli login work?",
+      "returned": 1,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-http",
+      "query": "what http client do outbound gateway calls use?",
+      "returned": 25,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-render2",
+      "query": "how are preview documents displayed?",
+      "returned": 3,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-cache2",
+      "query": "is there any caching on exports?",
+      "returned": 0,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-login2",
+      "query": "authentication flow for the cli",
+      "returned": 1,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-http2",
+      "query": "which library handles outbound gateway requests?",
+      "returned": 1,
+      "leakedRefs": []
+     },
+     {
+      "id": "neut-embed2",
+      "query": "external dashboards inside portal pages — supported?",
+      "returned": 12,
+      "leakedRefs": []
+     }
+    ],
+    "failureRows": [
+     {
+      "id": "fail-tried",
+      "query": "what did we try that failed?",
+      "requiredRefs": [
+       "lcb09@t2",
+       "lcb10@t2",
+       "lcb11@t2"
+      ],
+      "foundRefs": [
+       "lcb09@t2",
+       "lcb10@t2",
+       "lcb11@t2"
+      ]
+     },
+     {
+      "id": "fail-reverted",
+      "query": "which approaches did we revert?",
+      "requiredRefs": [
+       "lcb09@t2",
+       "lcb10@t2",
+       "lcb11@t2"
+      ],
+      "foundRefs": [
+       "lcb09@t2",
+       "lcb10@t2",
+       "lcb11@t2"
+      ]
+     },
+     {
+      "id": "fail-iframe",
+      "query": "did the iframe embed attempt go wrong?",
+      "requiredRefs": [
+       "lcb10@t2"
+      ],
+      "foundRefs": [
+       "lcb10@t2"
+      ]
+     },
+     {
+      "id": "fail-migrate",
+      "query": "show me the wrong path we took with the schema migration",
+      "requiredRefs": [
+       "lcb11@t2"
+      ],
+      "foundRefs": [
+       "lcb11@t2"
+      ]
+     },
+     {
+      "id": "fail-deadend",
+      "query": "which attempts turned out to be dead ends?",
+      "requiredRefs": [
+       "lcb09@t2",
+       "lcb10@t2",
+       "lcb11@t2"
+      ],
+      "foundRefs": [
+       "lcb09@t2",
+       "lcb10@t2",
+       "lcb11@t2"
+      ]
+     },
+     {
+      "id": "fail-brittle",
+      "query": "which attempt proved brittle on export caching?",
+      "requiredRefs": [
+       "lcb09@t2"
+      ],
+      "foundRefs": [
+       "lcb09@t2"
+      ]
+     },
+     {
+      "id": "fail-flop",
+      "query": "which experiment flopped on the embeds?",
+      "requiredRefs": [
+       "lcb10@t2"
+      ],
+      "foundRefs": [
+       "lcb10@t2"
+      ]
+     },
+     {
+      "id": "fail-abandon",
+      "query": "what did we abandon during the migration work?",
+      "requiredRefs": [
+       "lcb11@t2"
+      ],
+      "foundRefs": [
+       "lcb11@t2"
+      ]
+     }
+    ],
+    "ir": {
+     "probes": 24,
+     "recall5": 0.9722222222222223,
+     "recall10": 1,
+     "mrr": 0.8729166666666667,
+     "ndcg10": 0.9095247628457878,
+     "perProbe": [
+      {
+       "id": "neut-renderer",
+       "expected": [
+        "lcb02@t3"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-config",
+       "expected": [
+        "lcb04@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-retry",
+       "expected": [
+        "lcb06@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-harness",
+       "expected": [
+        "lcb08@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-login",
+       "expected": [
+        "lcb12@t3"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-http",
+       "expected": [
+        "lcb13@t6"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-render2",
+       "expected": [
+        "lcb02@t3"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-login2",
+       "expected": [
+        "lcb12@t3"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "neut-http2",
+       "expected": [
+        "lcb13@t6"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "fail-tried",
+       "expected": [
+        "lcb09@t2",
+        "lcb10@t2",
+        "lcb11@t2"
+       ],
+       "ranks": [
+        1,
+        2,
+        3
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "fail-reverted",
+       "expected": [
+        "lcb09@t2",
+        "lcb10@t2",
+        "lcb11@t2"
+       ],
+       "ranks": [
+        1,
+        2,
+        3
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "fail-iframe",
+       "expected": [
+        "lcb10@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "fail-migrate",
+       "expected": [
+        "lcb11@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "fail-deadend",
+       "expected": [
+        "lcb09@t2",
+        "lcb10@t2",
+        "lcb11@t2"
+       ],
+       "ranks": [
+        5,
+        6,
+        7
+       ],
+       "recall5": 0.3333333333333333,
+       "recall10": 1,
+       "mrr": 0.2,
+       "ndcg10": 0.5051284895111403
+      },
+      {
+       "id": "fail-brittle",
+       "expected": [
+        "lcb09@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "fail-flop",
+       "expected": [
+        "lcb10@t2"
+       ],
+       "ranks": [
+        4
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 0.25,
+       "ndcg10": 0.43067655807339306
+      },
+      {
+       "id": "fail-abandon",
+       "expected": [
+        "lcb11@t2"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "temp-renderer",
+       "expected": [
+        "lcb01@t3"
+       ],
+       "ranks": [
+        2
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 0.5,
+       "ndcg10": 0.6309297535714575
+      },
+      {
+       "id": "temp-config",
+       "expected": [
+        "lcb03@t3"
+       ],
+       "ranks": [
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "temp-retry",
+       "expected": [
+        "lcb05@t3"
+       ],
+       "ranks": [
+        2
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 0.5,
+       "ndcg10": 0.6309297535714575
+      },
+      {
+       "id": "temp-harness",
+       "expected": [
+        "lcb07@t2"
+       ],
+       "ranks": [
+        2
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 0.5,
+       "ndcg10": 0.6309297535714575
+      },
+      {
+       "id": "agg-auth-logging",
+       "expected": [
+        "lcb12@t3",
+        "lcb13@t3"
+       ],
+       "ranks": [
+        2,
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "agg-config-retry",
+       "expected": [
+        "lcb04@t2",
+        "lcb06@t2"
+       ],
+       "ranks": [
+        2,
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      },
+      {
+       "id": "agg-preview-tests",
+       "expected": [
+        "lcb02@t3",
+        "lcb08@t2"
+       ],
+       "ranks": [
+        2,
+        1
+       ],
+       "recall5": 1,
+       "recall10": 1,
+       "mrr": 1,
+       "ndcg10": 1
+      }
+     ]
+    },
+    "temporal": {
+     "rows": [
+      {
+       "id": "temp-renderer",
+       "query": "what did we decide before the static-html renderer switch?",
+       "expectedOldRefs": [
+        "lcb01@t3"
+       ],
+       "found": [
+        "lcb01@t3"
+       ]
+      },
+      {
+       "id": "temp-config",
+       "query": "which config format did we use previously?",
+       "expectedOldRefs": [
+        "lcb03@t3"
+       ],
+       "found": [
+        "lcb03@t3"
+       ]
+      },
+      {
+       "id": "temp-retry",
+       "query": "what was the webhook retry policy before the backoff change?",
+       "expectedOldRefs": [
+        "lcb05@t3"
+       ],
+       "found": [
+        "lcb05@t3"
+       ]
+      },
+      {
+       "id": "temp-harness",
+       "query": "what's the history of the integration test harness?",
+       "expectedOldRefs": [
+        "lcb07@t2"
+       ],
+       "found": [
+        "lcb07@t2"
+       ]
+      }
+     ],
+     "passRate": 1
+    },
+    "aggregation": {
+     "rows": [
+      {
+       "id": "agg-auth-logging",
+       "query": "how do cli login and the log pipeline work?",
+       "expectedRefs": [
+        "lcb12@t3",
+        "lcb13@t3"
+       ],
+       "ranks": [
+        2,
+        1
+       ],
+       "bothInTop5": true
+      },
+      {
+       "id": "agg-config-retry",
+       "query": "what did we settle for the config format and the webhook retry policy?",
+       "expectedRefs": [
+        "lcb04@t2",
+        "lcb06@t2"
+       ],
+       "ranks": [
+        2,
+        1
+       ],
+       "bothInTop5": true
+      },
+      {
+       "id": "agg-preview-tests",
+       "query": "which preview renderer ships, and what runs the integration tests?",
+       "expectedRefs": [
+        "lcb02@t3",
+        "lcb08@t2"
+       ],
+       "ranks": [
+        2,
+        1
+       ],
+       "bothInTop5": true
+      }
+     ],
+     "passRate": 1,
+     "maxRankNeeded": 2
+    },
+    "abstention": {
+     "rows": [
+      {
+       "id": "abs-kubernetes",
+       "query": "anything about kubernetes?",
+       "hits": 0
+      },
+      {
+       "id": "abs-billing",
+       "query": "did billing invoices surface anywhere?",
+       "hits": 0
+      },
+      {
+       "id": "abs-darktheme",
+       "query": "was the dark theme ever discussed?",
+       "hits": 0
+      },
+      {
+       "id": "abs-websocket",
+       "query": "any mention of websocket presence?",
+       "hits": 0
+      }
+     ],
+     "falseHits": 0,
+     "floorPresent": true
+    },
+    "gradedBlocks": [
+     {
+      "ref": "lcb01@t3",
+      "expected": "superseded",
+      "actual": "superseded",
+      "control": false,
+      "blockId": "lcb01:1"
+     },
+     {
+      "ref": "lcb02@t3",
+      "expected": "valid",
+      "actual": "valid",
+      "control": false,
+      "blockId": "lineage:lcb02:1"
+     },
+     {
+      "ref": "lcb03@t3",
+      "expected": "superseded",
+      "actual": "superseded",
+      "control": false,
+      "blockId": "lineage:lcb03:1"
+     },
+     {
+      "ref": "lcb04@t2",
+      "expected": "valid",
+      "actual": "valid",
+      "control": false,
+      "blockId": "lineage:lcb04:1"
+     },
+     {
+      "ref": "lcb05@t3",
+      "expected": "superseded",
+      "actual": "superseded",
+      "control": false,
+      "blockId": "lineage:lcb05:1"
+     },
+     {
+      "ref": "lcb06@t2",
+      "expected": "valid",
+      "actual": "valid",
+      "control": false,
+      "blockId": "lineage:lcb06:1"
+     },
+     {
+      "ref": "lcb07@t2",
+      "expected": "superseded",
+      "actual": "superseded",
+      "control": false,
+      "blockId": "lineage:lcb07:1"
+     },
+     {
+      "ref": "lcb08@t2",
+      "expected": "valid",
+      "actual": "valid",
+      "control": false,
+      "blockId": "lineage:lcb08:1"
+     },
+     {
+      "ref": "lcb09@t2",
+      "expected": "failed",
+      "actual": "failed",
+      "control": false,
+      "blockId": "lineage:lcb09:1"
+     },
+     {
+      "ref": "lcb10@t2",
+      "expected": "failed",
+      "actual": "failed",
+      "control": false,
+      "blockId": "lineage:lcb10:1"
+     },
+     {
+      "ref": "lcb11@t2",
+      "expected": "failed",
+      "actual": "failed",
+      "control": false,
+      "blockId": "lineage:lcb11:1"
+     },
+     {
+      "ref": "lcb12@t3",
+      "expected": "valid",
+      "actual": "valid",
+      "control": true,
+      "blockId": "lineage:lcb12:1"
+     },
+     {
+      "ref": "lcb12@t6",
+      "expected": "valid",
+      "actual": "valid",
+      "control": true,
+      "blockId": "lineage:lcb12:5"
+     },
+     {
+      "ref": "lcb13@t3",
+      "expected": "valid",
+      "actual": "valid",
+      "control": true,
+      "blockId": "lineage:lcb13:3"
+     },
+     {
+      "ref": "lcb13@t6",
+      "expected": "valid",
+      "actual": "valid",
+      "control": true,
+      "blockId": "lineage:lcb13:5"
+     },
+     {
+      "ref": "lcb14@t2",
+      "expected": "speculative",
+      "actual": "speculative",
+      "control": false,
+      "blockId": "lineage:lcb14:1"
+     },
+     {
+      "ref": "lcb14@t3",
+      "expected": "speculative",
+      "actual": "speculative",
+      "control": false,
+      "blockId": "lineage:lcb14:1"
+     }
+    ]
+   },
+   "gates": [
+    {
+     "name": "state accuracy ≥90% per class",
+     "value": "valid=100% superseded=100% failed=100% speculative=100%",
+     "pass": true
+    },
+    {
+     "name": "false demotions = 0",
+     "value": "0 (valid controls)",
+     "pass": true
+    },
+    {
+     "name": "supersession pair recall ≥80%",
+     "value": "100% (4/4)",
+     "pass": true
+    },
+    {
+     "name": "leak rate ≤10%",
+     "value": "0% (0/175 ranked results)",
+     "pass": true
+    },
+    {
+     "name": "IR Recall@5 ≥0.80",
+     "value": "0.972 (24 probes w/ expected refs)",
+     "pass": true
+    },
+    {
+     "name": "IR MRR ≥0.60",
+     "value": "0.873",
+     "pass": true
+    },
+    {
+     "name": "IR nDCG@10 ≥0.70",
+     "value": "0.910",
+     "pass": true
+    },
+    {
+     "name": "temporal: ≥1 old ref surfaced =100%",
+     "value": "100% (4/4)",
+     "pass": true
+    },
+    {
+     "name": "aggregation: both refs in top-5 =100%",
+     "value": "100% (3/3)",
+     "pass": true
+    },
+    {
+     "name": "abstention: 0 false hits",
+     "value": "0 hits across 4 absent-topic probes (score floor: present)",
+     "pass": true
+    },
+    {
+     "name": "scale: IR Recall@10 ≥0.70",
+     "value": "1.000",
+     "pass": true
+    }
+   ]
   }
- ]
+ ],
+ "gatesAllPass": true
 }
