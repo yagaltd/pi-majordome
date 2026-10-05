@@ -238,6 +238,11 @@ npx tsx tools/lifecyclebench.ts       # the 10-gate harness, both tiers
 
 ### Governance
 
+- **Judge-cost telemetry** — every judge call trails (including fail-opens);
+  `/majordome stats` aggregates the trail: calls, ok/fail-open split, calls per
+  turn (last 100), est. tokens where the engine reports usage. Doctor notes
+  judge creep (>3 calls/turn avg). Gap rule: an untrailed judge site fails
+  selfcheck.
 - **Judgment trail** — every judge verdict appends to
   `~/.pi/majordome/trails.jsonl` (never message text); consumed by
   calibration and future audits. Override: `MAJORDOME_TRAIL_FILE`. Fail-open.
