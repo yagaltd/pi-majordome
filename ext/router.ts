@@ -257,7 +257,7 @@ export function judgeLine(why: string, mode: "soft" | "strict" = "soft"): string
 
 const SHAPE_HINTS: Record<Exclude<OutputShape, "default">, string> = {
 	terse: "answer in a few sentences max — no preamble, no restating the question.",
-	"diagram-first": "lead with a mermaid or ascii graph; prose short.",
+	"diagram-first": "lead with a mermaid or ascii graph; prose short. Node labels stay on ONE line — use <br/> for breaks, never raw newlines inside quotes.",
 	table: "lead with a comparison table; one row per option, one column per attribute.",
 	walkthrough: "numbered steps in order; state the check between steps.",
 	artifact: "shape the answer as one self-contained artifact (doc/plan/design) the user can keep.",

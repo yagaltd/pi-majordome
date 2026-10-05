@@ -178,6 +178,10 @@ extension custom entries). majordome adds the classified layer on top.
   tried-and-failed); recall filters default-valid (failed/superseded surface on explicit
   "what did we try" queries); doctor reports the distribution. Runs as sidecar job or at
   recall time. Gate: map maturity from the dogfood stretch.
+- **Concept Cells** (named; gated on organic graph maturity) — Leiden over the
+  consolidation pair-affinity graph (jaccard ∨ dims-cosine edges already
+  computed), persist cellId + per-cell summary; recall gains expansion (hit →
+  cell siblings + summary). Name honors the CognitiveOS concept-cell lineage.
 - open for review: worker dispatch protocol UX (Herdr panes vs headless), sidecar adoption as
   default-on, consolidation (v2.4) still gated on the map
 
