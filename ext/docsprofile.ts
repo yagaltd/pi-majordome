@@ -195,6 +195,35 @@ export function seedDocsCursor(
 	return { next, seeded };
 }
 
+// ── shared sources (v2.9): the cross-project doc drop-dir ─────────────────
+
+/** A repo can expose docs for cross-project recall by dropping *.md files
+ * under <cwd>/.majordome-shared/. They are THIRD-PARTY text: not written by
+ * a judged session turn in this repo, so every block they produce carries
+ * fromUntrusted: true (store.ts) and their recall lines read '· unverified
+ * source'. Ingested by the same /majordome ingest-docs sweep as configured
+ * docs-sources.json paths (ext/ingest_docs.ts), so the shared dir needs no
+ * separate command — drop files, sweep, recalled marked unverified. */
+export const SHARED_SOURCES_DIR = ".majordome-shared";
+
+/** True when a path points INTO a shared-sources dir (the marker segment is
+ * the path boundary `/.majordome-shared/`). */
+export function isSharedSourcePath(p: string): boolean {
+	return p.includes(`/${SHARED_SOURCES_DIR}/`);
+}
+
+/** The *.md files in <cwd>/.majordome-shared/ (flat, sorted for determinism).
+ * Absent dir → empty list (ingest stays a no-op). */
+export function listSharedSources(cwd: string): string[] {
+	const dir = join(cwd, SHARED_SOURCES_DIR);
+	if (!existsSync(dir) || !statSync(dir).isDirectory()) return [];
+	try {
+		return readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".md")).sort().map((f) => join(dir, f));
+	} catch {
+		return []; // unreadable dir → nothing shared
+	}
+}
+
 /** The one compact init adoption line, e.g.
  * "docs adopted: README ← 2026-09-30, CHANGELOG ← 2026-10-01 (cursors seeded)". */
 export function adoptionLine(seeded: SeedFinding[]): string {

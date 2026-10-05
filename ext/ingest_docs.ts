@@ -12,6 +12,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { tokens } from "./core.ts";
+import { listSharedSources } from "./docsprofile.ts";
 import { appendBlock, loadBlocks, rewriteBlocks, type Block } from "./store.ts";
 
 export function sourcesFile(): string {
@@ -38,8 +39,12 @@ function parseFrontmatter(text: string): { meta: Record<string, string>; body: s
 	return { meta, body, bodyStart };
 }
 
-/** Ingest all configured sources. Returns {files, blocks} actually stored. */
-export function ingestDocs(): { files: number; blocks: number } {
+/** Ingest all configured sources PLUS the repo's .majordome-shared/ drop-dir
+ * (ext/docsprofile.ts). Every ingested block — configured doc or shared
+ * source — carries fromUntrusted: true (store.ts): it never passed through a
+ * judged session turn, so recall lines mark it '· unverified source'.
+ * Returns {files, blocks} actually stored. */
+export function ingestDocs(cwd: string = process.cwd()): { files: number; blocks: number } {
 	let paths: string[] = [];
 	const f = sourcesFile();
 	if (existsSync(f)) {
@@ -49,7 +54,7 @@ export function ingestDocs(): { files: number; blocks: number } {
 			return { files: 0, blocks: 0 };
 		}
 	}
-	const files = paths.flatMap(listMd);
+	const files = [...new Set([...paths, ...listSharedSources(cwd)])].flatMap(listMd);
 	let stored = 0;
 	for (const file of files) {
 		const base = file.split("/").pop()!.replace(/\.md$/, "");
@@ -86,6 +91,7 @@ export function ingestDocs(): { files: number; blocks: number } {
 				tokensHybrid: [...tokens(text)],
 				head: `[doc] ${meta.title ?? base} § ${sec.title}`,
 				closedAt: mtime,
+				fromUntrusted: true, // ingest-channel provenance: recall lines add '· unverified source'
 			};
 			appendBlock(b);
 			stored++;

@@ -7,13 +7,14 @@
  *   npx tsx ext/selfcheck.ts            # assertions
  *   npx tsx ext/selfcheck.ts --parity   # + replay parity vs bench/key.json
  */
-import { writeFileSync, mkdtempSync } from "node:fs";
+import { writeFileSync, mkdtempSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSession, tokens, jaccard, detectBoundaries, blockCores, bm25Rank, federatedOrder, cosineVec } from "./core.ts";
 import { parseDims, routingIntent, setClassifyFn, resetClassifyFn } from "./judges.ts";
 import { timeTravel, rankArm, route, injectionText, judgeLine, docsNudge, scanDocsTouched, armFor, slugScopeFrom, slugOfBlock } from "./router.ts";
 import { resolveWorkerRef } from "./orch.ts";
+import { ingestDocs } from "./ingest_docs.ts";
 import { composeKind, digest, filterBlocks } from "./docs.ts";
 import type { Block } from "./store.ts";
 
@@ -514,6 +515,15 @@ if (process.argv.includes("--parity")) {
 	const vTab = await shapeVerdict("compare the regex parser and the combinator parser");
 	check("shape: canned Jev choice parses to a verdict", vTab?.shape === "table");
 	check("shape: default verdict → zero injection (null line)", shapeHintLine("default", "ok") === null && shapeHintLine("table", "comparing parsers") !== null);
+
+	// user.md fixture must exist BEFORE the preference-context judge below:
+	// userPrefLines() reads MAJORDOME_USER_FILE at judge time (cached per
+	// session), so the env has to be in place first
+	const userFile = join(tmp, "user-fixture.md");
+	writeFileSync(userFile, "# personal rules (comment line)\n\n- Prefer a diagram over prose for flow questions.\n- Keep answers STE-80 short.\n");
+	process.env.MAJORDOME_USER_FILE = userFile;
+	resetUserPrefs();
+
 	let seenState: any = null;
 	setClassifyFn(async (state) => {
 		seenState = state;
@@ -539,12 +549,8 @@ if (process.argv.includes("--parity")) {
 	resetClassifyFn();
 	check("shape: malformed/empty/thrown judge answers → null (fail-open)", vBad === null && vEmpty === null && !throwThrew && vThrow === null);
 
-	// user.md preference context: read, comments stripped, missing → none,
-	// cached per session until resetUserPrefs()
-	const userFile = join(tmp, "user-fixture.md");
-	writeFileSync(userFile, "# personal rules (comment line)\n\n- Prefer a diagram over prose for flow questions.\n- Keep answers STE-80 short.\n");
-	process.env.MAJORDOME_USER_FILE = userFile;
-	resetUserPrefs();
+	// user.md preference context: lines read, comments/blanks stripped, cache
+	// per session until resetUserPrefs() (fixture + env set up above)
 	const lines1 = userPrefLines();
 	writeFileSync(userFile, "- rewritten on disk after the cache\n");
 	const lines2 = userPrefLines(); // same process → cached
@@ -638,6 +644,47 @@ if (process.argv.includes("--parity")) {
 	writeFileSync(trailPath, "");
 	check("telemetry: contradicts/docsVerdict/shapeVerdict/lifecycleVerdict make no call when unconfigured", (await jm.contradicts("q", "g")) === false && (await jm.docsVerdict("work")) === null && (await jm.shapeVerdict("msg", [])) === null && (await jm.lifecycleVerdict("a", "b")) === null && rfs(trailPath, "utf8").trim() === "");
 	delete process.env.MAJORDOME_DIR;
+}
+
+// ── v2.9 slice 1: fromUntrusted provenance (ingest/shared channels) ──
+{
+	process.env.MAJORDOME_DIR = join(tmp, "provenance-store");
+	process.env.MAJORDOME_TRAIL_FILE = join(tmp, "provenance-trails.jsonl");
+	const store1 = await import("./store.ts");
+	const { isSharedSourcePath, listSharedSources, SHARED_SOURCES_DIR } = await import("./docsprofile.ts");
+	const { mkdirSync: mkd } = await import("node:fs");
+
+	// fixture: one configured docs source + one shared drop-dir file, different repos
+	const repoD = join(tmp, "prov-docs");
+	const repoS = join(tmp, "prov-shared");
+	mkd(repoD, { recursive: true });
+	mkd(join(repoS, SHARED_SOURCES_DIR), { recursive: true });
+	writeFileSync(join(repoD, "adr-notes.md"), "# ADR notes\n\n## Renderer decision\n\nWe confirmed the webview panel is the docs preview renderer for all exports.\n");
+	writeFileSync(join(repoS, SHARED_SOURCES_DIR, "shared-api.md"), "# Shared API\n\n## Auth contract\n\nThe service token rotates every twelve hours; cache it with the refresh jitter noted here.\n");
+	process.env.MAJORDOME_DOCS_SOURCES = join(tmp, "docs-sources.json");
+	writeFileSync(process.env.MAJORDOME_DOCS_SOURCES, JSON.stringify({ paths: [repoD] }));
+
+	check("shared sources: drop-dir listed, sorted, md-only", JSON.stringify(listSharedSources(repoS)) === JSON.stringify([join(repoS, SHARED_SOURCES_DIR, "shared-api.md")]) && listSharedSources(repoD).length === 0 && listSharedSources(join(tmp, "missing-dir")).length === 0);
+	check("shared sources: boundary predicate", isSharedSourcePath(join(repoS, SHARED_SOURCES_DIR, "shared-api.md")) && !isSharedSourcePath("/x/majordome-shared/y.md") && !isSharedSourcePath("/x/docs/api.md"));
+
+	const ing = ingestDocs(repoS);
+	check("ingest: configured + shared files stored", ing.files === 2 && ing.blocks === 2);
+	const stored = store1.loadBlocks();
+	check("ingest: doc-source blocks carry fromUntrusted", stored.filter((b) => b.session === "doc:adr-notes").every((b) => b.fromUntrusted === true));
+	check("ingest: .majordome-shared blocks carry fromUntrusted", stored.filter((b) => b.session === "doc:shared-api").every((b) => b.fromUntrusted === true));
+	// lenient parse: non-boolean fromUntrusted junk reads absent (same class as status)
+	appendFileSync(join(process.env.MAJORDOME_DIR!, "blocks.jsonl"), JSON.stringify({ id: "junk:1", session: "junk", sessionFile: "/x/j.jsonl", firstTurn: 1, lastTurn: 2, gist: null, intent: null, dims: {}, tokensHybrid: [], head: "", closedAt: "", fromUntrusted: "yes", status: "garbage" }) + "\n");
+	const junk = store1.loadBlocks().find((x) => x.id === "junk:1");
+	check("lenient parse: non-boolean fromUntrusted junk reads absent", !!junk && junk.fromUntrusted === undefined && junk!.status === undefined);
+
+	// recall marker: flagged blocks marked, session blocks unaffected
+	const flagged = { ...mkBlock("docX", 1, 2, ["watcher"]), fromUntrusted: true };
+	check("recall marker: unverified source appended for flagged blocks", injectionText(flagged).includes("· unverified source"));
+	check("recall marker: session blocks stay trusted-class (no marker)", !injectionText(mkBlock("docX", 1, 2, ["watcher"])).includes("unverified source"));
+
+	delete process.env.MAJORDOME_DOCS_SOURCES;
+	delete process.env.MAJORDOME_DIR;
+	delete process.env.MAJORDOME_TRAIL_FILE;
 }
 
 if (failures) {

@@ -268,6 +268,9 @@ export function injectionText(w: Block, terms?: string, resume = false): string 
 	const bits = [`[majordome recall · ${slug} turns ${w.firstTurn}–${w.lastTurn}${when ? " · " + when : ""}]`];
 	if (w.gist) bits.push(w.gist);
 	if (w.intent) bits.push(`(intent: ${w.intent})`);
+	// provenance marker (v2.9): ingested/shared blocks never passed a judged
+	// session turn — the reader must see they are unverified
+	if (w.fromUntrusted) bits.push("· unverified source");
 	if (terms && terms.trim()) bits.push(`Read your request as: ${terms.trim().slice(0, 80)}.`);
 	if (resume) bits.push("This looks like work already done — resume it rather than redoing it.");
 	bits.push("If relevant, continue that thread; otherwise ignore.");

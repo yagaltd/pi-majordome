@@ -29,6 +29,13 @@ export interface Block {
 	head: string; // first user message snippet
 	closedAt: string;
 	status?: BlockStatus; // absent = valid (lenient parse below)
+	/** Provenance (v2.9): TRUE only for blocks ingested from outside the
+	 * session channels — ingest-docs sources and .majordome-shared/ shared
+	 * sources. Session blocks stay UNSET (trusted-class by decision: the
+	 * pi-guard/jev-guard pair covers the tool-call + instruction channels;
+	 * this flag covers the recall-amplification channel — content that never
+	 * passed through a judged session turn). Lenient parse below. */
+	fromUntrusted?: boolean;
 }
 
 export function statusOf(b: { status?: BlockStatus }): BlockStatus {
@@ -98,6 +105,8 @@ export function loadBlocks(): Block[] {
 			const b = JSON.parse(line) as Block;
 			// lenient lifecycle parse: unknown/corrupt status values read as valid
 			if (b.status !== undefined && !BLOCK_STATUSES.includes(b.status)) delete b.status;
+			// lenient provenance parse: non-boolean junk reads as absent
+			if (b.fromUntrusted !== undefined && typeof b.fromUntrusted !== "boolean") delete b.fromUntrusted;
 			out.push(b);
 		} catch {
 			// skip corrupt line (append-only file: never fatal)
