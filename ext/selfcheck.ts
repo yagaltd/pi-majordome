@@ -485,6 +485,80 @@ if (process.argv.includes("--parity")) {
 	delete process.env.MAJORDOME_DIR;
 }
 
+// ── outputShape routing (third axis) ──
+{
+	process.env.MAJORDOME_KEY_FILE = join(tmp, "no-key-on-purpose"); // hermetic
+	delete process.env.TYPELLM_API_KEY;
+	process.env.MAJORDOME_TRAIL_FILE = join(tmp, "shape-trails.jsonl");
+	const { shapeVerdict, userPrefLines, resetUserPrefs, OUTPUT_SHAPES } = await import("./judges.ts");
+	const { shapeHintLine } = await import("./router.ts");
+	resetClassifyFn();
+
+	check("shape: enum has the six ladder values", JSON.stringify(OUTPUT_SHAPES) === JSON.stringify(["default", "terse", "diagram-first", "table", "walkthrough", "artifact"]));
+	check("shape: hint line only for non-default shapes", shapeHintLine("default") === null && shapeHintLine("bogus") === null && (shapeHintLine("diagram-first") ?? "").startsWith("[majordome shape] diagram-first — "));
+	check("shape: hint is suggest-only advice, never a tool order", ![shapeHintLine("artifact"), shapeHintLine("walkthrough"), shapeHintLine("table")].some((l) => /\b(run|execute|invoke|call)\b/i.test(l ?? "")));
+
+	// fail-open: no key + no classifier → null (never throws, never guesses)
+	let shapeThrew = false;
+	let shapeOffline: unknown = "sentinel";
+	try {
+		shapeOffline = await shapeVerdict("explain the recall pipeline", []);
+	} catch {
+		shapeThrew = true;
+	}
+	check("shape: offline fail-open null (never throws)", !shapeThrew && shapeOffline === null);
+
+	// canned Jev verdicts parse through the same settle path; malformed → null
+	setClassifyFn(async () => ({ model: "canned", answers: { shape: { choice: "table" } } }));
+	const vTab = await shapeVerdict("compare the regex parser and the combinator parser");
+	check("shape: canned Jev choice parses to a verdict", vTab?.shape === "table");
+	check("shape: default verdict → zero injection (null line)", shapeHintLine("default", "ok") === null && shapeHintLine("table", "comparing parsers") !== null);
+	let seenState: any = null;
+	setClassifyFn(async (state) => {
+		seenState = state;
+		return { model: "canned", answers: { shape: { choice: "diagram-first" } } };
+	});
+	const vDia = await shapeVerdict("explain the recall pipeline");
+	resetClassifyFn();
+	check("shape: preference context reaches the judge state", vDia?.shape === "diagram-first" && String(seenState?.prefs ?? "").includes("diagram"));
+	setClassifyFn(async () => ({ model: "canned", answers: { shape: "diagram" } })); // not in enum
+	const vBad = await shapeVerdict("anything");
+	setClassifyFn(async () => ({ model: "canned", answers: {} }));
+	const vEmpty = await shapeVerdict("anything");
+	setClassifyFn(async () => {
+		throw new Error("transport down");
+	});
+	let vThrow: unknown = "sentinel";
+	let throwThrew = false;
+	try {
+		vThrow = await shapeVerdict("anything");
+	} catch {
+		throwThrew = true;
+	}
+	resetClassifyFn();
+	check("shape: malformed/empty/thrown judge answers → null (fail-open)", vBad === null && vEmpty === null && !throwThrew && vThrow === null);
+
+	// user.md preference context: read, comments stripped, missing → none,
+	// cached per session until resetUserPrefs()
+	const userFile = join(tmp, "user-fixture.md");
+	writeFileSync(userFile, "# personal rules (comment line)\n\n- Prefer a diagram over prose for flow questions.\n- Keep answers STE-80 short.\n");
+	process.env.MAJORDOME_USER_FILE = userFile;
+	resetUserPrefs();
+	const lines1 = userPrefLines();
+	writeFileSync(userFile, "- rewritten on disk after the cache\n");
+	const lines2 = userPrefLines(); // same process → cached
+	resetUserPrefs();
+	const lines3 = userPrefLines(); // re-read
+	process.env.MAJORDOME_USER_FILE = join(tmp, "definitely-missing-user.md");
+	resetUserPrefs();
+	const lines4 = userPrefLines();
+	resetUserPrefs();
+	delete process.env.MAJORDOME_USER_FILE;
+	delete process.env.MAJORDOME_TRAIL_FILE;
+	check("shape: user.md lines read, comments/blanks stripped", lines1.length === 2 && lines1[0].includes("diagram") && !lines1.join("|").includes("personal rules"));
+	check("shape: prefs cached per session until reset", lines2.length === 2 && lines3.length === 1 && lines4.length === 0);
+}
+
 if (failures) {
 	console.error(`\n${failures} failure(s)`);
 	process.exit(1);

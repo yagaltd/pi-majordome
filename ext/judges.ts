@@ -18,6 +18,7 @@ import { homedir } from "node:os";
 import { createInterface } from "node:readline";
 import { dirname, join } from "node:path";
 import { trail } from "./trail.ts";
+import { majordomeDir } from "./store.ts";
 
 export const HOSTED_URL = "https://api.typellm.ai";
 const TIMEOUT_MS = 30_000;
@@ -36,7 +37,9 @@ export function loadKey(): string | null {
 
 // ── TypeLLM transport ───────────────────────────────────────────────────────
 
-async function generate(
+/** Exported for bench seams that must ride the exact judge transport
+ * (shapebench live tier: draft/grade shaped-vs-default answers). */
+export async function generate(
 	context: string,
 	questions: Record<string, unknown>,
 	recent?: string,
@@ -396,6 +399,124 @@ export async function docsVerdict(work: string): Promise<DocsVerdict | null> {
 			return res?.answers ? settle(res.answers, "jev") : null;
 		} catch {
 			trail("docsVerdict", { judge: "jev", ok: false });
+			return null;
+		}
+	}
+	return null;
+}
+
+// ── output-shape verdict (the third routing axis) ───────────────────────
+
+export const OUTPUT_SHAPES = ["default", "terse", "diagram-first", "table", "walkthrough", "artifact"] as const;
+export type OutputShape = (typeof OUTPUT_SHAPES)[number];
+
+export interface ShapeVerdict {
+	shape: OutputShape;
+	why: string; // one line, ≤80 chars
+}
+
+function shapeOf(v: unknown): OutputShape | null {
+	if (typeof v !== "string" && typeof (v as any)?.choice !== "string") return null;
+	const s = (typeof v === "string" ? v : (v as any).choice).trim().toLowerCase();
+	return (OUTPUT_SHAPES as readonly string[]).includes(s) ? (s as OutputShape) : null;
+}
+
+const SHAPE_INSTRUCTIONS =
+	"Pick the OUTPUT SHAPE this user message calls for in a coding-agent chat, given the user's standing preferences. " +
+	"default: an ordinary mixed prose/code answer — including continuations (go, ok, continue), direct small tasks, and short factual questions. " +
+	"terse: the user explicitly wants it short (just tell me, one line, tl;dr, short, quick) — a few sentences at most. " +
+	"diagram-first: explains how something works — architecture, data/control flow, structure — the answer should LEAD with a graph (mermaid or ascii). " +
+	"table: compares two or more options or attributes side by side (compare X and Y, pros and cons, which should we pick). " +
+	"artifact: a substantial self-contained deliverable the user will keep (design note, plan, doc). 'Walk me through the whole design' or 'the overall design of X' asks for exactly this — a full write-up of the whole thing — even when phrased as 'walk me through'. " +
+	"walkthrough: a step-by-step procedure or cause-chain narrative (how do I get from A to B, why did X fail, walk me through a concrete how-to). " +
+	"When torn between shapes, choose default.";
+
+function settleShape(res: Record<string, unknown>, judge: string): ShapeVerdict | null {
+	const shape = shapeOf(res.shape);
+	if (!shape) {
+		trail("shapeVerdict", { judge, ok: false }); // fail-open: unparseable is null, never a guessed shape
+		return null;
+	}
+	const whyRaw = typeof res.why === "string" ? res.why : typeof (res.why as any)?.choice === "string" ? (res.why as any).choice : "";
+	const out: ShapeVerdict = { shape, why: whyRaw.replace(/\s+/g, " ").trim().slice(0, 80) };
+	trail("shapeVerdict", { judge, ok: true, shape: out.shape, why: out.why }); // never message text
+	return out;
+}
+
+/** Preference lines for shape judgment: user.md under the majordome dir (or
+ * MAJORDOME_USER_FILE override) — the user's standing output rules (e.g.
+ * STE-80% wording, diagram-first). Comment/blank lines stripped, capped at
+ * 12. Missing file = no context. Cached per session (process lifetime);
+ * resetUserPrefs() exists for benches and re-reads. */
+let userPrefsCache: string[] | null = null;
+export function resetUserPrefs(): void {
+	userPrefsCache = null;
+}
+export function userPrefLines(): string[] {
+	if (userPrefsCache) return userPrefsCache;
+	const f = process.env.MAJORDOME_USER_FILE?.trim() || join(majordomeDir(), "user.md");
+	try {
+		userPrefsCache = readFileSync(f, "utf8")
+			.split("\n")
+			.map((l) => l.trim())
+			.filter((l) => l && !l.startsWith("#"))
+			.slice(0, 12);
+	} catch {
+		userPrefsCache = []; // missing file = no context
+	}
+	return userPrefsCache;
+}
+
+/** Pre-turn OUTPUT-SHAPE verdict on the user message (third routing axis:
+ * intent decides WHAT to recall, dims/BM25 WHERE from, shape HOW to answer).
+ * A separate small call in the docsVerdict pattern, NOT a routingIntent
+ * field: routingIntent early-returns null on continuation and malformed
+ * intents (both ladder paths), which would silently drop a valid shape
+ * answer, and its injected-judge seam threads through route()'s pure
+ * retrieval logic and every bench call site. Fail-open null (no judges,
+ * error, unparseable) → the caller injects nothing — byte-identical
+ * behavior. Suggest-only downstream: the tail hint ADVISES the agent, never
+ * invokes tools. The verdict lands on the trail (shape + why), never message
+ * text. */
+export async function shapeVerdict(userMessage: string, prefLines: string[] = userPrefLines()): Promise<ShapeVerdict | null> {
+	const pref = prefLines.length ? `\n\n[user's standing output preferences]\n${prefLines.join("\n").slice(0, 800)}` : "";
+	if (loadKey()) {
+		const r = await generate(`[user message]\n${userMessage.slice(0, 1500)}${pref}`, {
+			shape: { type: "string", enum: [...OUTPUT_SHAPES], instructions: SHAPE_INSTRUCTIONS },
+			why: { type: "string", instructions: "One-line reason, max 12 words." },
+		});
+		if (!r?.result) {
+			trail("shapeVerdict", { judge: "typellm", ok: false });
+			return null;
+		}
+		return settleShape(r.result, "typellm");
+	}
+	if (classifyFn) {
+		try {
+			const res = await classifyFn(
+				{ msg: userMessage.slice(0, 500), prefs: prefLines.join(" | ").slice(0, 500) },
+				{
+					shape: {
+						type: "choice",
+						instructions: SHAPE_INSTRUCTIONS,
+						criteria: {
+							default: "ordinary answer; continuations, direct small tasks, short factual questions",
+							terse: "explicit brevity ask (just tell me, one line, tl;dr, short, quick)",
+							"diagram-first": "architecture/flow/structure explanation — lead with a graph",
+							table: "side-by-side comparison of options or attributes",
+							walkthrough: "step-by-step procedure or cause-chain (how-to, why did X fail)",
+							artifact: "substantial self-contained deliverable to keep (design note, plan)",
+						},
+					},
+				},
+			);
+			if (!res?.answers) {
+				trail("shapeVerdict", { judge: "jev", ok: false });
+				return null;
+			}
+			return settleShape(res.answers, "jev");
+		} catch {
+			trail("shapeVerdict", { judge: "jev", ok: false });
 			return null;
 		}
 	}

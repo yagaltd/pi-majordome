@@ -13,7 +13,7 @@
  * Pure decision logic here; judges injected so tests run offline.
  */
 import { bm25Rank, federatedOrder, cosineVec, sessionSlug, shortTag, tokens } from "./core.ts";
-import type { RoutingIntent, DocsKind } from "./judges.ts";
+import { OUTPUT_SHAPES, type RoutingIntent, type DocsKind, type OutputShape } from "./judges.ts";
 import { statusOf, type Block } from "./store.ts";
 import { BUILTIN_DOC_WATCH, watchRegexFor } from "./docsprofile.ts";
 
@@ -236,6 +236,29 @@ export function judgeLine(why: string, mode: "soft" | "strict" = "soft"): string
 	const whyTxt = why && why !== "ok" ? ` (${why})` : "";
 	if (mode === "strict") return `[majordome judge] Your request looks underspecified${whyTxt}. Ask ONE clarifying question before starting long work.`;
 	return `[majordome judge] Possible ambiguity${whyTxt}. If your tools or the conversation don't resolve it, ask one clarifying question before long work.`;
+}
+
+// ── outputShape hint (the third routing axis, suggest-only) ─────────────────
+
+const SHAPE_HINTS: Record<Exclude<OutputShape, "default">, string> = {
+	terse: "answer in a few sentences max — no preamble, no restating the question.",
+	"diagram-first": "lead with a mermaid or ascii graph; prose short.",
+	table: "lead with a comparison table; one row per option, one column per attribute.",
+	walkthrough: "numbered steps in order; state the check between steps.",
+	artifact: "shape the answer as one self-contained artifact (doc/plan/design) the user can keep.",
+};
+
+/** Non-default shape → the one suggest-only tail hint. Advice to the AGENT —
+ * it decides, never a tool call and never an auto-generated artifact (same
+ * contract as judgeLine). Every hint carries the user's standing STE rule
+ * ("never drop facts for style"): shaping reformats, it never costs facts.
+ * default/unknown → null: zero injection, so a default verdict is
+ * byte-identical to the feature being off. */
+export function shapeHintLine(shape: string, why = ""): string | null {
+	if (!(OUTPUT_SHAPES as readonly string[]).includes(shape) || shape === "default") return null;
+	const hint = SHAPE_HINTS[shape as Exclude<OutputShape, "default">];
+	const w = why && why !== "ok" ? ` (${why})` : "";
+	return `[majordome shape] ${shape} — ${hint}${w} Keep every fact.`;
 }
 
 export function injectionText(w: Block, terms?: string, resume = false): string {

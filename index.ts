@@ -20,8 +20,8 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
-import { blockMeta, contradicts, dimVector, docsVerdict, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, hasJev, type DocsVerdict } from "./ext/judges.ts";
-import { cursorForDoc, cursorKey, docsNudge, injectionText, judgeLine, scanDocsTouched, shouldJudgeLine, route, verdictToNudge } from "./ext/router.ts";
+import { blockMeta, contradicts, dimVector, docsVerdict, hasJev, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, shapeVerdict, userPrefLines, type DocsVerdict } from "./ext/judges.ts";
+import { cursorForDoc, cursorKey, docsNudge, injectionText, judgeLine, scanDocsTouched, shapeHintLine, shouldJudgeLine, route, verdictToNudge } from "./ext/router.ts";
 import { BUILTIN_DOC_WATCH, resolveDocsProfile } from "./ext/docsprofile.ts";
 import { composeOnePager } from "./ext/onepager.ts";
 import { compileMap } from "./ext/map.ts";
@@ -41,6 +41,7 @@ interface St {
 	vocab: string[];
 	indexedKeys: Set<string>;
 	routeCache: { query: string; result: Awaited<ReturnType<typeof route>>; contraLine: string | null } | null;
+	shapeCache: { query: string; line: string | null } | null; // outputShape verdict per fresh user turn
 	uiCtx: { hasUI: boolean; ui: { setStatus(k: string, v: string): void } } | null;
 	injects: number;
 	judgeMode: "off" | "soft" | "strict";
@@ -58,6 +59,7 @@ const st: St = {
 	vocab: [],
 	indexedKeys: new Set(),
 	routeCache: null,
+	shapeCache: null,
 	uiCtx: null,
 	injects: 0,
 	judgeMode: (process.env.MAJORDOME_JUDGE as St["judgeMode"]) || "soft",
@@ -305,6 +307,27 @@ export default function majordome(pi: ExtensionAPI): void {
 			const lastUser = lastUserIdx >= 0 ? msgs[lastUserIdx] : undefined;
 			const query = lastUser ? textof(lastUser.content).trim() : "";
 			if (!query || query.startsWith("/") || query.startsWith("<")) return;
+
+			// outputShape routing (third axis): one judge call per fresh user message.
+			// Non-default shape → ONE suggest-only tail line (advice to the agent —
+			// never a tool call). Fail-open: judges off, no key/classifier, judge
+			// error, or verdict 'default' → nothing appended (byte-identical to
+			// before). user.md preference lines feed the judge as standing context.
+			// Judged on the bare message at this pre-turn seam — the same place the
+			// judge/contra tail lines land — so the hint can shape THIS turn's
+			// answer (turn_end would be too late).
+			if (st.judgeMode !== "off" && (loadKey() || hasJev())) {
+				if (!st.shapeCache || st.shapeCache.query !== query) {
+					let line: string | null = null;
+					try {
+						const v = await shapeVerdict(query, userPrefLines());
+						line = v ? shapeHintLine(v.shape, v.why) : null;
+					} catch { /* fail open — routing must never break a request */ }
+					st.shapeCache = { query, line };
+				}
+				if (st.shapeCache?.line) appendTail(lastUser, st.shapeCache.line);
+			}
+
 			if (!st.sessionFile || !loadKey()) return;
 
 			// one DAG route per user turn (tool loops re-fire context with the same message)
