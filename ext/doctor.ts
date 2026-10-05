@@ -72,7 +72,12 @@ export async function doctor(): Promise<string> {
 		else ok("no heavy index lag detected");
 	} else bad("sessions dir not found");
 
-	// 5. orchestrator worker paths
+	// 5. user.md (optional personal tier)
+	const umd = join(dir, "user.md");
+	if (!existsSync(umd)) L.push("· user.md: absent (optional — your cross-project preferences; create it and majordome injects it)");
+	else ok("user.md present (personal tier)");
+
+	// 6. orchestrator worker paths
 	try {
 		const oc = JSON.parse(readFileSync(join(dir, "orchestrator.json"), "utf8"));
 		const missing = (oc.workers ?? []).filter((w: any) => !existsSync(w.cwd));
