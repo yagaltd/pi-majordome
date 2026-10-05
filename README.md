@@ -117,6 +117,14 @@ repo's artifacts fresh.
 /majordome docs <custom> …               your template from ~/.pi/majordome/templates/
 ```
 
+**Adoption is brownfield-safe**: init seeds per-repo doc cursors from the
+real file/git dates of your existing README/CHANGELOG/docs — nudges only fire
+for drift *after* adoption, never for history that predates majordome. A
+**docs profile** decides which docs are watched per repo: code markers →
+README + CHANGELOG + docs/ (coding default); no code markers → docs/ only
+(generic). Override anything with `.majordome/docs.json`:
+`{"watch": ["README", "CHANGELOG", "docs/", "NOTES"]}`.
+
 **Nudges are value-driven (v2)**: a per-turn `docsVerdict` judge decides
 whether the turn's work adds doc-worthy value — and which kind
 (readme/changelog/adr). Verdict-driven when judges are configured; the
