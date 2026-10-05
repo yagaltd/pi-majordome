@@ -50,7 +50,7 @@ its repo. Full guide: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md).
 /majordome                              # start all workers + per-worker report
 ```
 
-Workers self-init cold ("majordome init complete: +N blocks…"), push completion
+Each worker completion passes a **simplifyVerdict** judge (once per run, suggest-only): a `simplify hint: …` lands in the report when a simpler shape exists — delete/merge/inline. Workers self-init cold ("majordome init complete: +N blocks…"), push completion
 notices to the deck inbox, and everything lands in one global brain
 (`~/.pi/majordome`) — never per-repo state. A sidecar in watch mode keeps each
 repo's artifacts fresh.
@@ -85,6 +85,11 @@ repo's artifacts fresh.
   Hits inject tail-only (`[majordome recall · repo turns N–M · date] gist…
   Read your request as: …`). Strong recall on definition work adds "resume
   rather than redoing it".
+- **Provenance & lessons**: blocks from ingested/shared sources carry
+  `from_untrusted` and their recall lines say `· unverified source`. Mistakes
+  and lessons are a first-class index class (`lesson` blocks): boosted on
+  lesson/failure queries, merged by consolidation ("same mistake twice" is the
+  pair-judge), surfaced as a generated Lessons section in the one-pager.
 - **@slug scoping**: prefix a query with `@repo-slug` to hard-scope recall to
   that repo (`@office-parser what did we decide about the export loop?`) —
   overrides priors, kills cross-repo noise; lifecycle and intent scopes still

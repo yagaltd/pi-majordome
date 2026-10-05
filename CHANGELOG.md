@@ -1,4 +1,7 @@
 ## 2026-10-05 — v2 branch: judge-cost telemetry (trail aggregate)
+- from_untrusted: provenance flag on ingested/shared blocks + `· unverified source` recall marker (zero new judge calls; sessions trusted-class by scope).
+- lessons as index class: block-close lesson/error classification + lesson-intent query boost + one-pager generated Lessons section + consolidation pairing (no lessons.md — memory is JSONL+index).
+- simplifyVerdict: once-per-worker-completion simplification judge (delete/merge/inline hints), suggest-only inbox note, fail-open + trail. Also fixes latent missing pushInbox import (worker inbox pushes ReferenceError) and a selfcheck test-order bug.
 - judge-cost telemetry: complete trail coverage across all judge call sites (fixed latent trailFile bug — majordomeDir unimported, trail was silently empty in production) + trail aggregation + stats judge-cost section + meta.turns + doctor creep note + selfcheck gap rule. NOTE: shapebench live gate (f) flaked to 95.0% at the bar — proven grader-side model drift (fails identically on unmodified HEAD; 112%→89%→95% across runs, zero code change); follow-up: grader-variance policy for live judge-graded gates.
 
 - judge-cost telemetry: the judgment trail is the single source of truth — `/majordome stats` gains a `judge cost (trail aggregate)` section (`judge calls: N total · N today · avg X/turn (last 100 turns) · ~T tok reported` + `by judge:` split with ok/fail-open %), aggregated by new `aggregate()`/`judgeStatsLines()` in ext/trail.ts; zero parallel counters, zero new API calls.
