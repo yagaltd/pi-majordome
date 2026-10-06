@@ -1,5 +1,7 @@
 # Bench
 
+Eval plans live here with their runners: EVAL-SLICE{1..5,5B}.md (moved from docs/ — plans, harnesses, and results in one place). Research/design studies are in docs/dev/.
+
 Ladder-test harnesses for majordome's memory pipeline. The live harness is
 **lifecyclebench** (v2). The sibling study harness (`eval.py`, `cross_eval.py`,
 `slice5*.py`, `typellm_client.py` + their `key*.json` ground truths) is the

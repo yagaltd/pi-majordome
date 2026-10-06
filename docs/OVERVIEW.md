@@ -1,6 +1,6 @@
 # pi-majordome — overview: benchmark summary + architecture
 
-Condensed from `docs/EVAL-SLICE{1,2,3,4,5,5B}.md` + `docs/JUDGE-COMPARISON.md`.
+Condensed from `bench/EVAL-SLICE{1,2,3,4,5,5B}.md` + `docs/dev/JUDGE-COMPARISON.md`.
 Fixture: session A (code-parser, 101 turns, 6 gold blocks) + sessions SEP/AUG
 (MorphEditor, 763/1208 turns) = 22 indexed blocks across 3 sessions.
 
@@ -158,7 +158,7 @@ extension custom entries). majordome adds the classified layer on top.
   corpora collide on polysemous terms, idf can't discriminate within a project. Root cause of
   remaining MISSes = gist compression + dims quality, not lexing. Documented in-code.
 - next: orchestrator scope review (Durable A/B) + AGENTS.md pointer block (artifacts now exist)
-- ✅ **durable study** (`docs/durable-study.md`): Path A for v2.0 + durable sidecar; full Path B
+- ✅ **durable study** (`docs/dev/durable-study.md`): Path A for v2.0 + durable sidecar; full Path B
   deferred (experimental API, Harness rebuild). Verified by working crash/resume prototype.
 - ✅ **v2.0 orchestrator pieces**:
   - shared-brain parity: 4 concurrent writers × 50 single-line appends → 200/200, 0 dupes

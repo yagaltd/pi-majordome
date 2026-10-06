@@ -14,13 +14,13 @@ Update on land or drop — never leave a row stale past the session that changed
 | diagram-first single-line labels | built | cbd3b30 | ext/judges.ts shape enum · ext/router.ts shapeHintLine |
 | doctor audit (orphans, parse health, dims, lag, lifecycle, worker cwds) | built | 1c4047b | ext/doctor.ts |
 | docs/ONE-PAGER.md build-day ledger | built | e413c2f | docs/ONE-PAGER.md |
-| docs/FUTURE-STYLE-PROFILE.md | built | 3368e7e | docs/FUTURE-STYLE-PROFILE.md |
+| docs/dev/FUTURE-STYLE-PROFILE.md | built | 3368e7e | docs/dev/FUTURE-STYLE-PROFILE.md |
 | orchestrator deck/workers/inbox | built | 3fe5f4a (push half 6a886b8) | ext/orch.ts · ext/inbox.ts · tools/dispatch.ts |
 | doc-drift gate in doctor + STATUS.md ledger | built | 2d01537 (the housekeeping commit above) | ext/docdrift.ts · ext/doctor.ts check 11 · STATUS.md |
 | housekeeping routine (status-join in recall + doctor/housekeeping commands, safe-fix vs needs-yes) | built | 9df6d18 + this commit | ext/status.ts · ext/housekeep.ts · tools/doctor-cli.ts · index.ts (statusJoinTail + command registry) · ext/selfcheck.ts |
 | sidecar watch mode | parked | prototype only: 26fde67 durable-sidecar/sidecar.ts (pi-durable watch mode) — NOT wired into ext/ or tools/; README shipped-claim drift caught by doctor and reworded to planned | durable-sidecar/ (unwired prototype) |
 | Concept Cells | parked | named cbd3b30 — gated on organic graph maturity | docs/OVERVIEW.md |
-| per-task worktrees for orch workers | parked | firstmate pattern note only — never built | docs/DESIGN.md layering section |
+| per-task worktrees for orch workers | parked | firstmate pattern note only — never built | docs/dev/DESIGN.md layering section |
 | zero-token event-driven supervision | parked | design note: build fs.watch event-driven from day one, inbox as wake surface | docs/DESIGN.md · docs/OVERVIEW.md |
 | AGENTS.md seeding-via-docs | parked | paused — docs-profile pattern ready when needed (one-pager open queue #3) | docs/ONE-PAGER.md |
 | style-vector slices | parked | 3368e7e — design of record, "nothing here is wired yet" | docs/FUTURE-STYLE-PROFILE.md |
@@ -36,6 +36,9 @@ Update on land or drop — never leave a row stale past the session that changed
 | STATUS.md as docs-watch built-in + ingest source | pending | gap surfaced by ROLES charter §gaps #1,#5 | micro-slice in ext/docsprofile.ts |
 | guard upstream notes (origin study: jev-guard) | dropped | owner decision 2026-10-06: not for us, case closed | row retired |
 | docs command naming consolidation (docs gen/pull) | pending | gap surfaced by ROLES charter §gaps #4 | replaces docs <kind> vs ingest-docs |
+| AGENTS.md (this repo) + docs taxonomy (docs/dev/, bench/ eval plans) + code-parser parked-dependency bullet | built | this commit | ROLES.md v2 five-rule charter same commit |
+| init AGENTS.md scaffold/augment flow (absent → propose template, present → gap-report ask-first) | pending | captain approved 2026-10-06 | extends ext/agentsmd.ts |
+| STATUS.md docs-watch built-in (nudge trigger) | pending | captain approved 2026-10-06 | ext/docsprofile.ts micro-slice |
 | office-parser orch add | pending | one command: /majordome orch add /home/aurel/Documents/github/office-parser (repo exists, unregistered) | ~/.pi/majordome/orchestrator.json |
 
 ## Corrections to the 2026-10-05 session audit (verified before seeding)

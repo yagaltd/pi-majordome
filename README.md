@@ -208,7 +208,7 @@ ext/judges.ts             TypeLLM/Jev judge seam (fail-open) + setup/verify CLI
 ext/{init,orch,inbox,doctor,trail,codex,docs,ingest_docs,onepager,map,selfcheck}.ts
 tools/                    backfill, lifecyclebench v2, fixture generator, probes
 bench/                    offline study harness (eval.py …) + lifecycle fixtures
-docs/                     DESIGN.md (decisions) · OVERVIEW.md (roadmap) · EVAL-SLICE*
+docs/                     product docs · docs/dev/ (research, design) · bench/ (eval plans)
 ```
 
 ### Offline tier (study harness, no API key)
@@ -222,8 +222,8 @@ python3 bench/eval.py --session <session.jsonl> --classify   # + TypeLLM tier
 ```
 
 `bench/key.json` is the ground truth (6 blocks, 5 probes); results land in
-`bench/results/report.json`. Design trace: docs/EVAL-SLICE{1..5}.md,
-docs/JUDGE-COMPARISON.md. Headline from the study: DAG intent → specialist
+`bench/results/report.json`. Design trace: bench/EVAL-SLICE{1..5}.md (with their harnesses),
+docs/dev/JUDGE-COMPARISON.md. Headline from the study: DAG intent → specialist
 arm reaches 3/7 recall@1 over the cross-session suite, past every single arm
 and naive fusion (2/7).
 
