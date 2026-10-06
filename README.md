@@ -58,8 +58,9 @@ its repo. Full guide: [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md).
 
 Each worker completion passes a **simplifyVerdict** judge (once per run, suggest-only): a `simplify hint: …` lands in the report when a simpler shape exists — delete/merge/inline. Workers self-init cold ("majordome init complete: +N blocks…"), push completion
 notices to the deck inbox, and everything lands in one global brain
-(`~/.pi/majordome`) — never per-repo state. A sidecar in watch mode keeps each
-repo's artifacts fresh.
+(`~/.pi/majordome`) — never per-repo state. Planned, not yet built: a sidecar
+in watch mode that keeps each repo's artifacts fresh (prototype only, unwired,
+in `durable-sidecar/`; see [STATUS.md](STATUS.md)).
 
 ### Commands
 
@@ -198,6 +199,7 @@ tiers. The bench found and fixed a real recall bug
 
 ```
 index.ts                  extension entry (chat commands, session hooks, injection)
+STATUS.md                 deliverable status ledger — one row per discussed item (built/parked/dropped/pending + evidence)
 ext/store.ts              JSONL store: blocks, meta, vocab, lifecycle sidecar
 ext/core.ts               retrieval primitives (BM25 binary-tf, cosine, federation)
 ext/router.ts             intent → arm routing, scopeByLifecycle, evidence floor
@@ -250,13 +252,14 @@ npx tsx tools/lifecyclebench.ts       # the 10-gate harness, both tiers
 ### Status
 
 - **Shipped (v2.x)**: lifecycle states + consolidation (v2.4, bench-gated),
-  orchestrator (deck / workers / inbox / one-pager), sidecar, evidence floor
+  orchestrator (deck / workers / inbox / one-pager), evidence floor
   in recall, personal tier (`user.md`), visibility scopes (repo · user ·
   shared), doctor audits, lifecyclebench v2 (IR metrics + LongMemEval
   abilities + scale tier).
 - **Next (consolidation era)**: organic supersession pairs from the dogfood
-  stretch feed v2.4 consolidation; recall-scope maturation; see
-  docs/OVERVIEW.md.
+  stretch feed v2.4 consolidation; recall-scope maturation; sidecar watch
+  mode (planned — prototype unwired in `durable-sidecar/`, not yet built);
+  see docs/OVERVIEW.md.
 
 ### Governance
 
