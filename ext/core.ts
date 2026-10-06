@@ -233,6 +233,7 @@ export function cosineVec(a: Map<string, number>, b: Map<string, number>): numbe
 /** Human-readable session tag: pi slugs dash-join the cwd, so strip the
  * personal prefix and known path roots: --home-USER-Documents-current-X-- → X. */
 export function shortTag(slug: string): string {
+	if (!slug) return "(no session)";
 	const t = slug.replace(/^-+|-+$/g, "")
 		.replace(/^home-[^-]+-/, "")
 		.replace(/^(Documents-)?(current-|vibe-|github-)/, "");

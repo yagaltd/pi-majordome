@@ -1124,6 +1124,16 @@ if (process.argv.includes("--parity")) {
 		]);
 		check("status house render: local summary + worker lines + honest no-ledger + hint", t.includes("this repo: 2 rows") && t.includes("@code-parser \u2014 2 rows: pending 1") && t.includes("@cold-repo \u2014 no ledger (not init\u0027d)") && t.includes("status <@slug>"));
 	}
+	{
+		const { shortTag } = await import("./core.ts");
+		let ok = true;
+		try { ok = shortTag(undefined as never) === "(no session)"; } catch { ok = false; }
+		check("core: shortTag tolerates missing session (no .replace crash \u2014 the /majordome list bug)", ok);
+	}
+	{
+		const storeSrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("./store.ts", import.meta.url), "utf8"));
+		check("store: appendBlock stamps session default at the write seam", storeSrc.includes('"(direct)"'));
+	}
 	check("wiring: status @slug \u2014 resolveWorkerRef + roster fallback + house default", idxSrc2.includes("resolveWorkerRef(slug, workers)") && idxSrc2.includes("unknown worker") && idxSrc2.includes("formatHouseStatus"));
 	}
 	{

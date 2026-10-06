@@ -1,4 +1,5 @@
 ## 2026-10-05 — v2 branch: judge-cost telemetry (trail aggregate)
+- fix: /majordome list + dash crash (undefined session .replace) — root cause: a partial appendBlock write (duplicate lesson block without session) + unguarded shortTag. Fixed at three layers: shortTag guard, appendBlock write-seam default, store dedupe (141 blocks, one stamped).
 - /majordome status house view + @slug: formatHouseStatus + listWorkers/resolveWorkerRef reuse — any repo's ledger from any session (cold workers honestly "no ledger"); orch-start UX proposal filed under .majordome/proposals/ (first dogfood proposal in this repo).
 - /majordome status: ledger view command (formatStatus in ext/status.ts) — pending items in full, parked inline, built/dropped counts; data stays in STATUS.md, the command is a view. Registered in help.
 - mechanical pre-push gate: .githooks/pre-push (core.hooksPath) reruns selfcheck+docsbench and blocks red pushes — jev-guard's block-at-choke-point shape with deterministic checks (no classifier, no false-positive drift); born from the captain escalation on agent bypasses.

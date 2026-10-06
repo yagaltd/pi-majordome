@@ -142,6 +142,9 @@ export function blockDims(vec: Map<string, number> | null, lesson: boolean): Rec
 
 export function appendBlock(b: Block): void {
 	mkdirSync(majordomeDir(), { recursive: true });
+	// write-seam guard: partial writes must never produce session-less blocks
+	// (they crash shortTag in list/dash — found 2026-10-06)
+	if (!(b as Partial<Block>).session) (b as Partial<Block>).session = "(direct)";
 	appendFileSync(p("blocks.jsonl"), JSON.stringify(b) + "\n");
 }
 
