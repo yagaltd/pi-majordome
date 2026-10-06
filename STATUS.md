@@ -31,7 +31,7 @@ Update on land or drop — never leave a row stale past the session that changed
 | jev-guard | dropped | uninstalled (not in ~/.pi/agent/extensions); from_untrusted guards the recall channel independently | docs/ONE-PAGER.md env decisions |
 | max-of-two re-grade | dropped | replaced by panel grading — its lean (absence must be evidenced by omission) preserved in the panel rationale | ext/panel.ts header |
 | mailbox-parser add-failed mystery | dropped | CORRECTED: repo exists (/home/aurel/Documents/github/mailbox-parser) and is a registered worker; the add-failure was ~ path expansion, fixed 44a536c | 44a536c |
-| guard upstream notes (origin study: jev-guard — headless silent-block + instruction-dense false-positive findings, to file upstream or drop) | pending | awaiting owner decision | draft unsent |
+| guard upstream notes (origin study: jev-guard) | dropped | owner decision 2026-10-06: not for us, case closed | row retired |
 | office-parser orch add | pending | one command: /majordome orch add /home/aurel/Documents/github/office-parser (repo exists, unregistered) | ~/.pi/majordome/orchestrator.json |
 
 ## Corrections to the 2026-10-05 session audit (verified before seeding)
