@@ -1083,6 +1083,60 @@ if (process.argv.includes("--parity")) {
 	check("stats: lifetime window when no turn cursor, null when nothing measurable", (recall.proxyStatsLine({ measured: 1, referenced: 0, windowed: false }, real) ?? "").includes("(lifetime)") && recall.proxyStatsLine({ measured: 0, referenced: 0, windowed: false }, real) === null);
 }
 
+// ── doc-drift gate (ext/docdrift.ts via doctor) + STATUS.md status ledger ──
+{
+	const { readFileSync: rfs6, existsSync: ex6 } = await import("node:fs");
+	const { scanDocDrift, evidenceOk, DRIFT_RULES } = await import("./docdrift.ts");
+
+	// fixture README: a present-tense claim of a mechanism with no ext/ tools/
+	// code must WARN, naming the drift and the line
+	const fixture = [
+		"# fixture repo",
+		"",
+		"A sidecar in watch mode keeps each repo's artifacts fresh.",
+		"",
+		"Planned: a message-bus retriever (not yet built).",
+	].join("\n");
+	const noEv = scanDocDrift(fixture, () => false);
+	check("docdrift: fixture present-tense claim with no code → WARN names noun + line", noEv.warns.length === 1 && noEv.warns[0].includes('"sidecar"') && noEv.warns[0].includes("line 3"));
+
+	// roadmap-marked wording → note at most, never a WARN (honest plans stay quiet)
+	const roadm = scanDocDrift("Planned: a sidecar in watch mode to keep artifacts fresh (not yet built; see STATUS.md).\n", () => false);
+	check("docdrift: roadmap-marked claim → note only, zero warns", roadm.warns.length === 0 && roadm.notes.length === 1);
+
+	// claimed AND implemented → fully quiet (no warn, no note)
+	const withEv = scanDocDrift(fixture, (r) => r.noun === "sidecar");
+	check("docdrift: claim backed by code → fully quiet", withEv.warns.length === 0 && withEv.notes.length === 0);
+
+	// unrelated same-word mentions never false-hit ("lifecycle sidecar" ≠ sidecar watch mode)
+	const lookalike = scanDocDrift("ext/store.ts JSONL store: blocks, meta, vocab, lifecycle sidecar\n", () => false);
+	check("docdrift: claim signatures — lookalike noun mentions don't fire", lookalike.warns.length === 0 && lookalike.notes.length === 0);
+
+	// the REAL repo (run from ext/, so repo root is one level up)
+	const repoRoot = new URL("..", import.meta.url).pathname;
+	const real = scanDocDrift(rfs6(new URL("../README.md", import.meta.url), "utf8"), (rule) => evidenceOk(repoRoot, rule));
+	check("docdrift: real README — zero drift warns (post-fix wording is roadmap-exempt)", real.warns.length === 0);
+	check("docdrift: real README — wrapped sidecar roadmap mention still caught, as a note", real.notes.some((n) => n.includes("sidecar")));
+	check("docdrift: real evidence — inbox/orchestrator/panel grading/one-pager all map to code", DRIFT_RULES.filter((r) => r.noun !== "sidecar").every((r) => evidenceOk(repoRoot, r)));
+	check("docdrift: sidecar has NO ext/ tools/ evidence (prototype lives unwired in durable-sidecar/)", !evidenceOk(repoRoot, DRIFT_RULES.find((r) => r.noun === "sidecar")!));
+
+	// STATUS.md ledger: 4-column rows, known statuses, built rows cite 7-hex commits
+	const stPath = new URL("../STATUS.md", import.meta.url);
+	check("STATUS.md: exists at repo root", ex6(stPath));
+	const stText = rfs6(stPath, "utf8");
+	const stLines = stText.split("\n").filter((l) => l.trim().startsWith("|"));
+	const stHeader = stLines[0] ?? "";
+	const stRows = stLines.slice(2); // header + separator
+	const cells = (l: string) => l.split("|").map((s) => s.trim());
+	check("STATUS.md: table header is item | status | evidence | substrate", ["item", "status", "evidence", "substrate"].every((h) => cells(stHeader).includes(h)));
+	check("STATUS.md: has rows", stRows.length >= 20);
+	check("STATUS.md: every row has exactly 4 columns", stRows.every((l) => cells(l).length - 2 === 4));
+	const STATUSES = new Set(["built", "parked", "dropped", "pending"]);
+	check("STATUS.md: statuses limited to built/parked/dropped/pending", stRows.every((l) => STATUSES.has(cells(l)[2])));
+	check("STATUS.md: exactly one row per item (no duplicate items)", new Set(stRows.map((l) => cells(l)[1])).size === stRows.length);
+	check("STATUS.md: every built row cites a 7-hex commit", stRows.every((l) => { const c = cells(l); return c[2] !== "built" || /\b[0-9a-f]{7}\b/.test(c[3] ?? ""); }));
+}
+
 if (failures) {
 	console.error(`\n${failures} failure(s)`);
 	process.exit(1);

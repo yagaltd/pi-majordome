@@ -15,6 +15,7 @@ import { aggregate } from "./trail.ts";
 import { isSubagentSession } from "./core.ts";
 import { readDocsOverride, resolveDocsProfile } from "./docsprofile.ts";
 import { agentsReport } from "./agentsmd.ts";
+import { scanDocDrift, evidenceOk, DRIFT_RULES } from "./docdrift.ts";
 
 const dir = majordomeDir();
 
@@ -132,6 +133,21 @@ export async function doctor(): Promise<string> {
 			L.push(`· judge creep: ${ag.avgPerTurn} judge calls/turn (last 100 turns, > 3) across ${ag.total} trail-recorded calls — per-judge split in /majordome stats`);
 		}
 	} catch { /* ignore */ }
+
+	// 11. doc-drift gate (advisory): README mechanism claims must map to real
+	// code in ext/ or tools/. A present-tense claim with no implementation =
+	// drift WARN naming the line; roadmap-marked wording (planned / prototype /
+	// not yet built) is a note, never a failure. The doctor reports — the fix
+	// (build it, or roadmap-mark it and give it a STATUS.md row) is yours.
+	try {
+		const readmePath = join(process.cwd(), "README.md");
+		if (existsSync(readmePath)) {
+			const drift = scanDocDrift(readFileSync(readmePath, "utf8"), (rule) => evidenceOk(process.cwd(), rule));
+			for (const w of drift.warns) bad(w);
+			for (const n of drift.notes) L.push(`· ${n}`);
+			if (!drift.warns.length && !drift.notes.length && DRIFT_RULES.length) ok("doc drift: README mechanism claims all map to ext/ tools/ code");
+		}
+	} catch { /* advisory never fails the doctor */ }
 
 	L.push(warns ? `\n${warns} issue(s) found — fixes are actions you choose (see hints above).` : "\nall clear.");
 	return L.join("\n");
