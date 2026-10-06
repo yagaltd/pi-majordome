@@ -38,7 +38,8 @@ export function loadKey(): string | null {
 // ── TypeLLM transport ───────────────────────────────────────────────────────
 
 /** Exported for bench seams that must ride the exact judge transport
- * (shapebench live tier: draft/grade shaped-vs-default answers). `usage` is
+ * (shapebench live tier: draft/grade shaped-vs-default answers) and for
+ * panel.ts (second-pass + cost telemetry). `usage` is
  * the transport's token report verbatim (shape handled by tokensOf) when the
  * response exposes one — cost telemetry only, verdict semantics unchanged. */
 export async function generate(
@@ -88,7 +89,7 @@ export function parseDims(vals: (number | boolean | null | undefined)[], n: numb
  * OpenAI-style {total_tokens}, and part-summed {input_tokens, output_tokens,
  * thinking_tokens, prompt_tokens, completion_tokens} (the live TypeLLM
  * transport reports input+thinking with no total). */
-function tokensOf(r: { usage?: unknown } | null | undefined): number | null {
+export function tokensOf(r: { usage?: unknown } | null | undefined): number | null {
 	const u: any = r?.usage;
 	if (u == null) return null;
 	if (typeof u === "number") return u > 0 ? Math.round(u) : null;
@@ -866,6 +867,11 @@ export function setClassifyFn(fn: ClassifyFn): void {
 }
 export function hasJev(): boolean {
 	return classifyFn !== null;
+}
+/** The wired classifier, null when none — panel.ts composes engines from
+ * this (a missing engine is never fabricated). */
+export function getClassifyFn(): ClassifyFn | null {
+	return classifyFn;
 }
 export function resetClassifyFn(): void {
 	classifyFn = null;
