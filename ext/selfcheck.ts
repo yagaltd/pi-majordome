@@ -1120,21 +1120,141 @@ if (process.argv.includes("--parity")) {
 	check("docdrift: real evidence — inbox/orchestrator/panel grading/one-pager all map to code", DRIFT_RULES.filter((r) => r.noun !== "sidecar").every((r) => evidenceOk(repoRoot, r)));
 	check("docdrift: sidecar has NO ext/ tools/ evidence (prototype lives unwired in durable-sidecar/)", !evidenceOk(repoRoot, DRIFT_RULES.find((r) => r.noun === "sidecar")!));
 
-	// STATUS.md ledger: 4-column rows, known statuses, built rows cite 7-hex commits
+	// STATUS.md ledger — parsed by the SHARED parser (ext/status.ts: the same
+	// rows the recall status-join and housekeeping read). Raw-shape checks pin
+	// the table form; parser checks pin the semantics.
 	const stPath = new URL("../STATUS.md", import.meta.url);
+	const statusMod = await import("./status.ts");
 	check("STATUS.md: exists at repo root", ex6(stPath));
 	const stText = rfs6(stPath, "utf8");
 	const stLines = stText.split("\n").filter((l) => l.trim().startsWith("|"));
 	const stHeader = stLines[0] ?? "";
-	const stRows = stLines.slice(2); // header + separator
+	const stRows = statusMod.parseStatusRows(stText);
 	const cells = (l: string) => l.split("|").map((s) => s.trim());
 	check("STATUS.md: table header is item | status | evidence | substrate", ["item", "status", "evidence", "substrate"].every((h) => cells(stHeader).includes(h)));
 	check("STATUS.md: has rows", stRows.length >= 20);
-	check("STATUS.md: every row has exactly 4 columns", stRows.every((l) => cells(l).length - 2 === 4));
+	check("STATUS.md: every row has exactly 4 columns (raw rows all parse)", stLines.length - 2 === stRows.length);
 	const STATUSES = new Set(["built", "parked", "dropped", "pending"]);
-	check("STATUS.md: statuses limited to built/parked/dropped/pending", stRows.every((l) => STATUSES.has(cells(l)[2])));
-	check("STATUS.md: exactly one row per item (no duplicate items)", new Set(stRows.map((l) => cells(l)[1])).size === stRows.length);
-	check("STATUS.md: every built row cites a 7-hex commit", stRows.every((l) => { const c = cells(l); return c[2] !== "built" || /\b[0-9a-f]{7}\b/.test(c[3] ?? ""); }));
+	check("STATUS.md: statuses limited to built/parked/dropped/pending", stRows.every((r) => STATUSES.has(r.status)));
+	check("STATUS.md: exactly one row per item (no duplicate items)", new Set(stRows.map((r) => r.item)).size === stRows.length);
+	check("STATUS.md: every built row cites a 7-hex commit", stRows.every((r) => r.status !== "built" || /\b[0-9a-f]{7}\b/.test(r.evidence)));
+	check("STATUS.md: real ledger already canonical (normalizer is a no-op)", !statusMod.normalizeStatusText(stText).changed);
+}
+
+// ── status join + shared STATUS parser (ext/status.ts) ──────────────────
+{
+	const { parseStatusRows, normalizeStatusText, statusJoinLines } = await import("./status.ts");
+
+	// parser: header + separator skipped, malformed rows skipped, cells trimmed
+	const ragged = parseStatusRows("| item | status | evidence | substrate |\n|---|---|---|---|\n| ok row | built | abc1234 | ext/x.ts |\n| just | two |\n|   |   |   |   |\n");
+	check("status parser: header/separator/malformed skipped, 4-col rows kept", ragged.length === 1 && ragged[0].item === "ok row" && ragged[0].status === "built");
+
+	const rows = parseStatusRows(
+		"| item | status | evidence | substrate |\n|---|---|---|---|\n" +
+		"| sidecar watch mode | parked | 26fde67 prototype only, not wired | durable-sidecar/ |\n" +
+		"| panel grading (majority-of-available-engines) | built | 7f5e91b | ext/panel.ts |\n" +
+		"| pricing tiers | parked | discussed only | conversation notes |\n",
+	);
+
+	// match produces the line — exact format, evidence verbatim
+	const hit = statusJoinLines("fix the sidecar watch mode crash on rename", rows);
+	check("status-join: match produces the bound line", hit.length === 1 && hit[0] === "related status: sidecar watch mode — parked (26fde67 prototype only, not wired)");
+
+	// no match produces nothing (one shared token is below the honest-overlap bar)
+	check("status-join: no match → no lines", statusJoinLines("design the pricing checkout flow", rows).length === 0);
+	check("status-join: empty ledger or empty text → no lines", statusJoinLines("sidecar watch mode", []).length === 0 && statusJoinLines("", rows).length === 0);
+
+	// multiple matches bound to 2 (a second sidecar row competes; cap holds)
+	const many = rows.concat(parseStatusRows("| item | status | evidence | substrate |\n|---|---|---|---|\n| sidecar watch-mode ingest loop | parked | design note | docs/DESIGN.md |\n| third sidecar mode row | parked | note | docs/DESIGN.md |\n"));
+	const capped = statusJoinLines("fix the sidecar watch mode crash on rename", many);
+	check("status-join: multiple matches bound to 2", capped.length === 2 && capped.every((l) => l.startsWith("related status: ")));
+
+	// long evidence stays bounded on the injected line (row keeps the full text)
+	const longEv = statusJoinLines("fix the sidecar watch mode crash", parseStatusRows("| item | status | evidence | substrate |\n|---|---|---|---|\n| sidecar watch mode | parked | " + "x".repeat(140) + " | durable-sidecar/ |\n"));
+	check("status-join: evidence truncated to 100 chars on the line", longEv.length === 1 && longEv[0].length < 160 && longEv[0].includes("…"));
+
+	// normalizer: status case + cell spacing, idempotent, skeleton untouched
+	const nrm = normalizeStatusText("| item | status | evidence | substrate |\n|---|---|---|---|\n| x | Built |   abc1234  | y |\n");
+	check("status normalize: status case + cell spacing", nrm.changed && nrm.text.includes("| x | built | abc1234 | y |"));
+	check("status normalize: idempotent on its own output", !normalizeStatusText(nrm.text).changed);
+}
+
+// ── housekeeping: safe-fix vs needs-yes policy (ext/housekeep.ts) ────────
+{
+	const hk = await import("./housekeep.ts");
+	const { scanDocDrift } = await import("./docdrift.ts");
+	const fs2 = await import("node:fs");
+
+	// fixture repo: README carrying the proven drift signature + a ledger row
+	const repo = mkdtempSync(join(tmpdir(), "majordome-hk-"));
+	fs2.mkdirSync(join(repo, "docs"), { recursive: true });
+	const readme = ["# fixture repo", "", "A sidecar in watch mode keeps each repo's artifacts fresh.", ""].join("\n");
+	fs2.writeFileSync(join(repo, "README.md"), readme);
+	const ledger = "| item | status | evidence | substrate |\n|---|---|---|---|\n| sidecar watch mode | parked | 26fde67 prototype only, not wired | durable-sidecar/ |\n| ledger-only deliverable | built | abc0123 (docs def2345) | ext/nothing.ts |\n";
+	fs2.writeFileSync(join(repo, "STATUS.md"), ledger);
+	// the corrupt store file the rm proposal names — must survive housekeeping
+	const corrupt = join(repo, "trails.jsonl");
+	fs2.writeFileSync(corrupt, "{not json}\n");
+
+	const res = hk.collectHousekeep({
+		cwd: repo,
+		doctorText: "✓ index: 3 blocks parse\nall clear.",
+		statusText: ledger,
+		readmeText: readme,
+		changelogText: "## 1.0.0 — inbox now ships",
+		gitShas: [], // ledger cites 26fde67 → stale by construction
+		gitDirty: [" M bench/results/last.txt"],
+		storeCorrupt: [corrupt],
+		extraDocs: [],
+	});
+
+	// SAFE class: exactly the README reword, to roadmap tense, allowlisted path
+	const rewords = res.proposals.filter((p) => p.safe && p.kind === "reword");
+	check("housekeep: drift signature → safe reword proposal on README.md", rewords.length === 1 && rewords[0].path === "README.md" && rewords[0].to.includes("planned sidecar in watch mode") && rewords[0].to.includes("not yet built"));
+
+	// DANGEROUS class: rm + git listed for explicit yes, never executed
+	const dangerous = res.proposals.filter((p) => !p.safe);
+	check("housekeep: dangerous class listed (rm + git state change)", dangerous.length === 2 && dangerous.some((p) => p.kind === "rm") && dangerous.some((p) => p.kind === "git"));
+
+	// STATUS staleness: built rows citing commits git doesn't know
+	check("housekeep: stale built-row commit flagged", res.needsYes.some((l) => l.includes("abc0123") && l.includes("not in git log")));
+	// mechanism mention with no STATUS row (CHANGELOG's inbox, no inbox row)
+	check("housekeep: mechanism mention with no STATUS row flagged", res.needsYes.some((l) => l.includes('"inbox"')));
+
+	// the guard: dangerous kinds refused outright; safe kinds refused outside
+	// the hard path allowlist (code files, traversal)
+	let refused = false;
+	try { hk.assertExecutable({ safe: false, kind: "rm", describe: "x" }); } catch { refused = true; }
+	check("housekeep: guard refuses dangerous kinds (rm)", refused);
+	refused = false;
+	try { hk.assertExecutable({ safe: true, kind: "reword", path: "ext/store.ts", from: "a", to: "b", why: "w" }); } catch { refused = true; }
+	check("housekeep: guard refuses code-file paths (allowlist)", refused);
+	refused = false;
+	try { hk.assertExecutable({ safe: true, kind: "reword", path: "../README.md", from: "a", to: "b", why: "w" }); } catch { refused = true; }
+	check("housekeep: guard refuses path traversal", refused);
+
+	// apply: the safe fix rewords the fixture README; the dangerous class is
+	// listed, not executed — corrupt file survives, nothing else written
+	const fixed = hk.applySafeFixes(repo, res.proposals);
+	const after = fs2.readFileSync(join(repo, "README.md"), "utf8");
+	check("housekeep: safe-fix applied rewords the fixture README", fixed.length === 1 && after.includes("planned sidecar in watch mode (not yet built — see STATUS.md)"));
+	check("housekeep: reworded README is roadmap-exempt (doc-drift gate quiet)", scanDocDrift(after, () => false).warns.length === 0);
+	check("housekeep: dangerous action listed NOT executed (corrupt file survives)", fs2.existsSync(corrupt) && fixed.every((f) => !f.includes("rm")));
+	check("housekeep: STATUS.md untouched when already canonical", fs2.readFileSync(join(repo, "STATUS.md"), "utf8") === ledger);
+}
+
+// ── doctor + housekeeping command registration (same registry) ──────────
+{
+	const { readFileSync: rfsIdx, existsSync: exIdx } = await import("node:fs");
+	const idx = rfsIdx(new URL("../index.ts", import.meta.url), "utf8");
+	check("commands: /majordome doctor registered in the extension registry", /cmd === "doctor"/.test(idx) && /import \{ doctor \} from "\.\/ext\/doctor\.ts";/.test(idx));
+	check("commands: /majordome housekeeping registered in the extension registry", /cmd === "housekeeping"/.test(idx) && /import \{ housekeeping \} from "\.\/ext\/housekeep\.ts";/.test(idx));
+	check("commands: doctor CLI entry exists (bare tsx must print, never wait on stdin)", exIdx(new URL("../tools/doctor-cli.ts", import.meta.url)));
+	check("recall: status-join wired into the injection path", idx.includes("statusJoinTail(winner)") && idx.includes("loadStatusRows"));
+	// live smoke: the doctor audit always renders a report (never crashes, never empty)
+	const { doctor } = await import("./doctor.ts");
+	const doc = await doctor();
+	check("doctor: audit renders a non-empty report (incl. advisory checks)", typeof doc === "string" && doc.includes("✓") === true && (doc.includes("all clear") || doc.includes("issue(s) found")));
 }
 
 if (failures) {
