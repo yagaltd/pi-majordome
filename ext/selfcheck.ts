@@ -17,6 +17,7 @@ import { resolveWorkerRef } from "./orch.ts";
 import { ingestDocs } from "./ingest_docs.ts";
 import { composeKind, digest, filterBlocks } from "./docs.ts";
 import type { Block } from "./store.ts";
+import type { PanelGrader } from "./panel.ts";
 
 let failures = 0;
 function check(name: string, cond: boolean): void {
@@ -566,6 +567,83 @@ if (process.argv.includes("--parity")) {
 	check("shape: prefs cached per session until reset", lines2.length === 2 && lines3.length === 1 && lines4.length === 0);
 }
 
+// ── panel grading (majority-of-available-engines, ext/panel.ts) ──
+{
+	process.env.MAJORDOME_KEY_FILE = join(tmp, "no-key-on-purpose"); // hermetic
+	delete process.env.TYPELLM_API_KEY;
+	process.env.MAJORDOME_TRAIL_FILE = join(tmp, "panel-trails.jsonl");
+	const { readFileSync: rfsP } = await import("node:fs");
+	const { gradeWithPanel, majorityFacts, panelGraders } = await import("./panel.ts");
+	const { setClassifyFn, resetClassifyFn } = await import("./judges.ts");
+	resetClassifyFn();
+
+	// the pure majority rule (per fact: present iff 2·yes ≥ graders served)
+	check("panel: majority 2v1 picks the two", JSON.stringify(majorityFacts([[true, false], [true, false], [false, true]], 2)) === JSON.stringify([true, false]));
+	check("panel: 3-0 unanimous", JSON.stringify(majorityFacts([[true, true], [true, true], [true, true]], 2)) === JSON.stringify([true, true]));
+	check("panel: single grader — its verdict stands", JSON.stringify(majorityFacts([[true, false]], 2)) === JSON.stringify([true, false]));
+	check("panel: even-panel tie resolves presence-ward", JSON.stringify(majorityFacts([[true, false], [false, true]], 2)) === JSON.stringify([true, true]));
+	check("panel: 1v2 on three graders → absent; 2v1 → present", majorityFacts([[true], [false], [false]], 1)[0] === false && majorityFacts([[true], [true], [false]], 1)[0] === true);
+
+	// canned grader outputs through the real seam (injection = bench-only option)
+	let calls = 0;
+	const grader = (engine: string, votes: boolean[] | null | Error): PanelGrader => ({
+		engine,
+		run: async () => {
+			calls++;
+			if (votes instanceof Error) throw votes;
+			return votes ? { votes } : null;
+		},
+	});
+
+	// 2v1 split across three graders → majority settles it
+	calls = 0;
+	const r21 = await gradeWithPanel(["fact one", "fact two"], "OUT-SECRET-β", { prompt: "PROMPT-SECRET-α", label: "selfcheck:panel", graders: [grader("a", [true, false]), grader("b", [true, true]), grader("c", [false, false])] });
+	check("panel: 2v1 split settles on the two (1 of 2 facts)", r21.found === 1 && r21.total === 2);
+	check("panel: 2v1 — all three graders served, not variance-prone", r21.graders.length === 3 && r21.varianceProne === false && calls === 3);
+	check("panel: per-grader verdicts recorded (1,2,0)", JSON.stringify(r21.perGrader.map((g) => g.found)) === JSON.stringify([1, 2, 0]));
+
+	// 3-0 unanimity
+	const r30 = await gradeWithPanel(["x"], "y", { prompt: "p", graders: [grader("a", [true]), grader("b", [true]), grader("c", [true])] });
+	check("panel: 3-0 unanimous 1/1", r30.found === 1 && r30.varianceProne === false);
+
+	// single-grader run: verdict stands, variance-marked
+	const r1 = await gradeWithPanel(["x", "z"], "y", { prompt: "p", graders: [grader("solo", [true, false])] });
+	check("panel: single grader — its verdict stands and is variance-marked", r1.found === 1 && r1.varianceProne === true && JSON.stringify(r1.graders) === JSON.stringify(["solo"]));
+
+	// a failed grader is excluded, never a no-vote; remaining two settle (tie → presence-ward)
+	const rFail = await gradeWithPanel(["x"], "y", { prompt: "p", graders: [grader("dead", new Error("transport down")), grader("a", [true]), grader("b", [false])] });
+	check("panel: failed grader excluded (recorded found:null) — remaining two settle presence-ward", rFail.found === 1 && rFail.graders.join("+") === "a+b" && rFail.perGrader.find((g) => g.engine === "dead")?.found === null);
+
+	// every grader fails → fail-open null, never a pass
+	const rAll = await gradeWithPanel(["x"], "y", { prompt: "p", graders: [grader("dead", new Error("down")), grader("mute", null)] });
+	check("panel: every grader fails → found null (fail-open)", rAll.found === null && rAll.graders.length === 0);
+
+	// a wrong-length vote vector is not a verdict
+	const rLen = await gradeWithPanel(["x", "y2"], "z", { prompt: "p", graders: [grader("short", [true])] });
+	check("panel: wrong-length vote vector excluded", rLen.found === null && rLen.perGrader[0]?.found === null);
+
+	// empty panel
+	const rNone = await gradeWithPanel(["x"], "y", { prompt: "p", graders: [] });
+	check("panel: no graders configured → null, no call", rNone.found === null && rNone.attempted.length === 0);
+
+	// the REAL composition seam: jev wired + no key → exactly one grader (never fabricated)
+	setClassifyFn(async () => ({ model: "canned", answers: { fact_1: { noul: true }, fact_2: { noul: false } } }));
+	const gJev = panelGraders();
+	const rJev = await gradeWithPanel(["fact one", "fact two"], "answer text", { prompt: "p", label: "selfcheck:panel-jev" });
+	resetClassifyFn();
+	check("panel: configured engines only — jev wired, no key → single grader, variance-prone", gJev.length === 1 && gJev[0].engine === "jev" && rJev.found === 1 && rJev.varianceProne === true && rJev.graders.join("+") === "jev");
+	check("panel: nothing configured → panelGraders() empty (no fabricated grader)", panelGraders().length === 0);
+
+	// trail hygiene: per-grader lines (judge 'panel:<engine>'), composition on
+	// the panelVerdict record, message text never
+	const trailRaw = rfsP(join(tmp, "panel-trails.jsonl"), "utf8");
+	const trailLines = trailRaw.split("\n").filter(Boolean).map((l) => JSON.parse(l));
+	check("panel: trail — per-grader judge tags 'panel:<engine>', failures ok:false", trailLines.some((e: any) => e.j === "panelGrade" && e.judge === "panel:a" && e.ok === true) && trailLines.some((e: any) => e.j === "panelGrade" && e.judge === "panel:dead" && e.ok === false) && trailLines.some((e: any) => e.j === "panelGrade" && e.judge === "panel:jev" && e.ok === true));
+	check("panel: trail — panelVerdict records carry composition + variance flag", trailLines.some((e: any) => e.j === "panelVerdict" && JSON.stringify(e.graders) === JSON.stringify(["a", "b", "c"]) && e.varianceProne === false) && trailLines.some((e: any) => e.j === "panelVerdict" && e.varianceProne === true));
+	check("panel: trail — verdict metadata only, never message text", !trailRaw.includes("PROMPT-SECRET") && !trailRaw.includes("OUT-SECRET"));
+	delete process.env.MAJORDOME_TRAIL_FILE;
+}
+
 // ── v2.8 judge-cost telemetry: trail aggregation + gap-rule coverage ──
 {
 	process.env.MAJORDOME_DIR = join(tmp, "telemetry-store");
@@ -617,8 +695,9 @@ if (process.argv.includes("--parity")) {
 	// gap-rule (static): every judge entry point must trail-record inside its
 	// own function body — a judge call site without a trail line fails here
 	const src = rfs(new URL("./judges.ts", import.meta.url), "utf8");
-	const fnSrc = (name: string): string => src.match(new RegExp(`export (async )?function ${name}\\b[\\s\\S]*?\\n}`))?.[0] ?? "";
-	const trailHome: Record<string, string[]> = { shapeVerdict: ["shapeVerdict", "settleShape"] }; // judge → fns that may trail for it
+	const panelSrc = rfs(new URL("./panel.ts", import.meta.url), "utf8"); // panelGrade lines live in ext/panel.ts
+	const fnSrc = (name: string): string => (name === "gradeWithPanel" ? panelSrc : src).match(new RegExp(`export (async )?function ${name}\\b[\\s\\S]*?\\n}`))?.[0] ?? "";
+	const trailHome: Record<string, string[]> = { shapeVerdict: ["shapeVerdict", "settleShape"], panelGrade: ["gradeWithPanel"] }; // judge → fns that may trail for it
 	const missing = JUDGE_LINES.filter((j) => !(trailHome[j] ?? [j]).some((fn) => fnSrc(fn).includes(`trail("${j}"`)));
 	check("telemetry: gap-rule — every judge line name is trailed in its function", missing.length === 0 && fnSrc("dimVector").includes('trail("dimVector"'));
 

@@ -15,6 +15,15 @@
  *      bench-local reimplementation.
  *
  * PRE-REGISTERED GATES (fixed in this header before implementation):
+ *  PRE-REGISTERED POLICY (live judge-graded gates): any gate whose verdict a
+ *  live judge produces is graded by a PANEL — the majority of every grader
+ *  engine configured at run time (ext/panel.ts: TypeLLM, Jev when wired,
+ *  plus a second TypeLLM pass — the transport exposes no seed/sampling knob,
+ *  so an independent re-ask). Engines = whatever is configured; a missing
+ *  engine is never fabricated. A run where only ONE grader served is marked
+ *  VARIANCE-PRONE in output (the single-engine drift mode this replaces once
+ *  flipped gate (f) 112%→89%→95% on identical code). Per-gate output prints
+ *  which graders served. Fix the GRADER, not the bar.
  *  HERMETIC (must pass with no key, zero network):
  *  (a) fail-open 100% — no key/classifier, malformed judge answer, or judge
  *      transport throw → shapeVerdict null (never throws, never guesses a
@@ -44,12 +53,12 @@
  *      gate honestly marked n/a, never silently passed).
  *  (f) fact retention — for 5 planted prompts (one per non-default shape)
  *      generate a default answer and a shaped answer (the EXACT tail hint
- *      text), grade both with the SAME judge seam: shaped facts ≥ 95% of
- *      default's facts. Grader-variance guard: a shaped answer that grades
- *      below its default is re-graded once with the same seam and the max
- *      taken — measures fact PRESENCE reliably without softening the bar
- *      (a genuinely absent fact stays absent in both gradings). Seam
- *      failure → n/a, never a pass.
+ *      text), grade both with PANEL GRADING (ext/panel.ts): shaped facts ≥
+ *      95% of default's facts. Measures fact PRESENCE without softening the
+ *      bar — a genuinely absent fact stays absent under majority voting
+ *      (even-panel ties resolve presence-ward, documented in panel.ts).
+ *      Grader composition prints per gate; single-grader panels are marked
+ *      variance-prone. Seam failure → n/a, never a pass.
  *  (g) token report — mean output tokens (chars/4 estimate) shaped vs
  *      default per shape. REPORT ONLY (first measurement, no bar).
  *  (h) readability report — shaped mean sentence length vs default's.
@@ -64,6 +73,7 @@ import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import type { OutputShape } from "../ext/judges.ts";
+import type { PanelGrade } from "../ext/panel.ts";
 
 // ── capture the REAL key before sandboxing (live tier only) ─────────────────
 const realHome = process.env.HOME ?? homedir();
@@ -100,6 +110,7 @@ writeFileSync(process.env.MAJORDOME_USER_FILE, "# personal rules (majordome pers
 const { OUTPUT_SHAPES, shapeVerdict, userPrefLines, resetUserPrefs, loadKey, setClassifyFn, resetClassifyFn, generate } = await import("../ext/judges.ts");
 const { shapeHintLine } = await import("../ext/router.ts");
 const metrics = await import("../ext/metrics.ts");
+const panel = await import("../ext/panel.ts");
 const { majordomeDir } = await import("../ext/store.ts");
 
 // ── hard isolation guard: the bench must never touch the real brain ─────────
@@ -343,8 +354,10 @@ if (!realKey) {
 		}
 	}
 
-	// (f)/(g)/(h): default vs shaped generation through the SAME judge seam
-	console.log("\n── gates (f)(g)(h): shaped vs default (live generation + judge grading) ──");
+	// (f)/(g)/(h): default vs shaped generation; grading via PANEL (ext/panel.ts,
+	// pre-registered policy in this file's header). Same draft seam for both
+	// sides; per-fact majority of every configured grader settles the verdict.
+	console.log("\n── gates (f)(g)(h): shaped vs default (live generation + panel grading) ──");
 	{
 		const gen = async (prompt: string, hint: string | null): Promise<string | null> => {
 			const ctx = `You are a coding agent answering a user in a terminal session. Keep the answer under 200 words.\n\n[user message]\n${prompt}${hint ? `\n\n${hint}` : ""}`;
@@ -354,38 +367,37 @@ if (!realKey) {
 			const a = (r?.result as any)?.answer;
 			return typeof a === "string" && a.trim() ? a.trim() : null;
 		};
-		const grade = async (prompt: string, facts: string[], answer: string): Promise<number | null> => {
-			const list = facts.map((f, i) => `${i + 1}. ${f}`).join("\n");
-			const r = await generate(`A user asked a coding agent:\n${prompt}\n\nThe answer should state these facts:\n${list}\n\nAnswer to grade:\n${answer.slice(0, 1600)}`, {
-				found: { type: "number", instructions: `How many of the listed facts does the answer state? Count a fact if the answer states it in any wording (different phrasing or synonyms still count); only count it missing when the answer omits the substance. Answer with just the number 0-${facts.length}.` },
-			});
-			const n = Number((r?.result as any)?.found);
-			return Number.isFinite(n) ? Math.max(0, Math.min(facts.length, n)) : null;
-		};
-		const rows: { shape: OutputShape; dOut: string | null; sOut: string | null; dFacts: number | null; sFacts: number | null }[] = [];
+		const grade = (prompt: string, facts: string[], answer: string) => panel.gradeWithPanel(facts, answer, { prompt, label: "shapebench:f" });
+		const rows: { shape: OutputShape; dOut: string | null; sOut: string | null; d: PanelGrade | null; s: PanelGrade | null }[] = [];
 		for (const p of SHAPED) {
 			const dOut = await gen(p.prompt, null).catch(() => null);
 			const hint = shapeHintLine(p.shape, "planted ask");
 			const sOut = await gen(p.prompt, hint).catch(() => null);
-			const dFacts = dOut ? await grade(p.prompt, p.facts, dOut).catch(() => null) : null;
-			let sFacts = sOut ? await grade(p.prompt, p.facts, sOut).catch(() => null) : null;
-			// grader-variance guard (same judge seam): shaped grades below default →
-			// one re-grade, max taken. Presence, not phrasing — a genuinely absent
-			// fact stays absent in both gradings.
-			if (sOut && sFacts !== null && dFacts !== null && sFacts < dFacts) {
-				sFacts = Math.max(sFacts, (await grade(p.prompt, p.facts, sOut).catch(() => null)) ?? sFacts);
-			}
-			rows.push({ shape: p.shape, dOut, sOut, dFacts, sFacts });
-			console.log(`          ${p.shape.padEnd(14)} default facts=${dFacts ?? "null"}/${p.facts.length} shaped facts=${sFacts ?? "null"}/${p.facts.length}`);
+			const d = dOut ? await grade(p.prompt, p.facts, dOut).catch(() => null) : null;
+			const s = sOut ? await grade(p.prompt, p.facts, sOut).catch(() => null) : null;
+			rows.push({ shape: p.shape, dOut, sOut, d, s });
+			const fmt = (g: PanelGrade | null) =>
+				g === null
+					? "null (no grade)"
+					: g.found === null
+						? `null (panel failed: ${g.attempted.join("+") || "none configured"})`
+						: `${g.found}/${p.facts.length} (panel: ${g.graders.join("+") || "none served"}${g.varianceProne ? " — VARIANCE-PRONE" : ""})`;
+			console.log(`          ${p.shape.padEnd(14)} default facts=${fmt(d)}  shaped facts=${fmt(s)}`);
 		}
-		const seamBroken = rows.some((r) => r.dOut === null || r.sOut === null || r.dFacts === null || r.sFacts === null);
-		if (rows.every((r) => r.dFacts === null || r.sFacts === null)) {
+		const seamBroken = rows.some((r) => r.d === null || r.s === null || r.d.found === null || r.s.found === null);
+		if (rows.every((r) => r.d?.found == null || r.s?.found == null)) {
 			console.log("  gate (f): n/a — judge seam failed for every comparison (honestly not passed)");
 		} else {
-			const dTotal = rows.reduce((n, r) => n + (r.dFacts ?? 0), 0);
-			const sTotal = rows.reduce((n, r) => n + (r.sFacts ?? 0), 0);
+			const dTotal = rows.reduce((n, r) => n + (r.d?.found ?? 0), 0);
+			const sTotal = rows.reduce((n, r) => n + (r.s?.found ?? 0), 0);
 			const ratio = dTotal ? sTotal / dTotal : 0;
-			gate("(f) fact retention: shaped ≥ 95% of default's facts", ratio >= 0.95, `${Math.round(ratio * 100)}% (${sTotal}/${dTotal} facts)${seamBroken ? " · some seam nulls counted as 0" : ""}`);
+			const served = [...new Set(rows.flatMap((r) => [...(r.d?.graders ?? []), ...(r.s?.graders ?? [])]))];
+			const single = rows.some((r) => r.d?.varianceProne || r.s?.varianceProne);
+			gate(
+				"(f) fact retention: shaped ≥ 95% of default's facts",
+				ratio >= 0.95,
+				`${Math.round(ratio * 100)}% (${sTotal}/${dTotal} facts) · graders: ${served.join("+") || "none"}${single ? " · SINGLE-GRADER — VARIANCE-PRONE" : ""}${seamBroken ? " · some seam nulls counted as 0" : ""}`,
+			);
 		}
 		// (g) token report per shape (REPORT ONLY — first measurement)
 		console.log("  token report (chars/4 estimate, mean per prompt):");

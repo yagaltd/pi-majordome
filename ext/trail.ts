@@ -54,6 +54,7 @@ export function trail(judge: string, fields: Record<string, unknown>): void {
 export const JUDGE_LINES: readonly string[] = [
 	"blockMeta", "induceDims", "rewriteQuery", "keyPhrases", "routingIntent",
 	"contradicts", "docsVerdict", "shapeVerdict", "lifecycleVerdict", "dimVector", "simplifyVerdict",
+	"panelGrade", // one line per panel grader attempt (ext/panel.ts; the panelVerdict summary is a decision record)
 ];
 
 /** Compact display tags for the stats line (routingIntent → intent, …). */
@@ -69,6 +70,7 @@ export const JUDGE_TAGS: Record<string, string> = {
 	contradicts: "contra",
 	dimVector: "dimvec",
 	simplifyVerdict: "simpl",
+	panelGrade: "panel",
 };
 
 export interface JudgeCalls {
