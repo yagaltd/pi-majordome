@@ -85,6 +85,11 @@ async function ensureAndStart(w: Worker, mode: "headless" | "pane"): Promise<str
 		return `${w.name}: headless started (pid ${p.pid}) (${note}) — output \u2192 ${log}`;
 }
 
+/** Roster for views (status @slug etc.) — read-only reuse of the conf loader. */
+export function listWorkers(): { name: string; cwd: string }[] {
+	return load().workers;
+}
+
 export async function orch(arg?: string): Promise<string> {
 	const conf = load();
 	const L = (s: string) => s;

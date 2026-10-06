@@ -32,10 +32,10 @@ import { initRepo } from "./ext/init.ts";
 import { agentsOffer } from "./ext/agentsmd.ts";
 import { writeOfferProposal, stampDecision } from "./ext/proposals.ts";
 import { doctor } from "./ext/doctor.ts";
-import { orch } from "./ext/orch.ts";
+import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
-import { statusJoinLines, loadStatusRows, formatStatus } from "./ext/status.ts";
+import { statusJoinLines, loadStatusRows, formatStatus, formatHouseStatus } from "./ext/status.ts";
 import { housekeeping } from "./ext/housekeep.ts";
 import { appendBlock, appendDecision, blockDims, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
@@ -524,7 +524,15 @@ export default function majordome(pi: ExtensionAPI): void {
 				return;
 			}
 			if (cmd === "status") {
-				notify(formatStatus(loadStatusRows()));
+				const workers = listWorkers();
+				if (a) {
+					const slug = a.replace(/^@/, "");
+					const w = resolveWorkerRef(slug, workers);
+					if (!w) return notify(`unknown worker "${slug}" \u2014 roster: ${workers.map((x) => "@" + x.name).join(" \u00b7 ") || "(empty)"}`);
+					const rows = loadStatusRows(w.cwd);
+					return notify(rows.length ? `@${w.name} (${w.cwd})\n${formatStatus(rows)}` : `@${w.name} \u2014 no ledger (not init\u0027d): ${w.cwd}`);
+				}
+				notify(formatHouseStatus(loadStatusRows(), workers.map((w) => ({ name: w.name, cwd: w.cwd, rows: loadStatusRows(w.cwd) }))));
 				return;
 			}
 			if (cmd === "list") {

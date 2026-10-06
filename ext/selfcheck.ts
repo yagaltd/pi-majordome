@@ -1115,6 +1115,16 @@ if (process.argv.includes("--parity")) {
 		];
 		const t = formatStatus(rows);
 		check("status render: pending bullets, parked inline, counts, box", t.includes("pending (1)") && t.includes("\u00b7 a") && t.includes("parked (1): b") && t.includes("built 1 \u00b7 dropped 1") && t.startsWith("\u256d\u2500 /majordome status"));
+	{
+		const { formatHouseStatus } = await import("./status.ts");
+		const mk = (item: string, status: string) => ({ item, status, evidence: "x", substrate: "s" });
+		const t = formatHouseStatus([mk("p1", "pending"), mk("b1", "built")], [
+			{ name: "code-parser", cwd: "/x/code-parser", rows: [mk("a", "pending"), mk("b", "parked")] },
+			{ name: "cold-repo", cwd: "/x/cold-repo", rows: [] },
+		]);
+		check("status house render: local summary + worker lines + honest no-ledger + hint", t.includes("this repo: 2 rows") && t.includes("@code-parser \u2014 2 rows: pending 1") && t.includes("@cold-repo \u2014 no ledger (not init\u0027d)") && t.includes("status <@slug>"));
+	}
+	check("wiring: status @slug \u2014 resolveWorkerRef + roster fallback + house default", idxSrc2.includes("resolveWorkerRef(slug, workers)") && idxSrc2.includes("unknown worker") && idxSrc2.includes("formatHouseStatus"));
 	}
 	{
 		// lessons gap suppressed where the index already keeps lessons (captain decision 2026-10-05)

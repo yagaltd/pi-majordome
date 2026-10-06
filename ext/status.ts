@@ -147,3 +147,21 @@ export function formatStatus(rows: StatusRow[]): string {
 		"╰─",
 	].join("\n");
 }
+
+export interface HouseWorkerStatus { name: string; cwd: string; rows: StatusRow[] }
+
+/** House view: this repo's ledger summary + every registered worker's line
+ * (rows count by status, or an honest "no ledger" for cold repos). */
+export function formatHouseStatus(local: StatusRow[], workers: HouseWorkerStatus[]): string {
+	const cnt = (rows: StatusRow[], st: string) => rows.filter((r) => r.status === st).length;
+	const lines = [
+		"\u256d\u2500 /majordome status (house)",
+		`\u2502 this repo: ${local.length} rows \u2014 pending ${cnt(local, "pending")} \u00b7 parked ${cnt(local, "parked")} \u00b7 built ${cnt(local, "built")} \u00b7 dropped ${cnt(local, "dropped")}`,
+	];
+	for (const w of workers) {
+		if (!w.rows.length) lines.push(`\u2502 @${w.name} \u2014 no ledger (not init\u0027d): ${w.cwd}`);
+		else lines.push(`\u2502 @${w.name} \u2014 ${w.rows.length} rows: pending ${cnt(w.rows, "pending")} \u00b7 parked ${cnt(w.rows, "parked")} \u00b7 built ${cnt(w.rows, "built")} \u00b7 dropped ${cnt(w.rows, "dropped")}`);
+	}
+	lines.push("\u2502 detail: /majordome status <@slug> \u2014 full ledger of one worker", "\u2570\u2500");
+	return lines.join("\n");
+}
