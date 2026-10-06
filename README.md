@@ -37,6 +37,12 @@ sessions once; or let a repo's first worker start run `/majordome init` cold.
 
 ## Usage
 
+### AGENTS.md adoption
+
+Init detects your AGENTS.md and reports gaps in one line (greenfield vs
+brownfield, Lessons section, testing rules, no-compat rule for greenfield) —
+advisory only; AGENTS.md is indexed as knowledge and stays yours to write.
+
 ### The orchestrator (the daily command)
 
 Run a house of project workers from one deck directory — or from any repo;
@@ -112,6 +118,13 @@ repo's artifacts fresh.
 - **Composition**: pi-clm compatible (it curates the window, majordome
   supplies memory — verified co-loading). Majordome never talks to the user —
   the agent stays the interface; tone lives in your `AGENTS.md`.
+
+### Recall feedback (the self-improving loop)
+
+Injected blocks are tracked: `stats` shows a recall precision proxy
+(referenced-within-3-turns) and the false-positive specimen corpus
+(`bench/false_positives.json`, bucketed wrong-repo / stale / polysemy /
+weak-match). Specimens become bench probes — fixes stay fixed.
 
 ### Output shape (v2.6)
 

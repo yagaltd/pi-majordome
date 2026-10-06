@@ -1,4 +1,6 @@
 ## 2026-10-05 — v2 branch: judge-cost telemetry (trail aggregate)
+- AGENTS.md adoption: init/doctor gap report (greenfield vs brownfield via shared hasCodeManifest, Lessons/testing/no-compat gaps) — advisory only.
+- recall-feedback telemetry: revived the ✓ injected decision-log entry (dead since de2c1c1 — injections were never logged), precision proxy (shortId or ≥6-word gist phrase referenced within 3 turns), 8-specimen false-positive corpus (wrong-repo 6 · polysemy 1 · weak-match 1) + stats section. The self-improving loop: specimens become bench probes.
 - from_untrusted: provenance flag on ingested/shared blocks + `· unverified source` recall marker (zero new judge calls; sessions trusted-class by scope).
 - lessons as index class: block-close lesson/error classification + lesson-intent query boost + one-pager generated Lessons section + consolidation pairing (no lessons.md — memory is JSONL+index).
 - simplifyVerdict: once-per-worker-completion simplification judge (delete/merge/inline hints), suggest-only inbox note, fail-open + trail. Also fixes latent missing pushInbox import (worker inbox pushes ReferenceError) and a selfcheck test-order bug.
