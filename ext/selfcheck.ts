@@ -873,6 +873,137 @@ if (process.argv.includes("--parity")) {
 	delete process.env.MAJORDOME_TRAIL_FILE;
 }
 
+// ── AGENTS.md adoption (init/doctor advisory, greenfield vs brownfield) ──
+{
+	const { agentsReport, agentsGaps, greenfieldRepo } = await import("./agentsmd.ts");
+	const { mkdirSync: mkd } = await import("node:fs");
+
+	// fixture repos: greenfield (no .git, no manifests) vs brownfield (package.json)
+	const gf = join(tmp, "agents-greenfield");
+	const bf = join(tmp, "agents-brownfield");
+	mkd(gf, { recursive: true });
+	mkd(bf, { recursive: true });
+	writeFileSync(join(bf, "package.json"), "{}");
+	check("agents: greenfield = no .git AND no code manifests", greenfieldRepo(gf) === true && greenfieldRepo(bf) === false);
+	mkd(join(gf, ".git"), { recursive: true });
+	check("agents: .git presence (dir or worktree file) → brownfield", greenfieldRepo(gf) === false);
+
+	// present + all conventions (greenfield, incl. the no-compat rule) → ok
+	const full = join(tmp, "agents-full");
+	mkd(full, { recursive: true });
+	writeFileSync(join(full, "AGENTS.md"), "# AGENTS.md\n\n## Lessons\n- record mistakes as guidance\n\n## Testing\n- npx tsx ext/selfcheck.ts must stay green\n\n## Compatibility\n- no compat shims — we ship greenfield\n");
+	const repFull = agentsReport(full);
+	check("agents: present · ok when every convention is there", repFull.present && repFull.ok && repFull.line === "AGENTS.md: present · ok");
+
+	// missing sections → gap list; brownfield never flagged for no-compat
+	writeFileSync(join(bf, "AGENTS.md"), "# AGENTS.md\n\nsome notes, no sections\n");
+	const repBf = agentsReport(bf);
+	check("agents: brownfield gaps = lessons + testing only (no no-compat flag)", JSON.stringify(repBf.gaps) === JSON.stringify(["no Lessons section", "no testing rules"]) && repBf.line === "AGENTS.md: present · no Lessons section · no testing rules" && !repBf.ok);
+
+	// greenfield without a no-compat rule → third gap
+	const part = join(tmp, "agents-part");
+	mkd(part, { recursive: true });
+	writeFileSync(join(part, "AGENTS.md"), "# AGENTS.md\n\n## Lessons\nx\n\n## Testing rules\ny\n");
+	const repGf = agentsReport(part);
+	check("agents: greenfield without no-compat rule → third gap", JSON.stringify(repGf.gaps) === JSON.stringify(["no-compat rule missing (greenfield)"]));
+	check("agents: gap predicates — lessons heading, testing heading or bullet, no-compat phrasings", agentsGaps("## Lessons\n## Testing\nno-compat shims", true).length === 0 && agentsGaps("- test all the things", false).length === 1 && !agentsGaps("no backward compat", true).includes("no-compat rule missing (greenfield)"));
+
+	// absent → recommend line; doctor/init share the same line
+	const repAbsent = agentsReport(join(tmp, "agents-nowhere"));
+	check("agents: absent → recommend one (draft via /majordome docs)", !repAbsent.present && repAbsent.line === "AGENTS.md: absent — recommend one (draft via /majordome docs)");
+	// advisory only: the module must not carry a write path (static gap-rule —
+	// AGENTS.md is the agent's to write, majordome reports gaps)
+	const agSrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("./agentsmd.ts", import.meta.url), "utf8"));
+	check("agents: advisory only — no write path in the module", !/writeFileSync|appendFileSync|rmSync/.test(agSrc));
+}
+
+// ── recall-feedback telemetry: precision proxy + false-positive specimens ──
+{
+	process.env.MAJORDOME_KEY_FILE = join(tmp, "no-key-on-purpose"); // hermetic
+	delete process.env.TYPELLM_API_KEY;
+	const storeR = await import("./store.ts");
+	const recall = await import("./recall.ts");
+	const { readFileSync: rfs } = await import("node:fs");
+
+	// fixture session: 8 turns. t2 references by shortId, t4 by a ≥6-word gist
+	// phrase (assistant text), t5 is a re-injection tail (must NOT count), t6+ clean.
+	const proxySession = join(tmp, "recall-proxy.jsonl");
+	const P = (u: string, a: string) => JSON.stringify({ type: "message", message: { role: "user", content: [{ type: "text", text: u }] } }) + "\n" + JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: a }] } });
+	writeFileSync(
+		proxySession,
+		[
+			P("how does the exporter work in this repo", "it batches writes behind a cursor"),
+			P("used the code-parser:7 fix — thanks", "that was the watcher crash patch"),
+			P("now the gist fixture question about the exporter", "sure"),
+			P("go on", "right — the exporter ships markdown tables with column alignment hints"),
+			P("[majordome recall · code-parser turns 7–9] the exporter ships markdown tables with column alignment hints (intent: implementation)", "ok"),
+			P("nothing relevant here at all", "noted"),
+			P("still nothing about the exporter", "ok"),
+			P("and nothing again", "done"),
+		].join("\n"),
+	);
+	const turnsFix = parseSession(proxySession);
+	check("proxy: fixture session parses to 8 turns", turnsFix.length === 8);
+
+	const gistText = "the exporter ships markdown tables with column alignment hints";
+	const blocksFix = [
+		{ id: "code-parser:7", session: "--home-u-code-parser--", gist: "watcher crash patch" },
+		{ id: "exp:3", session: "exp", gist: gistText },
+		{ id: "exp:5", session: "exp", gist: "an unrelated gist about consolidation pairing" },
+	];
+	const q1 = "how does the exporter work in this repo";
+	const q3 = "now the gist fixture question about the exporter";
+	const q5 = "[majordome recall · code-parser turns 7–9] the exporter ships markdown tables with column alignment hints (intent: implementation)";
+	const q6 = "nothing relevant here at all";
+	const decisionsFix: any[] = [
+		{ ts: "t", query: q1, intent: "i", arm: "lex", winner: "code-parser:7", score: 0.8, injected: true, sessionFile: proxySession, turn: 1 },
+		{ ts: "t", query: q3, intent: "i", arm: "lex", winner: "exp:3", score: 0.7, injected: true, sessionFile: proxySession, turn: 3 },
+		{ ts: "t", query: q5, intent: "i", arm: "lex", winner: "exp:5", score: 0.7, injected: true, sessionFile: proxySession, turn: 5 },
+		{ ts: "t", query: q6, intent: "i", arm: "lex", winner: "exp:3", score: 0.6, injected: true, sessionFile: proxySession, turn: 6 },
+		{ ts: "t", query: q1, intent: "i", arm: "lex", winner: "exp:3", score: 0.9, injected: true }, // no sessionFile → unmeasurable
+	];
+	const proxy1 = recall.precisionProxy(decisionsFix, blocksFix, (f) => (f === proxySession ? turnsFix : null), 0);
+	check("proxy: 4 measured (unstamped-session entry skipped, never counted unreferenced)", proxy1.measured === 4);
+	check("proxy: referenced via shortId + via gist phrase; re-injection tail stripped; unreferenced stays unreferenced", proxy1.referenced === 2);
+	check("proxy: windowing — turn cursor drops old decisions from the denominator", recall.precisionProxy(decisionsFix, blocksFix, () => turnsFix, 106).measured === 0 && recall.precisionProxy(decisionsFix, blocksFix, () => turnsFix, 101).measured === 3); // turn ≤ 101-100 skipped
+	check("proxy: unlocatable query and missing file are unmeasurable, not unreferenced", recall.precisionProxy([{ ts: "t", query: "never asked this question anywhere", intent: "i", arm: "lex", winner: "exp:3", score: 1, injected: true, sessionFile: proxySession, turn: 1 }] as any, blocksFix, () => turnsFix, 0).measured === 0 && recall.precisionProxy(decisionsFix, blocksFix, () => null, 0).measured === 0);
+
+	// the primitives under the proxy
+	check("proxy: injected tail stripped before matching", !recall.referencedIn([{ user: "u", text: "[majordome recall · x turns 1–2] alpha beta gamma delta epsilon zeta" }], 0, "x:1", "alpha beta gamma delta epsilon zeta") && recall.referencedIn([{ user: "u", text: "plain alpha beta gamma delta epsilon zeta here" }], 0, "x:1", "alpha beta gamma delta epsilon zeta"));
+	check("proxy: beyond-3-turns does not count", !recall.referencedIn([{ user: "u", text: "x" }, { user: "u", text: "x" }, { user: "u", text: "x" }, { user: "u", text: "finally mentions code-parser:7" }], 0, "code-parser:7", null));
+	check("proxy: gist windows need ≥6 contiguous words (5-word echo is not a reference)", !recall.referencedIn([{ user: "u", text: "the exporter ships markdown tables" }], 0, "x:1", gistText) && recall.referencedIn([{ user: "u", text: "punctuated, line-broken form: The exporter ships markdown tables with column-alignment hints!" }], 0, "x:1", gistText));
+
+	// decision round-trip: the telemetry fields ride the existing log.jsonl
+	process.env.MAJORDOME_DIR = join(tmp, "recall-store");
+	process.env.MAJORDOME_TRAIL_FILE = join(tmp, "recall-trails.jsonl");
+	storeR.appendDecision({ ts: "2026-10-05T10:00:00Z", query: "q", intent: "i", arm: "lex", winner: "w:1", score: 0.9, injected: true, sessionFile: proxySession, turn: 42 } as any);
+	const back = storeR.lastDecisions(10)[0] as any;
+	check("telemetry: decision log carries sessionFile + turn stamps", back.sessionFile === proxySession && back.turn === 42);
+	delete process.env.MAJORDOME_DIR;
+
+	// bucket aggregation on a fixture corpus (env override — the hermetic seam)
+	const fpFix = join(tmp, "fp-fixture.json");
+	writeFileSync(fpFix, JSON.stringify({ specimens: [{ bucket: "wrong-repo" }, { bucket: "wrong-repo" }, { bucket: "stale" }, { bucket: "polysemy" }, { bucket: "weak-match" }, { bucket: "  " }, {}, { bucket: 42 }] }));
+	process.env.MAJORDOME_FP_FILE = fpFix;
+	const fpFixCounts = recall.fpCounts();
+	check("specimens: fixture counts by bucket, junk buckets skipped", fpFixCounts.total === 5 && fpFixCounts.byBucket["wrong-repo"] === 2 && fpFixCounts.byBucket["stale"] === 1);
+	check("specimens: stats fragment — canonical buckets fixed order, K total", recall.fpStatsLine(fpFixCounts) === "false-positive specimens: 5 (wrong-repo 2 · stale 1 · polysemy 1 · weak-match 1)");
+	writeFileSync(fpFix, "not json");
+	check("specimens: corrupt file → zeros + corrupt flag", (() => { const c = recall.fpCounts(); return c.total === 0 && c.corrupt === true; })());
+	delete process.env.MAJORDOME_FP_FILE;
+	check("specimens: absent file → zeros, not corrupt", (() => { const c = recall.fpCounts(join(tmp, "fp-nowhere.json")); return c.total === 0 && c.corrupt === false; })());
+
+	// the real seed corpus: 8 specimens from the 2026-10-05 session
+	const real = recall.fpCounts();
+	check("specimens: seed corpus parses — 8 specimens", real.total === 8 && !real.corrupt);
+	check("specimens: seed buckets wrong-repo 6 · stale 0 · polysemy 1 · weak-match 1", real.byBucket["wrong-repo"] === 6 && (real.byBucket["stale"] ?? 0) === 0 && real.byBucket["polysemy"] === 1 && real.byBucket["weak-match"] === 1);
+	check("specimens: all dated to the 2026-10-05 session", (() => { const j = JSON.parse(rfs(recall.fpFile(), "utf8")); return j.specimens.length === 8 && j.specimens.every((s: any) => s.date === "2026-10-05" && s.slug && s.query && s.injectedRef && s.bucket); })());
+
+	// the full stats line, both windows
+	check("stats: recall precision line (windowed)", recall.proxyStatsLine({ measured: 12, referenced: 7, windowed: true }, real) === "recall precision (proxy): 7/12 referenced (last 100 turns) · false-positive specimens: 8 (wrong-repo 6 · stale 0 · polysemy 1 · weak-match 1)");
+	check("stats: lifetime window when no turn cursor, null when nothing measurable", (recall.proxyStatsLine({ measured: 1, referenced: 0, windowed: false }, real) ?? "").includes("(lifetime)") && recall.proxyStatsLine({ measured: 0, referenced: 0, windowed: false }, real) === null);
+}
+
 if (failures) {
 	console.error(`\n${failures} failure(s)`);
 	process.exit(1);

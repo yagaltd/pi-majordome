@@ -1,0 +1,68 @@
+{
+ "specimens": [
+  {
+   "date": "2026-10-05",
+   "slug": "jev-guard",
+   "query": "jev-guard ASK threshold — when should the agent ask before proceeding",
+   "injectedRef": "models_inference:3",
+   "bucket": "wrong-repo",
+   "note": "models_inference KV-reuse block recalled for a jev-guard ASK-threshold question"
+  },
+  {
+   "date": "2026-10-05",
+   "slug": "pi",
+   "query": "mermaid node render — node labels wrapping onto the next line",
+   "injectedRef": "models_inference:6",
+   "bucket": "wrong-repo",
+   "note": "models_inference WebGPU block for a mermaid node-render question; polysemy: node/render"
+  },
+  {
+   "date": "2026-10-05",
+   "slug": "pi-majordome",
+   "query": "durable API harness — how the sidecar contract gets exercised",
+   "injectedRef": "models_inference:9",
+   "bucket": "wrong-repo",
+   "note": "models_inference API-design block for a durable-api/harness question"
+  },
+  {
+   "date": "2026-10-05",
+   "slug": "code-parser",
+   "query": "benchmark the code parser on the sample corpus",
+   "injectedRef": "models_inference:12",
+   "bucket": "wrong-repo",
+   "note": "models_inference Modal/Qwen block for a benchmark/code-parser question"
+  },
+  {
+   "date": "2026-10-05",
+   "slug": "mailbox-parser",
+   "query": "subagent task echo — why did the task id echo back",
+   "injectedRef": "mailbox-parser:2",
+   "bucket": "wrong-repo",
+   "note": "mailbox-parser typesafe-loop block for a subagent task/run echo question (1/2)"
+  },
+  {
+   "date": "2026-10-05",
+   "slug": "mailbox-parser",
+   "query": "subagent run echo — the completion line came back doubled",
+   "injectedRef": "mailbox-parser:2",
+   "bucket": "wrong-repo",
+   "note": "mailbox-parser typesafe-loop block for a subagent task/run echo question (2/2)"
+  },
+  {
+   "date": "2026-10-05",
+   "slug": "pi",
+   "query": "diagram render error missing bracket mermaid syntax pi update issue",
+   "injectedRef": "office-parser:14",
+   "bucket": "polysemy",
+   "note": "office-parser OCR/PPTX block (turns 14-22, 'Re-anchored OCR for scanned PDFs vs vision for complex PPTX') recalled for a mermaid parse-error question — the only shared token is the polysemous 'render'"
+  },
+  {
+   "date": "2026-10-05",
+   "slug": "jev-guard",
+   "query": "jev-guard install command — which package do I add",
+   "injectedRef": "code-parser:5",
+   "bucket": "weak-match",
+   "note": "code-parser code-map-crate block + resume hint for a jev-guard install-command question"
+  }
+ ]
+}

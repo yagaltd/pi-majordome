@@ -32,6 +32,7 @@ import { initRepo } from "./ext/init.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
+import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
 import { appendBlock, appendDecision, blockDims, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
 interface St {
@@ -111,6 +112,17 @@ function appendTail(lastUser: any, text: string): void {
 
 function currentTurnCount(): number {
 	return st.sessionFile ? parseSession(st.sessionFile).length : 0;
+}
+
+/** Cumulative turn cursor for decision-log stamps: meta.turns counts finished
+ * turns, so the turn in flight is turns+1 — the same cursor trail lines carry
+ * (stamped at turn_end). The recall-feedback proxy windows ✓ entries with it. */
+function inFlightTurn(): number {
+	try {
+		return (loadMeta().turns ?? 0) + 1;
+	} catch {
+		return 0; // unreadable store → unstamped (proxy treats it as unmeasurable)
+	}
 }
 
 function status(): void {
@@ -405,6 +417,7 @@ export default function majordome(pi: ExtensionAPI): void {
 					ts: new Date().toISOString(), query, intent: r?.intent ?? "continuation",
 					arm: r?.arm ?? "-", winner: r?.winner ? shortId(r.winner) : null,
 					score: r?.winner ? Math.round(r.score * 100) / 100 : null, injected: false,
+					sessionFile: st.sessionFile ?? undefined, turn: inFlightTurn(),
 				});
 				if (st.routeCache.contraLine) appendTail(lastUser, st.routeCache.contraLine);
 				if (judge) appendTail(lastUser, judge);
@@ -421,13 +434,20 @@ export default function majordome(pi: ExtensionAPI): void {
 			if (st.routeCache.contraLine) appendTail(lastUser, st.routeCache.contraLine);
 			if (judge) appendTail(lastUser, judge);
 			emitDocsNudge(lastUser);
-			return;
+			// ✓ decision-log entry (recall-feedback telemetry reads it): logged
+			// BEFORE the return, fresh-gated like the suppressed path so tool-loop
+			// refires don't double-log. This site sat dead after an early `return`
+			// since the interop rewrite — the dash/stats 'injected' count and the
+			// precision proxy both need it; reviving it is the telemetry's ground
+			// truth, not a new write path (log.jsonl, the existing sink).
 			st.injects++;
 			if (fresh) appendDecision({
 				ts: new Date().toISOString(), query, intent: r.intent, arm: r.arm,
 				winner: shortId(winner), score: Math.round(r.score * 1000) / 1000, injected: true,
+				sessionFile: st.sessionFile ?? undefined, turn: inFlightTurn(),
 			});
 			status();
+			return;
 		} catch {
 			// routing must never break a request
 		}
@@ -724,7 +744,8 @@ export default function majordome(pi: ExtensionAPI): void {
 			}
 			if (cmd === "stats") {
 				const all = lastDecisions(100000).reverse(); // oldest → newest
-				const judge = judgeStatsLines(aggregate()); // trail is the single source of truth — no parallel counters
+				const ag = aggregate(); // trail is the single source of truth — no parallel counters
+				const judge = judgeStatsLines(ag);
 				if (!all.length && !judge.length) return notify("no routing decisions logged yet");
 				const inj = all.filter((d) => d.injected);
 				const sup = all.filter((d) => !d.injected && d.winner);
@@ -733,6 +754,11 @@ export default function majordome(pi: ExtensionAPI): void {
 				const avg = (arr: typeof all) => (arr.length ? Math.round((arr.reduce((s2, d) => s2 + (d.score ?? 0), 0) / arr.length) * 100) / 100 : 0);
 				const arms = new Map<string, number>();
 				for (const d of inj) arms.set(d.arm, (arms.get(d.arm) ?? 0) + 1);
+				// recall-feedback section: the precision proxy reads the SAME log +
+				// the SAME session JSONLs the indexer parses (parseSession) — zero
+				// new judge calls, zero new write paths. Specimens are the corpus.
+				const proxy = precisionProxy(all, st.blocks, (f) => parseSession(f), ag.turns);
+				const recallLine = proxyStatsLine(proxy, fpCounts());
 				notify([
 					"╭─ /majordome stats (decision log)",
 					`│ turns seen      ${all.length}`,
@@ -741,8 +767,9 @@ export default function majordome(pi: ExtensionAPI): void {
 					`│ suppressed      ${sup.length}  (avg score ${avg(sup)} — gate rejects below it)`,
 					`│ arms (injected) ${[...arms].map(([a2, n]) => `${a2} ${n}`).join(" · ") || "-"}`,
 					...(judge.length ? ["├─ judge cost (trail aggregate)", ...judge.map((l) => `│ ${l}`)] : []),
+					...(recallLine ? ["├─ recall feedback (the self-improving loop)", `│ ${recallLine}`] : []),
 					"├─ reading the gate",
-					`│ recall precision proxy: injected avg (${avg(inj)}) vs suppressed avg (${avg(sup)})`,
+					`│ gate gap: injected avg (${avg(inj)}) vs suppressed avg (${avg(sup)})`,
 					`│ gate keeps injecting when the gap stays wide; if it narrows, raise MAJORDOME_MIN_SCORE`,
 					"╰─",
 				].join("\n"));

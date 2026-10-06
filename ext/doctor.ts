@@ -14,6 +14,7 @@ import { loadBlocks, loadLifecycle, loadMeta, loadVocab, majordomeDir, effective
 import { aggregate } from "./trail.ts";
 import { isSubagentSession } from "./core.ts";
 import { readDocsOverride, resolveDocsProfile } from "./docsprofile.ts";
+import { agentsReport } from "./agentsmd.ts";
 
 const dir = majordomeDir();
 
@@ -113,7 +114,16 @@ export async function doctor(): Promise<string> {
 		bad(`docs profile check failed: ${(e as Error).message}`);
 	}
 
-	// 9. judge-cost creep (trail aggregate): ONE line, only when notable —
+	// 9. AGENTS.md adoption (advisory): the same gap report init emits —
+	// conventions presence, greenfield-aware. Advisory only: the doctor never
+	// writes AGENTS.md (fixes are actions you choose). ✓ only when present
+	// with zero gaps; absent and gapped are notes, not failures.
+	try {
+		const ag = agentsReport(process.cwd());
+		L.push(`${ag.ok ? "✓" : "·"} ${ag.line}`);
+	} catch { /* advisory never fails the doctor */ }
+
+	// 10. judge-cost creep (trail aggregate): ONE line, only when notable —
 	// calls/turn above 3 over the last 100 turns smells like judge creep.
 	// Silent otherwise; a telemetry failure never fails the doctor.
 	try {

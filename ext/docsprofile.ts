@@ -92,18 +92,25 @@ export function readDocsOverride(cwd: string): { watch: string[] } | null | "inv
 	}
 }
 
-/** Detect the default profile from the repo cwd: any code manifest → coding
- * (README+CHANGELOG+docs/); otherwise generic (docs/ only). Never prompts. */
-export function detectDocsProfile(cwd: string): DocsProfile {
+/** Code-marker predicate over the repo cwd: any known manifest file, else a
+ * *.csproj/*.cabal glob. Shared by profile detection AND the AGENTS.md
+ * greenfield test (ext/agentsmd.ts) — one list, one predicate, two consumers. */
+export function hasCodeManifest(cwd: string): boolean {
 	let code = CODE_MANIFESTS.some((m) => existsSync(join(cwd, m)));
 	if (!code) {
 		try {
 			code = readdirSync(cwd).some((f) => f.endsWith(".csproj") || f.endsWith(".cabal"));
 		} catch {
-			/* unreadable cwd → generic */
+			/* unreadable cwd → no markers */
 		}
 	}
-	return code
+	return code;
+}
+
+/** Detect the default profile from the repo cwd: any code manifest → coding
+ * (README+CHANGELOG+docs/); otherwise generic (docs/ only). Never prompts. */
+export function detectDocsProfile(cwd: string): DocsProfile {
+	return hasCodeManifest(cwd)
 		? { watch: [...BUILTIN_DOC_WATCH], source: "detected-coding" }
 		: { watch: ["docs/"], source: "detected-generic" };
 }
