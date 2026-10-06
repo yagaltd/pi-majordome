@@ -70,7 +70,10 @@ the domain differs.
   too (did it land somewhere else?). Tables and queues are derived from
   STATUS.md by reading it, never from session memory.
 - **Verify before push, gates before commit** — never chain a gate and a push
-  in one command; a red gate stops the chain.
+  in one command; a red gate stops the chain. The push itself is
+  hook-enforced: `.githooks/pre-push` (installed via
+  `git config core.hooksPath .githooks`) reruns the gates and blocks red
+  pushes mechanically.
 
 ## The House
 

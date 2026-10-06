@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# mechanical gate — installed via: git config core.hooksPath .githooks
+# red gates block the push. Deterministic checks only — no classifier.
+set -u
+cd "$(git rev-parse --show-toplevel)" || exit 1
+fail=0
+npx tsx ext/selfcheck.ts > /tmp/prepush-selfcheck.txt 2>&1 || fail=1
+npx tsx tools/docsbench.ts > /tmp/prepush-docsbench.txt 2>&1 || fail=1
+if [ "$fail" -ne 0 ]; then
+  echo "PRE-PUSH GATE RED — push blocked. Evidence: /tmp/prepush-selfcheck.txt /tmp/prepush-docsbench.txt"
+  echo "Fix the gates; never chain a gate and a push in one command."
+  exit 1
+fi
+echo "pre-push gate green"
