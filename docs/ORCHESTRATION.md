@@ -31,7 +31,9 @@ a requirement. Light coordination from a working repo session is normal use.
 - Workers **self-init** on first start ("majordome init complete: +N blocks…").
 - Completed workers push a notice to the **deck inbox**; `/majordome one-pager`
   composes the cross-repo status doc.
-- A **sidecar** in watch mode keeps each registered repo's artifacts fresh.
+- A **sidecar** in watch mode keeping each registered repo's artifacts fresh is
+  planned, not yet built (prototype only, unwired, in `durable-sidecar/`; see
+  STATUS.md).
 - The brain is global; per-repo state is only the worker's own checkout. All
   blocks carry their repo slug (`code-parser:118`, `mailbox-parser:9`).
 
