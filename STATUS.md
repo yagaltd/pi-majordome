@@ -33,7 +33,7 @@ Update on land or drop — never leave a row stale past the session that changed
 | max-of-two re-grade | dropped | replaced by panel grading — its lean (absence must be evidenced by omission) preserved in the panel rationale | ext/panel.ts header |
 | mailbox-parser add-failed mystery | dropped | CORRECTED: repo exists (/home/aurel/Documents/github/mailbox-parser) and is a registered worker; the add-failure was ~ path expansion, fixed 44a536c | 44a536c |
 | docs/ROLES.md roles + communication charter (revised: integration pass — room dropped, loops corrected) | built | 1227a67 | origin study: codync rooms/team-MCP + firstmate pyramid; R1-R10 |
-| STATUS.md as docs-watch built-in + ingest source | pending | gap surfaced by ROLES charter §gaps #1,#5 | micro-slice in ext/docsprofile.ts |
+| STATUS.md as ingest-docs source (docs-watch half shipped in 881bb8e) | pending | ledger facts enter memory | ingest-docs sources config |
 | guard upstream notes (origin study: jev-guard) | dropped | owner decision 2026-10-06: not for us, case closed | row retired |
 | docs command naming consolidation (docs gen/pull) | pending | gap surfaced by ROLES charter §gaps #4 | replaces docs <kind> vs ingest-docs |
 | AGENTS.md (this repo) + docs taxonomy (docs/dev/, bench/ eval plans) + code-parser parked-dependency bullet | built | 035231b | ROLES.md v2 five-rule charter same commit |
