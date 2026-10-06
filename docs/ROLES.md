@@ -32,6 +32,14 @@ borrowed ideas land only after mapping onto our primitives.
    subagents from majordome or concierge), artifacts flow up. No
    worker-to-worker channels, ever — a dependency is an artifact path cited in
    a spec, sequenced by the manager.
+
+   Real-world semantics: the majordome orchestrates every request from the
+   captain; concierges run errands on its orders. One repo = one managing
+   context: the repo the majordome sits in is managed directly (majordome
+   takes the concierge duty, subagents build); every other repo gets a
+   concierge. Memory: global brain detached at ~/.pi/majordome (repo-tagged
+   blocks, orchestrator state); local memory per repo (.majordome/). Trails
+   flow up through consolidation; context flows down as briefs.
 2. **Spawn = verify.** Whoever spawns owns the first-line gate. Only the
    majordome merges and pushes. A role gets spawn rights only with the gate
    attached.
