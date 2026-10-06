@@ -249,7 +249,18 @@ npx tsx tools/lifecyclebench.ts       # the 10-gate harness, both tiers
   gist fallback uses your chat model at block close. `MAJORDOME_MIN_SCORE`
   (default 0.6) tunes the injection noise gate.
 
-### Status
+### Proposals
+
+Agents that lack permission to act leave a **proposal** instead:
+`.majordome/proposals/YYYY-MM-DD-<kind>.md` — plain markdown, `key: value`
+header (`kind`, `status: pending|approved|rejected`, `added`, `source`;
+decision adds `decided`, `by`, `reason`). Flat folder, state in metadata, the
+file never moves; body edits are append-only (`revised:`). Decisions are
+stamped by the butler and mirrored into STATUS.md; housekeeping lists pending
+and stale (>7d) proposals — it never decides. An explicit UI decline is a
+decision: recorded rejected, not pending. Spec: `ext/proposals.ts` header.
+
+## Status
 
 - **Shipped (v2.x)**: lifecycle states + consolidation (v2.4, bench-gated),
   orchestrator (deck / workers / inbox / one-pager), evidence floor

@@ -30,7 +30,7 @@ import { ingestDocs } from "./ext/ingest_docs.ts";
 import { listKinds, composeKind } from "./ext/docs.ts";
 import { initRepo } from "./ext/init.ts";
 import { agentsOffer } from "./ext/agentsmd.ts";
-import { writeOfferProposal } from "./ext/proposals.ts";
+import { writeOfferProposal, stampDecision } from "./ext/proposals.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
@@ -639,9 +639,9 @@ export default function majordome(pi: ExtensionAPI): void {
 					.then(async (m) => {
 						notify(m);
 						// AGENTS.md scaffold/augment (advisory): propose, apply ONLY on an
-						// explicit yes; every not-yes outcome (declined, headless) records a
-						// pending proposal under .majordome/proposals/ (ext/proposals.ts) and
-						// prints its path — AGENTS.md is never touched without the yes.
+						// explicit yes. Headless records a pending proposal under
+						// .majordome/proposals/; an explicit UI decline is a decision, stamped
+						// rejected at creation — AGENTS.md is never touched without the yes.
 						try {
 							const offer = agentsOffer(process.cwd());
 							if (!offer) return;
@@ -651,7 +651,8 @@ export default function majordome(pi: ExtensionAPI): void {
 								notify(`AGENTS.md ${offer.kind === "scaffold" ? "scaffolded" : "augmented"} → ${offer.target}`);
 							} else {
 								const p = writeOfferProposal(offer, process.cwd());
-								notify(`${offer.message}\nproposal (not applied) → ${p}`);
+								if (ctx.hasUI) stampDecision(p, { status: "rejected", by: "captain", reason: "declined at init" });
+								notify(`${offer.message}\nproposal (${ctx.hasUI ? "declined — recorded rejected" : "not applied — pending review"}) → ${p}`);
 							}
 						} catch { /* advisory never fails init */ }
 					})
