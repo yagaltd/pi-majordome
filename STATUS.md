@@ -47,7 +47,7 @@ Update on land or drop — never leave a row stale past the session that changed
 | pre-push mechanical gate (.githooks/pre-push — selfcheck+docsbench block red pushes) | built | 6e2dcd6 | jev-guard shape, deterministic checks, no classifier; installed via core.hooksPath |
 | ledger consistency judge (contradiction/cycle check across rows: gates vs triggers vs status) | pending | captain caught sqlite↔cells circular dependency + duplicate rows — no judge checks ledger-internal consistency | deterministic cycle/trigger check first (housekeep), judged pass later |
 | judge-credit warning (degraded judges surface in UI) | pending | trail records ok:false but no first-class credit/auth-exhaustion warning exists | consecutive judge failures → doctor/init injection warning |
-| queue-as-query (priority field on rows; /majordome queue reads data; STATUS.md demotes to generated export at sqlite) | pending | captain direction 2026-10-06: data-first, docs only as triggered exports (magic-docs philosophy) | rows gain priority+trigger fields; queue command reads them |
+| status as UI: /majordome status renders the ledger grouped by status/priority (zero standing tokens; optional --export md); queue-as-query at sqlite | pending | captain direction 2026-10-06: data-first, display in UI like list/dash, docs only as triggered exports; proposals get a view too (files stay as artifacts) | parse rows → render command; proposals view reuses scanProposals |
 | office-parser orch add (worker registration) | built | global: orchestrator.json 2026-10-06 — 4th worker, path verified | lazy-init on first start |
 
 ## Corrections to the 2026-10-05 session audit (verified before seeding)
