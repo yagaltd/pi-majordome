@@ -63,13 +63,16 @@ export function greenfieldRepo(cwd: string): boolean {
 
 /** Convention gaps in AGENTS.md content. Heuristic headings/bullets — this is
  * an advisory nudge, not a linter. A "Lessons" section records mistakes-as-
- * guidance (the same class Block.lesson indexes); a testing section records
- * how to verify; a no-compat rule frees greenfield work from shims; the
- * parked-dependencies rule keeps documented behavior from outliving the
- * mechanisms it promised. */
-export function agentsGaps(content: string, greenfield: boolean): string[] {
+ * guidance (the same class Block.lesson indexes) — proposed ONLY where the
+ * index does not already keep lessons (majordomeDir present ⇒ lessons have a
+ * home; a section there would be a second home — captain decision
+ * 2026-10-05: lessons live in the index, agents forget static files). A
+ * testing section records how to verify; a no-compat rule frees greenfield
+ * work from shims; the parked-dependencies rule keeps documented behavior
+ * from outliving the mechanisms it promised. */
+export function agentsGaps(content: string, greenfield: boolean, hasMajordome = false): string[] {
 	const gaps: string[] = [];
-	if (!/(^|\n)#{1,6}[^\n]*lessons/i.test(content)) gaps.push("no Lessons section");
+	if (!hasMajordome && !/(^|\n)#{1,6}[^\n]*lessons/i.test(content)) gaps.push("no Lessons section");
 	if (!/(^|\n)#{1,6}[^\n]*\btest/i.test(content) && !/(^|\n)[ \t]*[-*][^\n]*\btest/i.test(content)) gaps.push("no testing rules");
 	if (greenfield && !/no[\s-]*compat|without[ \t]+(?:backward[ \t]+)?compat|no[ \t]+backward/i.test(content)) {
 		gaps.push("no-compat rule missing (greenfield)");

@@ -1103,6 +1103,14 @@ if (process.argv.includes("--parity")) {
 	const cliSrc2 = await import("node:fs").then((fs) => fs.readFileSync(new URL("../tools/init-cli.ts", import.meta.url), "utf8"));
 	check("wiring: init boundary records offers via writeOfferProposal — no AGENTS.proposal.md write left, confirm gate intact", initBlock2.includes("writeOfferProposal") && initBlock2.includes("ui.confirm") && !initBlock2.includes("AGENTS.proposal.md") && cliSrc2.includes("writeOfferProposal") && !cliSrc2.includes("AGENTS.proposal.md"));
 	check("wiring: declined-with-UI stamps rejected — a no is a decision, not a pending proposal", idxSrc2.includes('stampDecision(p, { status: "rejected", by: "captain"') && idxSrc2.includes("declined — recorded rejected"));
+	{
+		// lessons gap suppressed where the index already keeps lessons (captain decision 2026-10-05)
+		const { agentsGaps } = await import("./agentsmd.ts");
+		const body = "# X\n\nno lessons here";
+		const without = agentsGaps(body, false, false);
+		const withMjd = agentsGaps(body, false, true);
+		check("agents: lessons gap fires without .majordome, suppressed with it (lessons live in the index)", without.includes("no Lessons section") && !withMjd.includes("no Lessons section"));
+	}
 
 	// the repo's OWN AGENTS.md passes the doctor's new check cleanly (it carries
 	// the parked-dependencies bullet — no parked-dependencies gap here)
