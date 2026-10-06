@@ -1,3 +1,7 @@
+added: 2026-10-06
+source: durable-sidecar evaluation (v2)
+status: decided: Path A
+
 # Pi Durable study — Path A/B decision input (v2 orchestrator)
 
 Date: 2026-10-03. Method: read the shipped API (`@earendil-works/pi-durable@1.0.1` on npm, README +

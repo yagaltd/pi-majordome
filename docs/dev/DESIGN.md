@@ -1,3 +1,7 @@
+added: 2026-10-06
+source: v2 architecture sessions (Path A/B)
+status: current
+
 # pi-majordome — design ledger
 
 Converged architecture for "infinite chat": topic-scoped, cross-session memory

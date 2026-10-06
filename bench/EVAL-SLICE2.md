@@ -1,3 +1,8 @@
+added: 2026-10-06
+source: slice eval program
+status: executed
+harness: bench/eval.py
+
 # Slice-Two Eval — hybrid retrieval, EMA boundaries, artifact dims, recency
 
 Date: 2026-09-28 · Same session and key as slice-one · Adds: hybrid token

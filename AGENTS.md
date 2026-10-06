@@ -45,6 +45,11 @@ the domain differs.
 - `ext/` — extension modules. `tools/` — CLIs and bench runners. Checks live
   in `ext/selfcheck.ts`; repos under test stay hermetic (never the real
   `~/.pi/majordome`).
+- **OKF metadata**: research artifacts (`docs/dev/`, `bench/EVAL-*`) carry a
+  plain `key: value` header — `added`, `source`, `status` — no fences. Product
+  docs are exempt (their structure is the metadata: CHANGELOG dates, STATUS
+  table). `AGENTS.md` stays header-free: it is a prompt surface; provenance
+  lives in prose.
 - New files go next to similar code. Never a new top-level directory without
   proposing it first.
 

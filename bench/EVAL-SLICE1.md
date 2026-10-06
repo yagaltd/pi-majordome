@@ -1,3 +1,8 @@
+added: 2026-10-06
+source: slice eval program
+status: executed
+harness: bench/eval.py
+
 # Slice-One Eval — session replay through the topic-memory indexer
 
 Date: 2026-09-28 · Session: code-parser `01a0e6ec` (101 user turns, 4 compactions,

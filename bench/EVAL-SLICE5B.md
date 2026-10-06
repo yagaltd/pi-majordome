@@ -1,3 +1,8 @@
+added: 2026-10-06
+source: slice eval program
+status: executed
+harness: bench/slice5b.py
+
 # Slice-5b — pair-cell positive case, confidence arms (rejected), AUG probes
 
 Date: 2026-09-28 · Three-session index: A (code-parser, 6 blocks) + SEP

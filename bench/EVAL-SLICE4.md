@@ -1,3 +1,8 @@
+added: 2026-10-06
+source: slice eval program
+status: executed
+harness: bench/eval.py
+
 # Slice-Four Eval — cross-session index, time-travel probes, communities
 
 Date: 2026-09-28 · Sessions: A = code-parser reference (105 turns, 6 gold

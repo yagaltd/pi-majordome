@@ -1,3 +1,7 @@
+added: 2026-10-06
+source: style-vector study 2026-10-05
+status: parked (queued slices)
+
 # FUTURE: Style Profile & Writing Enforcement
 
 Status: planned, not scheduled. Extraction→hint→score slices, then extract-if-proven

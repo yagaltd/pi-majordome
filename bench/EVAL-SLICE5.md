@@ -1,3 +1,8 @@
+added: 2026-10-06
+source: slice eval program
+status: executed
+harness: bench/slice5.py
+
 # Slice-Five Eval — pair cells, intent-specialist routing, community-as-unit
 
 Date: 2026-09-28 · Same two-session index (A: code-parser, B: MorphEditor,

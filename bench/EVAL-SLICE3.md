@@ -1,3 +1,8 @@
+added: 2026-10-06
+source: slice eval program
+status: executed
+harness: bench/eval.py
+
 # Slice-Three Eval — RRF fusion, query rewrites, dim induction
 
 Date: 2026-09-28 · Same session/key · Implements the slice-two hypotheses:

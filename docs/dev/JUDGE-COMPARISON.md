@@ -1,3 +1,7 @@
+added: 2026-10-06
+source: slice-3 failure-mode investigation
+status: current
+
 # Judge comparison — TypeLLM vs Jev on the slice-3 failure modes
 
 Date: 2026-09-28 · Same session, dims, and probes as slice-3 · Trigger: the
