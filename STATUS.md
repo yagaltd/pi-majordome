@@ -36,7 +36,7 @@ Update on land or drop — never leave a row stale past the session that changed
 | STATUS.md as docs-watch built-in + ingest source | pending | gap surfaced by ROLES charter §gaps #1,#5 | micro-slice in ext/docsprofile.ts |
 | guard upstream notes (origin study: jev-guard) | dropped | owner decision 2026-10-06: not for us, case closed | row retired |
 | docs command naming consolidation (docs gen/pull) | pending | gap surfaced by ROLES charter §gaps #4 | replaces docs <kind> vs ingest-docs |
-| AGENTS.md (this repo) + docs taxonomy (docs/dev/, bench/ eval plans) + code-parser parked-dependency bullet | built | this commit | ROLES.md v2 five-rule charter same commit |
+| AGENTS.md (this repo) + docs taxonomy (docs/dev/, bench/ eval plans) + code-parser parked-dependency bullet | built | 035231b | ROLES.md v2 five-rule charter same commit |
 | init AGENTS.md scaffold/augment flow (absent → propose template, present → gap-report ask-first) | pending | captain approved 2026-10-06 | extends ext/agentsmd.ts |
 | STATUS.md docs-watch built-in (nudge trigger) | pending | captain approved 2026-10-06 | ext/docsprofile.ts micro-slice |
 | office-parser orch add | pending | one command: /majordome orch add /home/aurel/Documents/github/office-parser (repo exists, unregistered) | ~/.pi/majordome/orchestrator.json |
