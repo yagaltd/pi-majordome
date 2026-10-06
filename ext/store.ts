@@ -93,6 +93,13 @@ export interface RoutingDecision {
 	winner: string | null;
 	score: number | null;
 	injected: boolean;
+	/** Recall-feedback telemetry (v2.10): the session the decision happened in
+	 * and the cumulative turn cursor (meta.turns + 1 — the in-flight turn, the
+	 * same cursor trail lines carry). Optional + lenient: pre-telemetry records
+	 * read fine without them (proxy skips unstamped ✓ entries — unmeasurable,
+	 * not unreferenced). No parallel store: these ride the existing log.jsonl. */
+	turn?: number;
+	sessionFile?: string;
 }
 
 export function majordomeDir(): string {
