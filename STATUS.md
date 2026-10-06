@@ -16,7 +16,7 @@ Update on land or drop — never leave a row stale past the session that changed
 | docs/ONE-PAGER.md build-day ledger | built | e413c2f | docs/ONE-PAGER.md |
 | docs/FUTURE-STYLE-PROFILE.md | built | 3368e7e | docs/FUTURE-STYLE-PROFILE.md |
 | orchestrator deck/workers/inbox | built | 3fe5f4a (push half 6a886b8) | ext/orch.ts · ext/inbox.ts · tools/dispatch.ts |
-| doc-drift gate in doctor + STATUS.md ledger | pending | lands in this session's housekeeping commit — flip to built citing its hash | ext/docdrift.ts · ext/doctor.ts check 11 · STATUS.md |
+| doc-drift gate in doctor + STATUS.md ledger | built | 2d01537 (the housekeeping commit above) | ext/docdrift.ts · ext/doctor.ts check 11 · STATUS.md |
 | sidecar watch mode | parked | prototype only: 26fde67 durable-sidecar/sidecar.ts (pi-durable watch mode) — NOT wired into ext/ or tools/; README shipped-claim drift caught by doctor and reworded to planned | durable-sidecar/ (unwired prototype) |
 | Concept Cells | parked | named cbd3b30 — gated on organic graph maturity | docs/OVERVIEW.md |
 | per-task worktrees for orch workers | parked | firstmate pattern note only — never built | docs/DESIGN.md layering section |
