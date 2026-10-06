@@ -39,6 +39,8 @@ Update on land or drop — never leave a row stale past the session that changed
 | AGENTS.md (this repo) + docs taxonomy (docs/dev/, bench/ eval plans) + code-parser parked-dependency bullet | built | 035231b | ROLES.md v2 five-rule charter same commit |
 | init AGENTS.md scaffold/augment flow (absent → propose template, present → gap-report ask-first) | pending | captain approved 2026-10-06 | extends ext/agentsmd.ts |
 | STATUS.md docs-watch built-in (nudge trigger) | pending | captain approved 2026-10-06 | ext/docsprofile.ts micro-slice |
+| scheduled housekeeping run (cheap dreaming: scheduler → doctor-cli housekeeping --brief → inbox) | pending | cognition dreaming study 2026-10-06 — effort S, impact M; promote when house >5 repos or first missed-consolidation incident | tools/doctor-cli.ts brief mode + scheduler install |
+| swarm measurement-discipline rule (one shared bench script per research swarm) | pending | cognition swarm study 2026-10-06 — effort XS, impact latent until first research swarm | ROLES.md patterns line |
 | office-parser orch add | pending | one command: /majordome orch add /home/aurel/Documents/github/office-parser (repo exists, unregistered) | ~/.pi/majordome/orchestrator.json |
 
 ## Corrections to the 2026-10-05 session audit (verified before seeding)
