@@ -184,7 +184,11 @@ results on master — verified by running `npx tsx tools/lifecyclebench.ts`:
 | aggregation (both refs top-5) | 100% | **3/3** | — |
 | abstention (false hits) | 0 | **0** (4 absent-topic probes) | — |
 
-Runtime ≈2.6s for both tiers. The bench found and fixed a real recall bug
+Live judge-graded gates use **panel grading** (majority of available engines,
+`ext/panel.ts`) — one drifting judge can't flip a gate; single-grader runs are
+marked variance-prone. Gate (f) verified stable at 100% across consecutive
+live runs (was: 112→89→95% flake on identical code). Runtime ≈2.6s for both
+tiers. The bench found and fixed a real recall bug
 (score-0 winners — now the evidence floor in `route()`). Machine-readable:
 `bench/results/lifecyclebench-last.json`.
 

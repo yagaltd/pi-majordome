@@ -1,4 +1,5 @@
 ## 2026-10-05 — v2 branch: judge-cost telemetry (trail aggregate)
+- panel grading: majority-of-available-engines for live judge-graded gates (ext/panel.ts; per-fact yes/no across TypeLLM/Jev/re-ask, tie resolves presence-ward, single-grader marked variance-prone, trail-recorded per grader) — shapebench gate (f) stable at 100% across consecutive live runs (closes the documented grader-drift flake).
 - AGENTS.md adoption: init/doctor gap report (greenfield vs brownfield via shared hasCodeManifest, Lessons/testing/no-compat gaps) — advisory only.
 - recall-feedback telemetry: revived the ✓ injected decision-log entry (dead since de2c1c1 — injections were never logged), precision proxy (shortId or ≥6-word gist phrase referenced within 3 turns), 8-specimen false-positive corpus (wrong-repo 6 · polysemy 1 · weak-match 1) + stats section. The self-improving loop: specimens become bench probes.
 - from_untrusted: provenance flag on ingested/shared blocks + `· unverified source` recall marker (zero new judge calls; sessions trusted-class by scope).
