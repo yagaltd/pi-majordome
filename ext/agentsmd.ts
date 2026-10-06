@@ -15,10 +15,12 @@
  *   present → augment: paste-ready additions for exactly the gaps found
  *   ok      → null (nothing to propose)
  * The offer is PURE. Writes happen only at the UI/CLI boundary (index.ts,
- * tools/init-cli.ts) and only after an explicit user yes — headless surfaces
- * instead write the review copy to .majordome/AGENTS.proposal.md and print
- * its path. This module itself never touches the filesystem for writing
- * (selfcheck pins that), so an auto-write is structurally impossible here.
+ * tools/init-cli.ts) and only after an explicit user yes — every not-yes
+ * outcome (declined, headless) instead records the offer as a pending
+ * proposal under .majordome/proposals/ via ext/proposals.ts (writeOfferProposal)
+ * and prints its path. This module itself never touches the filesystem for
+ * writing (selfcheck pins that), so an auto-write is structurally impossible
+ * here.
  *
  * Greenfield test: no .git history AND no code manifests (the docsprofile
  * detection list — one shared predicate, two consumers). Greenfield repos
@@ -160,16 +162,9 @@ function readAgentsContent(f: string): string {
 	}
 }
 
-/** Where the headless review copy of a proposal lands (never AGENTS.md —
- * that path is written only on an explicit user yes, at the UI/CLI boundary). */
-export function proposalPath(cwd: string): string {
-	return join(cwd, ".majordome", "AGENTS.proposal.md");
-}
-
 export interface AgentsOffer {
 	kind: "scaffold" | "augment";
 	target: string; // the AGENTS.md a user yes would write/append
-	path: string; // review copy for headless surfaces (proposalPath)
 	doc: string; // paste-ready: the full template (scaffold) or the additions (augment)
 	message: string; // the ONE compact ask (confirm dialog / headless print)
 }
@@ -182,7 +177,6 @@ export function agentsOffer(cwd: string): AgentsOffer | null {
 		return {
 			kind: "scaffold",
 			target: f,
-			path: proposalPath(cwd),
 			doc: AGENTS_TEMPLATE,
 			message: "No AGENTS.md found — scaffold one from the bundled template? (principles · invariants · structure · how-to-work · gates)",
 		};
@@ -197,7 +191,6 @@ export function agentsOffer(cwd: string): AgentsOffer | null {
 	return {
 		kind: "augment",
 		target: f,
-		path: proposalPath(cwd),
 		doc,
 		message: `AGENTS.md: present · ${gaps.join(" · ")} — propose these additions?`,
 	};

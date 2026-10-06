@@ -13,6 +13,12 @@
  *               allowlist (isSafeDocPath) — defense in depth, so a bug in a
  *               rule can never turn into a destructive action.
  *
+ * Advisory proposals findings (ext/proposals.ts): pending proposals in
+ * .majordome/proposals/ (with a stale >7d count) and legacy
+ * .majordome/AGENTS.proposal.md files are listed in needs-your-yes —
+ * deciding is the captain's; housekeeping counts and reports, it never
+ * stamps a decision.
+ *
  * Pure collection (collectHousekeep) is injectable for hermetic tests; the
  * live wrapper (housekeeping) probes the real repo (doctor audit, git log,
  * store parse health) and formats the fixed/needs-yes report.
@@ -24,6 +30,7 @@ import { doctor } from "./doctor.ts";
 import { DRIFT_RULES, ROADMAP_RE } from "./docdrift.ts";
 import { majordomeDir } from "./store.ts";
 import { parseStatusRows, normalizeStatusText, type StatusRow } from "./status.ts";
+import { scanProposals, type ProposalsScan } from "./proposals.ts";
 
 // ── the two fix classes ──────────────────────────────────────────────────────
 
@@ -160,6 +167,8 @@ export interface HousekeepInput {
 	storeCorrupt?: string[];
 	/** extra docs scanned for drift + safe-reworded (live default: docs/*.md) */
 	extraDocs?: { path: string; text: string }[];
+	/** proposals scan (live default: scanProposals(cwd); inject for hermetic tests) */
+	proposals?: ProposalsScan;
 }
 
 export interface HousekeepResult {
@@ -220,6 +229,17 @@ export function collectHousekeep(input: HousekeepInput): HousekeepResult {
 	const gitShas = input.gitShas ?? [];
 	for (const f of staleCommitFindings(rows, gitShas)) needsYes.push(f);
 	for (const f of mechanismGapFindings(readmeText, changelogText, rows)) needsYes.push(f);
+
+	// proposals lifecycle (advisory): pending + stale counts and the legacy
+	// file note — needs your yes; deciding is the captain's, never auto-decided
+	const ps = input.proposals ?? scanProposals(cwd);
+	checkLines.push(`proposals: ${ps.pending} pending · ${ps.stale} stale (>7d)${ps.legacy ? " · legacy AGENTS.proposal.md present" : ""}`);
+	if (ps.pending > 0) {
+		needsYes.push(`[proposals] ${ps.pending} pending proposal(s) in .majordome/proposals/ (${ps.stale} stale >7d) — deciding is the captain's; housekeeping never auto-decides`);
+	}
+	if (ps.legacy) {
+		needsYes.push(`[proposals] legacy proposal file .majordome/AGENTS.proposal.md — re-run init to regenerate under proposals/ or move manually`);
+	}
 
 	// dangerous proposals: derived from findings, listed never executed
 	for (const f of input.storeCorrupt ?? []) {

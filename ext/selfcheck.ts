@@ -980,8 +980,8 @@ if (process.argv.includes("--parity")) {
 
 // ── AGENTS.md adoption (init/doctor advisory + scaffold/augment offers) ──
 {
-	const { agentsReport, agentsGaps, greenfieldRepo, agentsOffer, AGENTS_TEMPLATE, proposalPath } = await import("./agentsmd.ts");
-	const { mkdirSync: mkd, readFileSync: rfsAg, existsSync: exAg } = await import("node:fs");
+	const { agentsReport, agentsGaps, greenfieldRepo, agentsOffer, AGENTS_TEMPLATE } = await import("./agentsmd.ts");
+	const { mkdirSync: mkd, readFileSync: rfsAg, existsSync: exAg, writeFileSync: wfAg } = await import("node:fs");
 
 	// fixture repos: greenfield (no .git, no manifests) vs brownfield (package.json)
 	const gf = join(tmp, "agents-greenfield");
@@ -1027,10 +1027,10 @@ if (process.argv.includes("--parity")) {
 	const gfScaffold = join(tmp, "agents-scaffold");
 	mkd(gfScaffold, { recursive: true });
 	const offScaffold = agentsOffer(gfScaffold);
-	check("agents: scaffold offer on greenfield — kind, target, review path", !!offScaffold && offScaffold.kind === "scaffold" && offScaffold.target === join(gfScaffold, "AGENTS.md") && offScaffold.path === proposalPath(gfScaffold) && offScaffold.path.endsWith(join(".majordome", "AGENTS.proposal.md")));
+	check("agents: scaffold offer on greenfield — kind + target (the proposal path is proposals.ts's fact, not this module's)", !!offScaffold && offScaffold.kind === "scaffold" && offScaffold.target === join(gfScaffold, "AGENTS.md") && !("path" in offScaffold));
 	check("agents: scaffold template carries the house sections (principles · invariants · structure · how-to-work incl. parked-deps · gates)", !!offScaffold && ["## Design Principles", "## Hard Invariants", "## Structure & Placement", "## How to Work", "Parked dependencies invalidate dependents", "Gates, not promises", "## Testing", "## Lessons"].every((s) => offScaffold!.doc.includes(s)));
 	check("agents: scaffold template passes the gap report clean (greenfield)", agentsGaps(AGENTS_TEMPLATE, true).length === 0);
-	check("agents: scaffold proposal writes nothing on its own", !exAg(join(gfScaffold, "AGENTS.md")) && !exAg(proposalPath(gfScaffold)));
+	check("agents: scaffold proposal writes nothing on its own", !exAg(join(gfScaffold, "AGENTS.md")) && !exAg(join(gfScaffold, ".majordome", "proposals")));
 
 	// augment proposal on a brownfield fixture: additions for exactly the gaps,
 	// ask-first (composing the offer must not touch the file)
@@ -1039,6 +1039,69 @@ if (process.argv.includes("--parity")) {
 	check("agents: augment offer on gapped brownfield — kind + gaps named in the ask", !!offAugment && offAugment.kind === "augment" && offAugment.target === join(bf, "AGENTS.md") && offAugment.message.includes("no Lessons section") && offAugment.message.includes("no testing rules") && offAugment.message.includes("no parked-dependencies rule"));
 	check("agents: augment doc proposes an addition per gap (incl. the parked-dependencies bullet)", !!offAugment && ["## Lessons", "## Testing", "Parked dependencies invalidate dependents"].every((s) => offAugment!.doc.includes(s)) && offAugment!.doc.includes("<!-- pi-majordome init"));
 	check("agents: ask-first — composing the augment offer leaves AGENTS.md byte-identical", rfsAg(join(bf, "AGENTS.md"), "utf8") === bfBefore);
+
+	// ── proposals lifecycle (.majordome/proposals/ — OKF metadata state) ──
+	const pr = await import("./proposals.ts");
+	const pRepo = join(tmp, "props-repo");
+	mkd(join(pRepo, ".majordome"), { recursive: true });
+
+	// write + parse roundtrip: the metadata header, title and body survive —
+	// the format spec lives in ext/proposals.ts's header; this pins it
+	const p1 = pr.writeProposal({ kind: "agents-scaffold", title: "Scaffold AGENTS.md from the bundled template", body: "principles · invariants · gates", source: "init", added: "2025-01-01" }, pRepo);
+	const raw1 = rfsAg(p1, "utf8");
+	const rt = pr.parseProposalText(raw1);
+	check("proposals: header parse roundtrip — kind/status/added/source + title + body", rt.meta.kind === "agents-scaffold" && rt.meta.status === "pending" && rt.meta.added === "2025-01-01" && rt.meta.source === "init" && rt.title === "Scaffold AGENTS.md from the bundled template" && rt.body.includes("principles · invariants · gates"));
+	check("proposals: flat folder, state is metadata — .majordome/proposals/YYYY-MM-DD-<kind>.md, no status subfolders", p1 === join(pRepo, ".majordome", "proposals", "2025-01-01-agents-scaffold.md"));
+
+	// same-day same-kind collision → -2 suffix (filename never changes after)
+	const p2 = pr.writeProposal({ kind: "agents-scaffold", title: "second", body: "again", added: "2025-01-01" }, pRepo);
+	check("proposals: same-day same-kind collision → -2 suffix", p2.endsWith(join("2025-01-01-agents-scaffold-2.md")) && exAg(p2));
+
+	// stampDecision: ONLY metadata keys move — the body is byte-identical
+	pr.stampDecision(p1, { status: "approved", by: "butler", reason: "captain said yes" });
+	const after = rfsAg(p1, "utf8");
+	check("proposals: stampDecision updates keys only — body byte-identical", after.slice(after.indexOf("\n\n")) === raw1.slice(raw1.indexOf("\n\n")));
+	const st = pr.parseProposalText(after).meta;
+	check("proposals: stamp writes decided/by/reason, keeps added + pending others untouched", st.status === "approved" && st.decided === pr.todayISO() && st.by === "butler" && st.reason === "captain said yes" && st.added === "2025-01-01");
+
+	// status values constrained: a non-decision stamp throws; a bogus-status
+	// file is not a proposal (excluded from the listing)
+	let noDecision = false;
+	try { pr.stampDecision(p2, { status: "pending" as "approved", by: "x" }); } catch { noDecision = true; }
+	wfAg(join(pRepo, ".majordome", "proposals", "2025-01-01-bogus.md"), "kind: x\nstatus: maybe\nadded: 2025-01-01\nsource: init\n\n# t\n\nb\n");
+	check("proposals: status values constrained — stamp rejects non-decisions, parse rejects bogus status", noDecision && pr.listProposals(pRepo).length === 2 && !pr.listProposals(pRepo).some((e) => e.file.includes("bogus")));
+
+	// listProposals: flat chronological listing with a status filter
+	check("proposals: listProposals filters by status (1 pending, 1 approved, bogus excluded)", pr.listProposals(pRepo, { status: "pending" }).length === 1 && pr.listProposals(pRepo, { status: "approved" }).length === 1);
+
+	// staleness: strictly > days — exactly 7d is not stale, 8d is; decided
+	// proposals never count
+	const pOld = pr.writeProposal({ kind: "docs-gap", title: "old", body: "b", added: "2025-01-01" }, pRepo);
+	check("proposals: stalePending is strictly >7d (7d boundary quiet, 8d flagged, approved never stale)", pr.stalePending(7, { cwd: pRepo, now: "2025-01-08" }).length === 0 && pr.stalePending(7, { cwd: pRepo, now: "2025-01-09" }).map((e) => e.path).sort().join("|") === [p2, pOld].sort().join("|"));
+
+	// housekeeping consumes the scan as an advisory needs-your-yes finding —
+	// counts pending + stale, notes the legacy file, never stamps a decision
+	const hk = await import("./housekeep.ts");
+	const scan = pr.scanProposals(pRepo, { now: "2025-01-09" });
+	wfAg(join(pRepo, ".majordome", "AGENTS.proposal.md"), "# legacy review copy\n");
+	const legacyScan = pr.scanProposals(pRepo, { now: "2025-01-09" });
+	const hkRes = hk.collectHousekeep({ cwd: pRepo, statusText: "", readmeText: "", changelogText: "", extraDocs: [], proposals: legacyScan });
+	check("proposals: scanProposals — flat-dir counts (3 parsed · 2 pending · 2 stale) + legacy flag", scan.entries.length === 3 && scan.pending === 2 && scan.stale === 2 && scan.legacy === false && legacyScan.legacy === true);
+	check("housekeep: pending proposals listed as needs-your-yes, never decided (file stays pending)", hkRes.needsYes.some((l) => l.includes("[proposals] 2 pending proposal(s)") && l.includes("2 stale >7d") && l.includes("deciding is the captain's") && l.includes("never auto-decides")) && hkRes.needsYes.some((l) => l.includes("legacy proposal file") && l.includes("re-run init to regenerate under proposals/ or move manually")) && rfsAg(p2, "utf8").includes("status: pending"));
+	check("housekeep: safe class unchanged — proposal paths stay outside the README/STATUS/docs allowlist", !hk.isSafeDocPath(".majordome/proposals/2025-01-01-agents-scaffold.md") && hk.isSafeDocPath("docs/x.md") && hk.isSafeDocPath("STATUS.md"));
+
+	// agentsmd stays provably write-free: no write call AND no proposals import
+	// that would smuggle a write path in transitively
+	const agSrc2 = await import("node:fs").then((fs) => fs.readFileSync(new URL("./agentsmd.ts", import.meta.url), "utf8"));
+	check("agents: still advisory — no write path, no proposals import in agentsmd.ts", !/writeFileSync|appendFileSync|rmSync|from "\.\/proposals\.ts"/.test(agSrc2));
+
+	// boundary wiring: index.ts + init-cli.ts record offers via
+	// writeOfferProposal — the AGENTS.proposal.md write is gone; applying to
+	// AGENTS.md still sits behind the explicit ui.confirm yes
+	const idxSrc2 = await import("node:fs").then((fs) => fs.readFileSync(new URL("../index.ts", import.meta.url), "utf8"));
+	const initBlock2 = idxSrc2.slice(idxSrc2.indexOf("cmd === \"init\""), idxSrc2.indexOf("cmd === \"help\""));
+	const cliSrc2 = await import("node:fs").then((fs) => fs.readFileSync(new URL("../tools/init-cli.ts", import.meta.url), "utf8"));
+	check("wiring: init boundary records offers via writeOfferProposal — no AGENTS.proposal.md write left, confirm gate intact", initBlock2.includes("writeOfferProposal") && initBlock2.includes("ui.confirm") && !initBlock2.includes("AGENTS.proposal.md") && cliSrc2.includes("writeOfferProposal") && !cliSrc2.includes("AGENTS.proposal.md"));
 
 	// the repo's OWN AGENTS.md passes the doctor's new check cleanly (it carries
 	// the parked-dependencies bullet — no parked-dependencies gap here)
@@ -1051,7 +1114,7 @@ if (process.argv.includes("--parity")) {
 	const initBlock = idxSrc.slice(idxSrc.indexOf('cmd === "init"'));
 	check("agents: init wiring — offer + explicit confirm gate before any apply", initBlock.includes("agentsOffer") && initBlock.includes("ui.confirm") && initBlock.indexOf("ui.confirm") < initBlock.indexOf("appendFileSync"));
 	const cliSrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("../tools/init-cli.ts", import.meta.url), "utf8"));
-	check("agents: headless CLI writes the review copy, never auto-applies", cliSrc.includes("agentsOffer") && cliSrc.includes("proposal") && !/appendFileSync/.test(cliSrc));
+	check("agents: headless CLI records a proposal, never auto-applies", cliSrc.includes("agentsOffer") && cliSrc.includes("writeOfferProposal") && cliSrc.includes("proposal") && !/appendFileSync|AGENTS\.proposal/.test(cliSrc));
 }
 
 // ── recall-feedback telemetry: precision proxy + false-positive specimens ──
