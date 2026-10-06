@@ -42,6 +42,7 @@ Update on land or drop — never leave a row stale past the session that changed
 | scheduled housekeeping run (cheap dreaming: scheduler → doctor-cli housekeeping --brief → inbox) | pending | cognition dreaming study 2026-10-06 — effort S, impact M; promote when house >5 repos or first missed-consolidation incident | tools/doctor-cli.ts brief mode + scheduler install |
 | swarm measurement-discipline rule (one shared bench script per research swarm) | pending | cognition swarm study 2026-10-06 — effort XS, impact latent until first research swarm | ROLES.md patterns line |
 | proposals lifecycle (.majordome/proposals/ — OKF metadata state, butler-stamped, advisory staleness) | built | fcc8519 + declined-rejected fix | ext/proposals.ts spec header; README §Proposals |
+| sqlite storage engine — one DB per repo + one global (blocks/trails/proposals tables; FTS5 replaces vocab index) | pending | leviathan study 2026-10-06 + pi-durable openNodeSqliteStorage; triggers: writer contention / house >5 repos / index rewrite | store.ts contract swap; steal: indexed-token single-match, BM25×boosts, atomic swap, safe FTS5 expressions |
 | office-parser orch add | pending | one command: /majordome orch add /home/aurel/Documents/github/office-parser (repo exists, unregistered) | ~/.pi/majordome/orchestrator.json |
 
 ## Corrections to the 2026-10-05 session audit (verified before seeding)

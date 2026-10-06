@@ -141,6 +141,7 @@ the lowest long-term cost for this repository and note it in the commit.
 
 /** The full report for a repo cwd. Absent file → the recommend line. */
 export function agentsReport(cwd: string): AgentsReport {
+	cwd = cwd || process.cwd();
 	const f = join(cwd, "AGENTS.md");
 	if (!existsSync(f)) {
 		return { present: false, ok: false, greenfield: greenfieldRepo(cwd), gaps: [], line: "AGENTS.md: absent — recommend one (init proposes a scaffold)" };
@@ -175,6 +176,7 @@ export interface AgentsOffer {
 /** The init proposal for a repo cwd, PURE (no writes — see the module
  * docstring). Null = present and zero gaps → nothing to propose. */
 export function agentsOffer(cwd: string): AgentsOffer | null {
+	cwd = cwd || process.cwd();
 	const f = join(cwd, "AGENTS.md");
 	if (!existsSync(f)) {
 		return {
