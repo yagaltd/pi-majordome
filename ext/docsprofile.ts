@@ -3,14 +3,16 @@
  *
  * A docs profile says which docs a repo watches for the nudge pipeline:
  *   { watch: string[] }  — names are built-ins ("README", "CHANGELOG",
- *   "docs/") or custom doc names ("NOTES" → matches /notes\.md at a path
- *   boundary, case-insensitive).
+ *   "STATUS", "docs/") or custom doc names ("NOTES" → matches /notes\.md
+ *   at a path boundary, case-insensitive).
  *
  * Resolution order (resolveDocsProfile):
  *   1. repo override  .majordome/docs.json  {"watch":[...]}
  *   2. stored profile (index.json docsProfile — detected at init)
  *   3. detected default: any code manifest in the repo cwd → coding
- *      (README+CHANGELOG+docs/); else generic (docs/ only)
+ *      (README+CHANGELOG+STATUS+docs/ — STATUS is the deliverable ledger, a
+ *      ledger edit is a docs touch like a CHANGELOG entry); else generic
+ *      (docs/ only)
  *
  * Init is sometimes HEADLESS (worker cold-start) — detection never prompts;
  * the init output notes the resolution and the override path instead.
@@ -31,7 +33,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /** Built-in watch names — these keep their exact touch regexes (scanDocsTouched). */
-export const BUILTIN_DOC_WATCH: readonly string[] = ["README", "CHANGELOG", "docs/"];
+export const BUILTIN_DOC_WATCH: readonly string[] = ["README", "CHANGELOG", "STATUS", "docs/"];
 
 export interface DocsProfile {
 	watch: string[]; // doc names watched by the nudge pipeline
@@ -57,6 +59,7 @@ export function isValidDocsProfile(p: unknown): p is DocsProfile {
 export function watchRegexFor(name: string): RegExp {
 	if (name === "README") return /[/"\\]readme\.md/i;
 	if (name === "CHANGELOG") return /[/"\\]changelog\.md/i;
+	if (name === "STATUS") return /[/"\\]status\.md/i;
 	if (name === "docs/") return /[/"\\]docs\//i;
 	const esc = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 	return new RegExp(`[/\\\\]${esc}\\.md`, "i");
@@ -69,6 +72,7 @@ function normalizeWatchName(n: string): string {
 	const t = n.trim();
 	if (/^readme$/i.test(t)) return "README";
 	if (/^changelog$/i.test(t)) return "CHANGELOG";
+	if (/^status$/i.test(t)) return "STATUS";
 	if (/^docs\/?$/i.test(t)) return "docs/";
 	return t;
 }
@@ -108,7 +112,8 @@ export function hasCodeManifest(cwd: string): boolean {
 }
 
 /** Detect the default profile from the repo cwd: any code manifest → coding
- * (README+CHANGELOG+docs/); otherwise generic (docs/ only). Never prompts. */
+ * (README+CHANGELOG+STATUS+docs/); otherwise generic (docs/ only). Never
+ * prompts. */
 export function detectDocsProfile(cwd: string): DocsProfile {
 	return hasCodeManifest(cwd)
 		? { watch: [...BUILTIN_DOC_WATCH], source: "detected-coding" }

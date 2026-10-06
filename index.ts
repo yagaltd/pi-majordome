@@ -29,6 +29,7 @@ import { compileMap } from "./ext/map.ts";
 import { ingestDocs } from "./ext/ingest_docs.ts";
 import { listKinds, composeKind } from "./ext/docs.ts";
 import { initRepo } from "./ext/init.ts";
+import { agentsOffer } from "./ext/agentsmd.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
@@ -634,7 +635,26 @@ export default function majordome(pi: ExtensionAPI): void {
 			}
 			if (cmd === "init") {
 				initRepo({ cwd: process.cwd(), dryRun: a === "dry-run", slug: a && a !== "dry-run" ? a : undefined })
-					.then((m) => notify(m))
+					.then(async (m) => {
+						notify(m);
+						// AGENTS.md scaffold/augment (advisory): propose, apply ONLY on an
+						// explicit yes; declined → nothing; headless → review copy + path.
+						try {
+							const offer = agentsOffer(process.cwd());
+							if (!offer) return;
+							if (ctx.hasUI && await ctx.ui.confirm("majordome init — AGENTS.md", `${offer.message}\n\n${offer.kind === "scaffold" ? "Write" : "Append the additions to"} ${offer.target}?`)) {
+								if (offer.kind === "scaffold") writeFileSync(offer.target, offer.doc);
+								else appendFileSync(offer.target, `\n\n${offer.doc}`);
+								notify(`AGENTS.md ${offer.kind === "scaffold" ? "scaffolded" : "augmented"} → ${offer.target}`);
+							} else if (!ctx.hasUI) {
+								mkdirSync(join(process.cwd(), ".majordome"), { recursive: true });
+								writeFileSync(offer.path, offer.doc);
+								notify(`${offer.message}\nproposal (not applied) → ${offer.path}`);
+							} else {
+								notify("AGENTS.md proposal declined — nothing written");
+							}
+						} catch { /* advisory never fails init */ }
+					})
 					.catch((e) => notify(`init failed: ${(e as Error).message}`));
 				return;
 			}

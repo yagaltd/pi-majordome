@@ -421,13 +421,39 @@ if (process.argv.includes("--parity")) {
 		return wr.test('"path":"docs/README.md"') && wr.test('"repo\\\\README.md"') && !wr.test("plain README.md prose") && !wr.test('"x/footer-readme.md"') && watchRegexFor("docs/").test('"path":"docs/api"') && !watchRegexFor("docs/").test('"path":"docsx/api"');
 	})());
 
+	// 1b. STATUS built-in (the deliverable ledger): touch regex mirrors
+	// CHANGELOG's, coding default grows to README+CHANGELOG+STATUS+docs/,
+	// generic stays docs/ only, custom overrides still win
+	check("watch: built-ins are README+CHANGELOG+STATUS+docs/", JSON.stringify(BUILTIN_DOC_WATCH) === JSON.stringify(["README", "CHANGELOG", "STATUS", "docs/"]));
+	check("watch: STATUS touch regex mirrors CHANGELOG (path boundary, case-insensitive)", (() => {
+		const wr = watchRegexFor("STATUS");
+		return wr.test('"path":"docs/STATUS.md"') && wr.test('"repo\\\\STATUS.md"') && wr.test('"x/status.md"') && !wr.test("plain STATUS.md prose") && !wr.test('"x/footer-status.md"') && !watchRegexFor("CHANGELOG").test('"path":"STATUS.md"');
+	})());
+	check("profile: custom override still wins over the detected coding default", (() => {
+		const repoO = join(tmp, "prof-override-coding");
+		mkd(join(repoO, ".majordome"), { recursive: true });
+		writeFileSync(join(repoO, "package.json"), "{}");
+		writeFileSync(join(repoO, ".majordome", "docs.json"), '{"watch":["NOTES"]}');
+		const r = resolveDocsProfile(repoO, null);
+		return r.source === "override" && r.watch.join(",") === "NOTES";
+	})());
+	// a STATUS.md touch satisfies the docs nudge like README/CHANGELOG: the
+	// cursor advances (the exact index.ts turn_end wiring) and covers the work
+	const { cursorKey } = await import("./router.ts");
+	const SFS = "/h/.pi/agent/sessions/--home-u-repos--/s.jsonl";
+	const implS = ["a", "b", "c"].map((g, i) => ({ sessionFile: SFS, intent: "implementation", gist: `built ${g}`, closedAt: `2026-10-0${i + 1}T12:00:00Z` }));
+	const stCur: Record<string, string> = {};
+	for (const doc of scanDocsTouched('"file":"/repo/STATUS.md"')) stCur[cursorKey("--home-u-repos--", doc)] = "2026-10-02T00:00:00Z";
+	check("nudge: STATUS.md touch scans as a built-in and satisfies the nudge (cursor covers)", scanDocsTouched('"file":"/repo/STATUS.md"').join(",") === "STATUS" && stCur["--home-u-repos--:STATUS"] === "2026-10-02T00:00:00Z" && docsNudge(implS as any, SFS, stCur) === null);
+	check("nudge: without the STATUS touch the nudge still fires at 3", (docsNudge(implS as any, SFS, {}) ?? "").includes("3 implementation blocks"));
+
 	// 2. profile resolution precedence: override > stored > detected
 	const repoC = join(tmp, "prof-coding");
 	const repoG = join(tmp, "prof-generic");
 	mkd(join(repoC, "lib"), { recursive: true });
 	writeFileSync(join(repoC, "Cargo.toml"), "[package]\n");
 	mkd(join(repoG, "docs"), { recursive: true });
-	check("profile: code manifest → coding (README+CHANGELOG+docs/)", JSON.stringify(detectDocsProfile(repoC)) === JSON.stringify({ watch: [...BUILTIN_DOC_WATCH], source: "detected-coding" }));
+	check("profile: code manifest → coding (README+CHANGELOG+STATUS+docs/)", JSON.stringify(detectDocsProfile(repoC)) === JSON.stringify({ watch: [...BUILTIN_DOC_WATCH], source: "detected-coding" }));
 	const repoCabal = join(tmp, "prof-cabal");
 	mkd(repoCabal, { recursive: true });
 	writeFileSync(join(repoCabal, "majordome.cabal"), "cabal-version: 3.0\n");
@@ -952,10 +978,10 @@ if (process.argv.includes("--parity")) {
 	delete process.env.MAJORDOME_TRAIL_FILE;
 }
 
-// ── AGENTS.md adoption (init/doctor advisory, greenfield vs brownfield) ──
+// ── AGENTS.md adoption (init/doctor advisory + scaffold/augment offers) ──
 {
-	const { agentsReport, agentsGaps, greenfieldRepo } = await import("./agentsmd.ts");
-	const { mkdirSync: mkd } = await import("node:fs");
+	const { agentsReport, agentsGaps, greenfieldRepo, agentsOffer, AGENTS_TEMPLATE, proposalPath } = await import("./agentsmd.ts");
+	const { mkdirSync: mkd, readFileSync: rfsAg, existsSync: exAg } = await import("node:fs");
 
 	// fixture repos: greenfield (no .git, no manifests) vs brownfield (package.json)
 	const gf = join(tmp, "agents-greenfield");
@@ -967,33 +993,65 @@ if (process.argv.includes("--parity")) {
 	mkd(join(gf, ".git"), { recursive: true });
 	check("agents: .git presence (dir or worktree file) → brownfield", greenfieldRepo(gf) === false);
 
-	// present + all conventions (greenfield, incl. the no-compat rule) → ok
+	// present + all conventions (greenfield, incl. no-compat + parked-deps) → ok
 	const full = join(tmp, "agents-full");
 	mkd(full, { recursive: true });
-	writeFileSync(join(full, "AGENTS.md"), "# AGENTS.md\n\n## Lessons\n- record mistakes as guidance\n\n## Testing\n- npx tsx ext/selfcheck.ts must stay green\n\n## Compatibility\n- no compat shims — we ship greenfield\n");
+	writeFileSync(join(full, "AGENTS.md"), "# AGENTS.md\n\n## Lessons\n- record mistakes as guidance\n\n## Testing\n- npx tsx ext/selfcheck.ts must stay green\n\n## Compatibility\n- no compat shims — we ship greenfield\n\n## How to Work\n- **Parked dependencies invalidate dependents** — parks re-decide their documented dependents.\n");
 	const repFull = agentsReport(full);
 	check("agents: present · ok when every convention is there", repFull.present && repFull.ok && repFull.line === "AGENTS.md: present · ok");
+	check("agents: zero gaps → null offer (nothing to propose)", agentsOffer(full) === null);
 
 	// missing sections → gap list; brownfield never flagged for no-compat
 	writeFileSync(join(bf, "AGENTS.md"), "# AGENTS.md\n\nsome notes, no sections\n");
 	const repBf = agentsReport(bf);
-	check("agents: brownfield gaps = lessons + testing only (no no-compat flag)", JSON.stringify(repBf.gaps) === JSON.stringify(["no Lessons section", "no testing rules"]) && repBf.line === "AGENTS.md: present · no Lessons section · no testing rules" && !repBf.ok);
+	check("agents: brownfield gaps = lessons + testing + parked-deps (no no-compat flag)", JSON.stringify(repBf.gaps) === JSON.stringify(["no Lessons section", "no testing rules", "no parked-dependencies rule"]) && repBf.line === "AGENTS.md: present · no Lessons section · no testing rules · no parked-dependencies rule" && !repBf.ok);
 
 	// greenfield without a no-compat rule → third gap
 	const part = join(tmp, "agents-part");
 	mkd(part, { recursive: true });
 	writeFileSync(join(part, "AGENTS.md"), "# AGENTS.md\n\n## Lessons\nx\n\n## Testing rules\ny\n");
 	const repGf = agentsReport(part);
-	check("agents: greenfield without no-compat rule → third gap", JSON.stringify(repGf.gaps) === JSON.stringify(["no-compat rule missing (greenfield)"]));
-	check("agents: gap predicates — lessons heading, testing heading or bullet, no-compat phrasings", agentsGaps("## Lessons\n## Testing\nno-compat shims", true).length === 0 && agentsGaps("- test all the things", false).length === 1 && !agentsGaps("no backward compat", true).includes("no-compat rule missing (greenfield)"));
+	check("agents: greenfield without no-compat rule → gaps name it (+ parked-deps)", JSON.stringify(repGf.gaps) === JSON.stringify(["no-compat rule missing (greenfield)", "no parked-dependencies rule"]));
+	check("agents: gap predicates — lessons heading, testing heading or bullet, no-compat + parked phrasings", agentsGaps("## Lessons\n## Testing\nno-compat shims\n- parked dependencies invalidate dependents", true).length === 0 && agentsGaps("- test all the things", false).length === 2 && !agentsGaps("no backward compat", true).includes("no-compat rule missing (greenfield)"));
 
-	// absent → recommend line; doctor/init share the same line
+	// absent → recommend line (init now offers the scaffold); doctor/init share it
 	const repAbsent = agentsReport(join(tmp, "agents-nowhere"));
-	check("agents: absent → recommend one (draft via /majordome docs)", !repAbsent.present && repAbsent.line === "AGENTS.md: absent — recommend one (draft via /majordome docs)");
+	check("agents: absent → recommend one (init proposes a scaffold)", !repAbsent.present && repAbsent.line === "AGENTS.md: absent — recommend one (init proposes a scaffold)");
 	// advisory only: the module must not carry a write path (static gap-rule —
-	// AGENTS.md is the agent's to write, majordome reports gaps)
+	// AGENTS.md is written only on an explicit user yes, at the UI/CLI boundary;
+	// this module composes offers, it can never touch the disk)
 	const agSrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("./agentsmd.ts", import.meta.url), "utf8"));
 	check("agents: advisory only — no write path in the module", !/writeFileSync|appendFileSync|rmSync/.test(agSrc));
+
+	// scaffold proposal on a greenfield fixture: template composes, nothing writes
+	const gfScaffold = join(tmp, "agents-scaffold");
+	mkd(gfScaffold, { recursive: true });
+	const offScaffold = agentsOffer(gfScaffold);
+	check("agents: scaffold offer on greenfield — kind, target, review path", !!offScaffold && offScaffold.kind === "scaffold" && offScaffold.target === join(gfScaffold, "AGENTS.md") && offScaffold.path === proposalPath(gfScaffold) && offScaffold.path.endsWith(join(".majordome", "AGENTS.proposal.md")));
+	check("agents: scaffold template carries the house sections (principles · invariants · structure · how-to-work incl. parked-deps · gates)", !!offScaffold && ["## Design Principles", "## Hard Invariants", "## Structure & Placement", "## How to Work", "Parked dependencies invalidate dependents", "Gates, not promises", "## Testing", "## Lessons"].every((s) => offScaffold!.doc.includes(s)));
+	check("agents: scaffold template passes the gap report clean (greenfield)", agentsGaps(AGENTS_TEMPLATE, true).length === 0);
+	check("agents: scaffold proposal writes nothing on its own", !exAg(join(gfScaffold, "AGENTS.md")) && !exAg(proposalPath(gfScaffold)));
+
+	// augment proposal on a brownfield fixture: additions for exactly the gaps,
+	// ask-first (composing the offer must not touch the file)
+	const bfBefore = rfsAg(join(bf, "AGENTS.md"), "utf8");
+	const offAugment = agentsOffer(bf);
+	check("agents: augment offer on gapped brownfield — kind + gaps named in the ask", !!offAugment && offAugment.kind === "augment" && offAugment.target === join(bf, "AGENTS.md") && offAugment.message.includes("no Lessons section") && offAugment.message.includes("no testing rules") && offAugment.message.includes("no parked-dependencies rule"));
+	check("agents: augment doc proposes an addition per gap (incl. the parked-dependencies bullet)", !!offAugment && ["## Lessons", "## Testing", "Parked dependencies invalidate dependents"].every((s) => offAugment!.doc.includes(s)) && offAugment!.doc.includes("<!-- pi-majordome init"));
+	check("agents: ask-first — composing the augment offer leaves AGENTS.md byte-identical", rfsAg(join(bf, "AGENTS.md"), "utf8") === bfBefore);
+
+	// the repo's OWN AGENTS.md passes the doctor's new check cleanly (it carries
+	// the parked-dependencies bullet — no parked-dependencies gap here)
+	const own = rfsAg(new URL("../AGENTS.md", import.meta.url), "utf8");
+	check("agents: this repo's own AGENTS.md passes the parked-dependencies check", !agentsGaps(own, false).includes("no parked-dependencies rule"));
+
+	// wiring: index.ts applies ONLY behind an explicit ui.confirm yes; init-cli
+	// (headless) writes the review copy and prints its path — never auto-apply
+	const idxSrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("../index.ts", import.meta.url), "utf8"));
+	const initBlock = idxSrc.slice(idxSrc.indexOf('cmd === "init"'));
+	check("agents: init wiring — offer + explicit confirm gate before any apply", initBlock.includes("agentsOffer") && initBlock.includes("ui.confirm") && initBlock.indexOf("ui.confirm") < initBlock.indexOf("appendFileSync"));
+	const cliSrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("../tools/init-cli.ts", import.meta.url), "utf8"));
+	check("agents: headless CLI writes the review copy, never auto-applies", cliSrc.includes("agentsOffer") && cliSrc.includes("proposal") && !/appendFileSync/.test(cliSrc));
 }
 
 // ── recall-feedback telemetry: precision proxy + false-positive specimens ──
