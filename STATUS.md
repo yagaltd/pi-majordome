@@ -17,6 +17,7 @@ Update on land or drop — never leave a row stale past the session that changed
 | docs/FUTURE-STYLE-PROFILE.md | built | 3368e7e | docs/FUTURE-STYLE-PROFILE.md |
 | orchestrator deck/workers/inbox | built | 3fe5f4a (push half 6a886b8) | ext/orch.ts · ext/inbox.ts · tools/dispatch.ts |
 | doc-drift gate in doctor + STATUS.md ledger | built | 2d01537 (the housekeeping commit above) | ext/docdrift.ts · ext/doctor.ts check 11 · STATUS.md |
+| housekeeping routine (status-join in recall + doctor/housekeeping commands, safe-fix vs needs-yes) | built | 9df6d18 + this commit | ext/status.ts · ext/housekeep.ts · tools/doctor-cli.ts · index.ts (statusJoinTail + command registry) · ext/selfcheck.ts |
 | sidecar watch mode | parked | prototype only: 26fde67 durable-sidecar/sidecar.ts (pi-durable watch mode) — NOT wired into ext/ or tools/; README shipped-claim drift caught by doctor and reworded to planned | durable-sidecar/ (unwired prototype) |
 | Concept Cells | parked | named cbd3b30 — gated on organic graph maturity | docs/OVERVIEW.md |
 | per-task worktrees for orch workers | parked | firstmate pattern note only — never built | docs/DESIGN.md layering section |
