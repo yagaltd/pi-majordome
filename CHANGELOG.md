@@ -1,4 +1,5 @@
 ## 2026-10-05 — v2 branch: judge-cost telemetry (trail aggregate)
+- house registered office-parser as 4th orch worker (path verified, global: orchestrator.json); STATUS gate now accepts global-state evidence for built rows that are not repo commits.
 - agentsmd cwd guard (undefined cwd → process.cwd()) — fixes fs.existsSync deprecation warning in headless doctor paths; sqlite storage study queued (STATUS) with leviathan FTS5 patterns + pi-durable option, gated on contention/scale.
 - agents gap-report: Lessons-section gap is now conditional — suppressed wherever .majordome exists (lessons live in the index there; captain decision 2026-10-05: agents forget static files). Fixed decision-vs-mechanism drift where the loopbuilder gap check kept re-proposing a rejected idea; selfcheck pin added.
 - proposals lifecycle: .majordome/proposals/YYYY-MM-DD-<kind>.md (OKF metadata state, flat folder, decisions stamped in metadata by the butler + mirrored to STATUS.md, append-only revisions; housekeeping lists pending/stale >7d/legacy, never decides) — replaces .majordome/AGENTS.proposal.md; declined-with-UI is stamped rejected (a no is a decision, not pending).

@@ -82,3 +82,9 @@ the domain differs.
 
 - TypeScript / CodeNNL for `ext/` and `tools/`; keep modules small (~300–400
   lines soft limit); split at real responsibility boundaries only.
+
+
+<!-- pi-majordome init: proposed AGENTS.md additions -->
+
+## Lessons
+- Record mistakes as guidance here, newest first — a lesson beats a lecture.

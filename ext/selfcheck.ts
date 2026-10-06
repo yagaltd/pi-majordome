@@ -1267,7 +1267,7 @@ if (process.argv.includes("--parity")) {
 	const STATUSES = new Set(["built", "parked", "dropped", "pending"]);
 	check("STATUS.md: statuses limited to built/parked/dropped/pending", stRows.every((r) => STATUSES.has(r.status)));
 	check("STATUS.md: exactly one row per item (no duplicate items)", new Set(stRows.map((r) => r.item)).size === stRows.length);
-	check("STATUS.md: every built row cites a 7-hex commit", stRows.every((r) => r.status !== "built" || /\b[0-9a-f]{7}\b/.test(r.evidence)));
+	check("STATUS.md: every built row cites a 7-hex commit or global-state evidence", stRows.every((r) => r.status !== "built" || /\b[0-9a-f]{7}\b/.test(r.evidence) || /^global: /.test(r.evidence)));
 	check("STATUS.md: real ledger already canonical (normalizer is a no-op)", !statusMod.normalizeStatusText(stText).changed);
 }
 
