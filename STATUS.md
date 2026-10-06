@@ -48,6 +48,7 @@ Update on land or drop — never leave a row stale past the session that changed
 | ledger consistency judge (contradiction/cycle check across rows: gates vs triggers vs status) | pending | captain caught sqlite↔cells circular dependency + duplicate rows — no judge checks ledger-internal consistency | deterministic cycle/trigger check first (housekeep), judged pass later |
 | judge-credit warning (degraded judges surface in UI) | pending | trail records ok:false but no first-class credit/auth-exhaustion warning exists | consecutive judge failures → doctor/init injection warning |
 | status as UI: /majordome status renders the ledger (this slice: the view; queue-as-query at sqlite later) | built | 6c5fb1b | captain direction 2026-10-06: data-first, display in UI like list/dash, docs only as triggered exports; proposals get a view too (files stay as artifacts) | parse rows → render command; proposals view reuses scanProposals |
+| /majordome status house view (aggregate registered workers' ledgers + house ledger; status <name> for one; cold = not init'd) | pending | captain ran status from code-parser session — repo-scoped view returned empty; the queue is the house's | status.ts render + orchestrator.json roster; loadStatusRows per worker cwd |
 | office-parser orch add (worker registration) | built | global: orchestrator.json 2026-10-06 — 4th worker, path verified | lazy-init on first start |
 
 ## Corrections to the 2026-10-05 session audit (verified before seeding)
