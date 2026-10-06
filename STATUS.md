@@ -44,7 +44,7 @@ Update on land or drop — never leave a row stale past the session that changed
 | proposals lifecycle (.majordome/proposals/ — OKF metadata state, butler-stamped, advisory staleness) | built | fcc8519 + declined-rejected fix | ext/proposals.ts spec header; README §Proposals |
 | sqlite storage engine — one DB per repo + one global (blocks/trails/proposals tables; FTS5 replaces vocab index) | pending | leviathan study 2026-10-06 + pi-durable openNodeSqliteStorage; triggers: writer contention / house >5 repos / index rewrite | store.ts contract swap; steal: indexed-token single-match, BM25×boosts, atomic swap, safe FTS5 expressions |
 | orch add: eager init at link time (currently lazy — first worker start) | pending | captain request 2026-10-06 — mechanism exists, delta is timing | orch.ts add → headless initRepo; offers land as pending proposals |
-| pre-push mechanical gate (.githooks/pre-push — selfcheck+docsbench block red pushes) | built | this commit | jev-guard shape, deterministic checks, no classifier; installed via core.hooksPath |
+| pre-push mechanical gate (.githooks/pre-push — selfcheck+docsbench block red pushes) | built | 6e2dcd6 | jev-guard shape, deterministic checks, no classifier; installed via core.hooksPath |
 | office-parser orch add (worker registration) | built | global: orchestrator.json 2026-10-06 — 4th worker, path verified | lazy-init on first start |
 
 ## Corrections to the 2026-10-05 session audit (verified before seeding)
