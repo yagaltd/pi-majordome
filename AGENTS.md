@@ -65,6 +65,10 @@ the domain differs.
   check where possible; a prompt alone is not enough.
 - **Plan non-trivial work** — >~80–100 lines or >1–2 files: short plan of
   modules/files first.
+- **Negatives need positive proof** — an existence claim requires an explicit
+  test (`test -d`, exit codes), never an empty grep/ls; check the other side
+  too (did it land somewhere else?). Tables and queues are derived from
+  STATUS.md by reading it, never from session memory.
 - **Verify before push, gates before commit** — never chain a gate and a push
   in one command; a red gate stops the chain.
 

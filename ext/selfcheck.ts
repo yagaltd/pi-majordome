@@ -1103,6 +1103,7 @@ if (process.argv.includes("--parity")) {
 	const cliSrc2 = await import("node:fs").then((fs) => fs.readFileSync(new URL("../tools/init-cli.ts", import.meta.url), "utf8"));
 	check("wiring: init boundary records offers via writeOfferProposal — no AGENTS.proposal.md write left, confirm gate intact", initBlock2.includes("writeOfferProposal") && initBlock2.includes("ui.confirm") && !initBlock2.includes("AGENTS.proposal.md") && cliSrc2.includes("writeOfferProposal") && !cliSrc2.includes("AGENTS.proposal.md"));
 	check("wiring: declined-with-UI stamps rejected — a no is a decision, not a pending proposal", idxSrc2.includes('stampDecision(p, { status: "rejected", by: "captain"') && idxSrc2.includes("declined — recorded rejected"));
+	check("wiring: init ordering — initRepo runs before the AGENTS offer (apply implies state)", idxSrc2.indexOf("initRepo") > -1 && idxSrc2.indexOf("initRepo") < idxSrc2.indexOf("agentsOffer"));
 	{
 		// lessons gap suppressed where the index already keeps lessons (captain decision 2026-10-05)
 		const { agentsGaps } = await import("./agentsmd.ts");
