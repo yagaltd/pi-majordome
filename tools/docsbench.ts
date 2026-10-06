@@ -34,7 +34,7 @@
  *      only, idempotent) and omits the adoption line; backfilled work closed
  *      BEFORE the seeded date never nudges.
  *  (e) docs profile resolution + filtered nudges — code manifest → coding
- *      {README, CHANGELOG, docs/}, none → generic {docs/}; precedence
+ *      {README, CHANGELOG, STATUS, docs/}, none → generic {docs/}; precedence
  *      override > stored > detected with invalid overrides failing open;
  *      generic-profile repo with coding-shaped impl turns → NO README/
  *      CHANGELOG nudge at threshold, .majordome/docs.json override re-enables
@@ -292,7 +292,7 @@ console.log("\n── gate (e): docs profile resolution + filtered nudges ──
 	writeFileSync(join(repoCoding, "package.json"), "{}\n");
 	mkdirSync(join(repoGeneric, "docs"), { recursive: true });
 	const probes: [string, boolean][] = [
-		["code manifest → coding profile", JSON.stringify(detectDocsProfile(repoCoding)) === JSON.stringify({ watch: ["README", "CHANGELOG", "docs/"], source: "detected-coding" })],
+		["code manifest → coding profile (README+CHANGELOG+STATUS+docs/)", JSON.stringify(detectDocsProfile(repoCoding)) === JSON.stringify({ watch: ["README", "CHANGELOG", "STATUS", "docs/"], source: "detected-coding" })],
 		["no manifest → generic profile (docs/ only)", detectDocsProfile(repoGeneric).source === "detected-generic" && JSON.stringify(detectDocsProfile(repoGeneric).watch) === JSON.stringify(["docs/"])],
 		["absent override reads null", readDocsOverride(repoCoding) === null],
 		["stored profile wins over detection (no override)", resolveDocsProfile(repoGeneric, { watch: ["NOTES"], source: "detected-generic" }).watch.join(",") === "NOTES"],
