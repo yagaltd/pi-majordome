@@ -30,6 +30,7 @@ import { ingestDocs } from "./ext/ingest_docs.ts";
 import { listKinds, composeKind } from "./ext/docs.ts";
 import { initRepo } from "./ext/init.ts";
 import { agentsOffer } from "./ext/agentsmd.ts";
+import { writeOfferProposal } from "./ext/proposals.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
@@ -638,7 +639,9 @@ export default function majordome(pi: ExtensionAPI): void {
 					.then(async (m) => {
 						notify(m);
 						// AGENTS.md scaffold/augment (advisory): propose, apply ONLY on an
-						// explicit yes; declined → nothing; headless → review copy + path.
+						// explicit yes; every not-yes outcome (declined, headless) records a
+						// pending proposal under .majordome/proposals/ (ext/proposals.ts) and
+						// prints its path — AGENTS.md is never touched without the yes.
 						try {
 							const offer = agentsOffer(process.cwd());
 							if (!offer) return;
@@ -646,12 +649,9 @@ export default function majordome(pi: ExtensionAPI): void {
 								if (offer.kind === "scaffold") writeFileSync(offer.target, offer.doc);
 								else appendFileSync(offer.target, `\n\n${offer.doc}`);
 								notify(`AGENTS.md ${offer.kind === "scaffold" ? "scaffolded" : "augmented"} → ${offer.target}`);
-							} else if (!ctx.hasUI) {
-								mkdirSync(join(process.cwd(), ".majordome"), { recursive: true });
-								writeFileSync(offer.path, offer.doc);
-								notify(`${offer.message}\nproposal (not applied) → ${offer.path}`);
 							} else {
-								notify("AGENTS.md proposal declined — nothing written");
+								const p = writeOfferProposal(offer, process.cwd());
+								notify(`${offer.message}\nproposal (not applied) → ${p}`);
 							}
 						} catch { /* advisory never fails init */ }
 					})
