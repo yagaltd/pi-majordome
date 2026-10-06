@@ -35,7 +35,7 @@ import { doctor } from "./ext/doctor.ts";
 import { orch } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
-import { statusJoinLines, loadStatusRows } from "./ext/status.ts";
+import { statusJoinLines, loadStatusRows, formatStatus } from "./ext/status.ts";
 import { housekeeping } from "./ext/housekeep.ts";
 import { appendBlock, appendDecision, blockDims, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
@@ -478,7 +478,7 @@ export default function majordome(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("majordome", {
-		description: "Topic memory dashboard (bare) · list · show · forget · run-the-house (bare) · help · doctor · housekeeping · dash · orch · one-pager · map · ingest-docs · docs · export · reindex · stats · log · on/off",
+		description: "Topic memory dashboard (bare) · list · show · forget · run-the-house (bare) · help · doctor · housekeeping · dash · status · orch · one-pager · map · ingest-docs · docs · export · reindex · stats · log · on/off",
 		handler: async (args, ctx) => {
 			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
 			const cmd = parts[0];
@@ -521,6 +521,10 @@ export default function majordome(pi: ExtensionAPI): void {
 					"╰─",
 				];
 				notify(lines.join("\n"));
+				return;
+			}
+			if (cmd === "status") {
+				notify(formatStatus(loadStatusRows()));
 				return;
 			}
 			if (cmd === "list") {

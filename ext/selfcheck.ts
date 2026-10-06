@@ -1104,6 +1104,18 @@ if (process.argv.includes("--parity")) {
 	check("wiring: init boundary records offers via writeOfferProposal — no AGENTS.proposal.md write left, confirm gate intact", initBlock2.includes("writeOfferProposal") && initBlock2.includes("ui.confirm") && !initBlock2.includes("AGENTS.proposal.md") && cliSrc2.includes("writeOfferProposal") && !cliSrc2.includes("AGENTS.proposal.md"));
 	check("wiring: declined-with-UI stamps rejected — a no is a decision, not a pending proposal", idxSrc2.includes('stampDecision(p, { status: "rejected", by: "captain"') && idxSrc2.includes("declined — recorded rejected"));
 	check("wiring: init ordering — initRepo runs before the AGENTS offer (apply implies state)", idxSrc2.indexOf("initRepo") > -1 && idxSrc2.indexOf("initRepo") < idxSrc2.indexOf("agentsOffer"));
+	check("wiring: /majordome status command registered + render imported", idxSrc2.includes('cmd === "status"') && idxSrc2.includes("formatStatus"));
+	{
+		const { formatStatus } = await import("./status.ts");
+		const rows: { item: string; status: string; evidence: string; substrate: string }[] = [
+			{ item: "a", status: "pending", evidence: "x", substrate: "s" },
+			{ item: "b", status: "parked", evidence: "x", substrate: "s" },
+			{ item: "c", status: "built", evidence: "abc1234", substrate: "s" },
+			{ item: "d", status: "dropped", evidence: "x", substrate: "s" },
+		];
+		const t = formatStatus(rows);
+		check("status render: pending bullets, parked inline, counts, box", t.includes("pending (1)") && t.includes("\u00b7 a") && t.includes("parked (1): b") && t.includes("built 1 \u00b7 dropped 1") && t.startsWith("\u256d\u2500 /majordome status"));
+	}
 	{
 		// lessons gap suppressed where the index already keeps lessons (captain decision 2026-10-05)
 		const { agentsGaps } = await import("./agentsmd.ts");

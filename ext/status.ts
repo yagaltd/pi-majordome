@@ -128,3 +128,22 @@ export function statusJoinLines(blockText: string, rows: StatusRow[], max = 2): 
 		(r) => `related status: ${r.item} — ${r.status} (${shortEvidence(r.evidence)})`,
 	);
 }
+
+/** Render the ledger as the /majordome status panel: pending items in full
+ * (ledger order), parked inline, built/dropped as counts. Data stays in
+ * STATUS.md — this is a view, not a source. */
+export function formatStatus(rows: StatusRow[]): string {
+	const by = (st: string) => rows.filter((r) => r.status === st);
+	const pending = by("pending");
+	const parked = by("parked");
+	const built = by("built");
+	const dropped = by("dropped");
+	return [
+		"╭─ /majordome status",
+		`│ pending (${pending.length})`,
+		...(pending.length ? pending.map((r) => `│ · ${r.item}`) : ["│ · (none — queue clear)"]),
+		`│ parked (${parked.length}): ${parked.map((r) => r.item).join(" · ") || "(none)"}`,
+		`│ built ${built.length} · dropped ${dropped.length} — evidence in STATUS.md`,
+		"╰─",
+	].join("\n");
+}
