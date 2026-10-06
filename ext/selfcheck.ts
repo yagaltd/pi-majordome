@@ -873,6 +873,50 @@ if (process.argv.includes("--parity")) {
 	delete process.env.MAJORDOME_TRAIL_FILE;
 }
 
+// ── AGENTS.md adoption (init/doctor advisory, greenfield vs brownfield) ──
+{
+	const { agentsReport, agentsGaps, greenfieldRepo } = await import("./agentsmd.ts");
+	const { mkdirSync: mkd } = await import("node:fs");
+
+	// fixture repos: greenfield (no .git, no manifests) vs brownfield (package.json)
+	const gf = join(tmp, "agents-greenfield");
+	const bf = join(tmp, "agents-brownfield");
+	mkd(gf, { recursive: true });
+	mkd(bf, { recursive: true });
+	writeFileSync(join(bf, "package.json"), "{}");
+	check("agents: greenfield = no .git AND no code manifests", greenfieldRepo(gf) === true && greenfieldRepo(bf) === false);
+	mkd(join(gf, ".git"), { recursive: true });
+	check("agents: .git presence (dir or worktree file) → brownfield", greenfieldRepo(gf) === false);
+
+	// present + all conventions (greenfield, incl. the no-compat rule) → ok
+	const full = join(tmp, "agents-full");
+	mkd(full, { recursive: true });
+	writeFileSync(join(full, "AGENTS.md"), "# AGENTS.md\n\n## Lessons\n- record mistakes as guidance\n\n## Testing\n- npx tsx ext/selfcheck.ts must stay green\n\n## Compatibility\n- no compat shims — we ship greenfield\n");
+	const repFull = agentsReport(full);
+	check("agents: present · ok when every convention is there", repFull.present && repFull.ok && repFull.line === "AGENTS.md: present · ok");
+
+	// missing sections → gap list; brownfield never flagged for no-compat
+	writeFileSync(join(bf, "AGENTS.md"), "# AGENTS.md\n\nsome notes, no sections\n");
+	const repBf = agentsReport(bf);
+	check("agents: brownfield gaps = lessons + testing only (no no-compat flag)", JSON.stringify(repBf.gaps) === JSON.stringify(["no Lessons section", "no testing rules"]) && repBf.line === "AGENTS.md: present · no Lessons section · no testing rules" && !repBf.ok);
+
+	// greenfield without a no-compat rule → third gap
+	const part = join(tmp, "agents-part");
+	mkd(part, { recursive: true });
+	writeFileSync(join(part, "AGENTS.md"), "# AGENTS.md\n\n## Lessons\nx\n\n## Testing rules\ny\n");
+	const repGf = agentsReport(part);
+	check("agents: greenfield without no-compat rule → third gap", JSON.stringify(repGf.gaps) === JSON.stringify(["no-compat rule missing (greenfield)"]));
+	check("agents: gap predicates — lessons heading, testing heading or bullet, no-compat phrasings", agentsGaps("## Lessons\n## Testing\nno-compat shims", true).length === 0 && agentsGaps("- test all the things", false).length === 1 && !agentsGaps("no backward compat", true).includes("no-compat rule missing (greenfield)"));
+
+	// absent → recommend line; doctor/init share the same line
+	const repAbsent = agentsReport(join(tmp, "agents-nowhere"));
+	check("agents: absent → recommend one (draft via /majordome docs)", !repAbsent.present && repAbsent.line === "AGENTS.md: absent — recommend one (draft via /majordome docs)");
+	// advisory only: the module must not carry a write path (static gap-rule —
+	// AGENTS.md is the agent's to write, majordome reports gaps)
+	const agSrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("./agentsmd.ts", import.meta.url), "utf8"));
+	check("agents: advisory only — no write path in the module", !/writeFileSync|appendFileSync|rmSync/.test(agSrc));
+}
+
 if (failures) {
 	console.error(`\n${failures} failure(s)`);
 	process.exit(1);

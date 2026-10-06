@@ -21,6 +21,7 @@ import { join } from "node:path";
 import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug } from "./core.ts";
 import { blockMeta, dimVector, induceDims } from "./judges.ts";
 import { adoptionLine, brownfieldDocDates, detectDocsProfile, profileNoteLine, readDocsOverride, resolveDocsProfile, seedDocsCursor } from "./docsprofile.ts";
+import { agentsReport } from "./agentsmd.ts";
 import { appendBlock, blockDims, loadBlocks, loadMeta, loadVocab, saveMeta, saveVocab, type Block } from "./store.ts";
 
 const SESSIONS_DIR = join(homedir(), ".pi", "agent", "sessions");
@@ -84,7 +85,7 @@ export async function initRepo(opts: InitOpts): Promise<string> {
 	if (!current) {
 		const cands = [...bySlug.keys()].filter((s) => s.toLowerCase().includes(base));
 		if (cands.length === 1) current = cands[0];
-		else if (cands.length === 0) return `majordome init: no sessions found for "${base}" — pass slug explicitly`;
+		else if (cands.length === 0) return `majordome init: no sessions found for "${base}" — pass slug explicitly\n${agentsReport(opts.cwd).line}`;
 		else return `majordome init: ambiguous slug "${base}" (${cands.length} candidates) — pass --slug`;
 	}
 
@@ -248,5 +249,8 @@ export async function initRepo(opts: InitOpts): Promise<string> {
 			/* consolidation is maintenance, never a reason to fail init */
 		}
 	}
-	return `majordome init complete: +${indexed} blocks from ${newDone.length} sessions.${lifecycleNote} ${parkedCount} other project(s) parked (map-only) — /majordome init --lineage <slug> to index one.` + (adoptionNote ? `\n${adoptionNote}` : "");
+	// AGENTS.md adoption line (advisory — never written, only reported):
+	// conventions gap report, greenfield-aware (no .git + no code manifests).
+	const agentsNote = agentsReport(opts.cwd).line;
+	return `majordome init complete: +${indexed} blocks from ${newDone.length} sessions.${lifecycleNote} ${parkedCount} other project(s) parked (map-only) — /majordome init --lineage <slug> to index one.` + (adoptionNote ? `\n${adoptionNote}` : "") + `\n${agentsNote}`;
 }
