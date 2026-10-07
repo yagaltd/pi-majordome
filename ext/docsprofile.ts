@@ -59,7 +59,7 @@ export function isValidDocsProfile(p: unknown): p is DocsProfile {
 export function watchRegexFor(name: string): RegExp {
 	if (name === "README") return /[/"\\]readme\.md/i;
 	if (name === "CHANGELOG") return /[/"\\]changelog\.md/i;
-	if (name === "STATUS") return /[/"\\]status\.md/i;
+	if (name === "STATUS") return /[/"\\]status\.(md|json)/i; // export (status.md) or a json shape of the same rows
 	if (name === "docs/") return /[/"\\]docs\//i;
 	const esc = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 	return new RegExp(`[/\\\\]${esc}\\.md`, "i");

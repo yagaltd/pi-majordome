@@ -36,7 +36,7 @@ import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
 import { appendEntities, extractEntities, knownEntitiesIn } from "./ext/entities.ts";
-import { statusJoinLines, loadStatusRows, formatStatus, formatHouseStatus } from "./ext/status.ts";
+import { statusJoinLines, loadStatusRows, formatStatus, formatHouseStatus, exportStatusMd } from "./ext/status.ts";
 import { housekeeping } from "./ext/housekeep.ts";
 import { appendBlock, appendDecision, blockDims, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
@@ -629,6 +629,9 @@ export default function majordome(pi: ExtensionAPI): void {
 				return;
 			}
 			if (cmd === "status") {
+				// --export md: regenerate STATUS.md from the decision fold (the one
+				// md door — the file is a generated export, never hand-edited)
+				if (a === "--export md" || a === "export md") return notify(exportStatusMd());
 				const workers = listWorkers();
 				if (a) {
 					const slug = a.replace(/^@/, "");

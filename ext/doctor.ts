@@ -10,7 +10,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { loadBlocks, loadLifecycle, loadMeta, loadVocab, majordomeDir, effectiveStatus } from "./store.ts";
+import { loadBlocks, loadLifecycle, loadMeta, loadVocab, majordomeDir, effectiveStatus, isDecisionBlock } from "./store.ts";
 import { aggregate } from "./trail.ts";
 import { isSubagentSession } from "./core.ts";
 import { readDocsOverride, resolveDocsProfile } from "./docsprofile.ts";
@@ -49,10 +49,12 @@ export async function doctor(): Promise<string> {
 	if (orphans.length) bad(`${orphans.length} session file(s) referenced but missing: ${orphans.slice(0, 3).join(", ")}${orphans.length > 3 ? "…" : ""} — their blocks stay (trail is append-only); re-init rebuilds if you restore the files`);
 	else ok("no orphaned blocks (every block's session file exists)");
 
-	// 3. dims coverage
-	const noDims = blocks.filter((b) => !b.dims || Object.keys(b.dims).length === 0).length;
-	if (blocks.length && noDims / blocks.length > 0.3) bad(`dims coverage low: ${noDims}/${blocks.length} blocks have no dims (dims arm blind on them) — re-init --with-dims or accept bm25-only`);
-	else if (blocks.length) ok(`dims coverage ok (${blocks.length - noDims}/${blocks.length})`);
+	// 3. dims coverage — memory blocks only (decision blocks are ledger
+	// records, not recall targets: they carry no dims by design)
+	const memBlocks = blocks.filter((b) => !isDecisionBlock(b));
+	const noDims = memBlocks.filter((b) => !b.dims || Object.keys(b.dims).length === 0).length;
+	if (memBlocks.length && noDims / memBlocks.length > 0.3) bad(`dims coverage low: ${noDims}/${memBlocks.length} memory blocks have no dims (dims arm blind on them) — re-init --with-dims or accept bm25-only`);
+	else if (memBlocks.length) ok(`dims coverage ok (${memBlocks.length - noDims}/${memBlocks.length})`);
 
 	// 4. session-cursor lag per slug (indexed lastTurn vs file size)
 	const sd = sessionsDir();

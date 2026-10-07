@@ -425,9 +425,9 @@ if (process.argv.includes("--parity")) {
 	// CHANGELOG's, coding default grows to README+CHANGELOG+STATUS+docs/,
 	// generic stays docs/ only, custom overrides still win
 	check("watch: built-ins are README+CHANGELOG+STATUS+docs/", JSON.stringify(BUILTIN_DOC_WATCH) === JSON.stringify(["README", "CHANGELOG", "STATUS", "docs/"]));
-	check("watch: STATUS touch regex mirrors CHANGELOG (path boundary, case-insensitive)", (() => {
+	check("watch: STATUS touch regex mirrors CHANGELOG (path boundary, case-insensitive; export md + status.json)", (() => {
 		const wr = watchRegexFor("STATUS");
-		return wr.test('"path":"docs/STATUS.md"') && wr.test('"repo\\\\STATUS.md"') && wr.test('"x/status.md"') && !wr.test("plain STATUS.md prose") && !wr.test('"x/footer-status.md"') && !watchRegexFor("CHANGELOG").test('"path":"STATUS.md"');
+		return wr.test('"path":"docs/STATUS.md"') && wr.test('"repo\\\\STATUS.md"') && wr.test('"x/status.md"') && wr.test('"x/status.json"') && !wr.test("plain STATUS.md prose") && !wr.test('"x/footer-status.md"') && !wr.test('"x/footer-status.json"') && !watchRegexFor("CHANGELOG").test('"path":"STATUS.md"');
 	})());
 	check("profile: custom override still wins over the detected coding default", (() => {
 		const repoO = join(tmp, "prof-override-coding");
@@ -1085,10 +1085,10 @@ if (process.argv.includes("--parity")) {
 	const scan = pr.scanProposals(pRepo, { now: "2025-01-09" });
 	wfAg(join(pRepo, ".majordome", "AGENTS.proposal.md"), "# legacy review copy\n");
 	const legacyScan = pr.scanProposals(pRepo, { now: "2025-01-09" });
-	const hkRes = hk.collectHousekeep({ cwd: pRepo, statusText: "", readmeText: "", changelogText: "", extraDocs: [], proposals: legacyScan });
+	const hkRes = hk.collectHousekeep({ cwd: pRepo, decisions: [], readmeText: "", changelogText: "", extraDocs: [], proposals: legacyScan });
 	check("proposals: scanProposals — flat-dir counts (3 parsed · 2 pending · 2 stale) + legacy flag", scan.entries.length === 3 && scan.pending === 2 && scan.stale === 2 && scan.legacy === false && legacyScan.legacy === true);
 	check("housekeep: pending proposals listed as needs-your-yes, never decided (file stays pending)", hkRes.needsYes.some((l) => l.includes("[proposals] 2 pending proposal(s)") && l.includes("2 stale >7d") && l.includes("deciding is the captain's") && l.includes("never auto-decides")) && hkRes.needsYes.some((l) => l.includes("legacy proposal file") && l.includes("re-run init to regenerate under proposals/ or move manually")) && rfsAg(p2, "utf8").includes("status: pending"));
-	check("housekeep: safe class unchanged — proposal paths stay outside the README/STATUS/docs allowlist", !hk.isSafeDocPath(".majordome/proposals/2025-01-01-agents-scaffold.md") && hk.isSafeDocPath("docs/x.md") && hk.isSafeDocPath("STATUS.md"));
+	check("housekeep: safe class unchanged — proposal paths stay outside the README/docs allowlist (the ledger export is decision-owned)", !hk.isSafeDocPath(".majordome/proposals/2025-01-01-agents-scaffold.md") && hk.isSafeDocPath("docs/x.md") && hk.isSafeDocPath("README.md") && !hk.isSafeDocPath("STATUS.md"));
 
 	// agentsmd stays provably write-free: no write call AND no proposals import
 	// that would smuggle a write path in transitively
@@ -1292,9 +1292,11 @@ if (process.argv.includes("--parity")) {
 	check("docdrift: real evidence — inbox/orchestrator/panel grading/one-pager all map to code", DRIFT_RULES.filter((r) => r.noun !== "sidecar").every((r) => evidenceOk(repoRoot, r)));
 	check("docdrift: sidecar has NO ext/ tools/ evidence (prototype lives unwired in durable-sidecar/)", !evidenceOk(repoRoot, DRIFT_RULES.find((r) => r.noun === "sidecar")!));
 
-	// STATUS.md ledger — parsed by the SHARED parser (ext/status.ts: the same
-	// rows the recall status-join and housekeeping read). Raw-shape checks pin
-	// the table form; parser checks pin the semantics.
+	// STATUS.md — since v2.11 the GENERATED EXPORT of the decision fold (the
+	// source is blocks.jsonl; this repo's real migration runs on master at
+	// merge). The export must still parse to exactly the rows it was generated
+	// from, so the raw-shape checks keep grading the file; the fold itself and
+	// its gates live in the decision-store section below.
 	const stPath = new URL("../STATUS.md", import.meta.url);
 	const statusMod = await import("./status.ts");
 	check("STATUS.md: exists at repo root", ex6(stPath));
@@ -1351,19 +1353,114 @@ if (process.argv.includes("--parity")) {
 	check("status normalize: idempotent on its own output", !normalizeStatusText(nrm.text).changed);
 }
 
+// ── decision-block store: append + fold + migration + md export (v2.11) ──
+{
+	const { mkdirSync, readFileSync: rfsDec, writeFileSync: wfsDec, appendFileSync } = await import("node:fs");
+	process.env.MAJORDOME_DIR = join(tmp, "decision-store");
+	const store = await import("./store.ts");
+	const st = await import("./status.ts");
+	const mig = await import("../tools/migrate-status.ts");
+
+	// the schema: appendDecisionStatus → a decision block on the ledger channel
+	const repoA = join(tmp, "decision-repo-a");
+	st.appendDecisionStatus({ item: "sidecar watch mode", status: "parked", evidence: "26fde67 prototype only, not wired", substrate: "durable-sidecar/" }, repoA);
+	st.appendDecisionStatus({ item: "panel grading (majority-of-available-engines)", status: "built", evidence: "7f5e91b", substrate: "ext/panel.ts" }, repoA);
+	const decA = st.loadDecisions(repoA);
+	check("decision store: appendDecisionStatus → kind=decision blocks on the ledger channel", decA.length === 2 && decA.every((b) => store.isDecisionBlock(b)) && decA.every((b) => b.session === store.DECISION_SESSION && b.firstTurn === 0 && b.lastTurn === 0));
+	check("decision store: payload fields stored verbatim", decA[0].decision.item === "sidecar watch mode" && decA[0].decision.evidence === "26fde67 prototype only, not wired" && decA[0].decision.substrate === "durable-sidecar/");
+	check("decision store: tags are decision+status+slug-of-item", decA[0].tags?.join(",") === "decision,status,sidecar-watch-mode");
+
+	// scoping: another repo's decisions don't leak, memory blocks never fold in
+	const repoB = join(tmp, "decision-repo-b");
+	st.appendDecisionStatus({ item: "other repo row", status: "pending", evidence: "x", substrate: "y" }, repoB);
+	store.appendBlock({ id: "mem:1", session: "mem", sessionFile: "/x/mem.jsonl", firstTurn: 1, lastTurn: 2, gist: null, intent: null, dims: {}, tokensHybrid: [], head: "", closedAt: "" });
+	check("decision store: loadDecisions scopes to the repo, ignores memory blocks", st.loadDecisions(repoB).length === 1 && st.loadDecisions(repoA).length === 2 && st.loadStatusRows(repoB)[0].item === "other repo row");
+
+	// the fold: latest appended wins; disagreeing statuses flag contradicted
+	st.appendDecisionStatus({ item: "sidecar watch mode", status: "built", evidence: "abc1234", substrate: "ext/x.ts" }, repoA);
+	const rowsA = st.loadStatusRows(repoA);
+	const side = rowsA.find((r) => r.item === "sidecar watch mode")!;
+	check("fold: latest appended decision wins (older superseded by append order)", side.status === "built" && side.evidence === "abc1234" && side.substrate === "ext/x.ts");
+	check("fold: disagreeing statuses flag contradicted, others don't", side.contradicted === true && rowsA.find((r) => r.item === "panel grading (majority-of-available-engines)")?.contradicted === undefined);
+	st.appendDecisionStatus({ item: "panel grading (majority-of-available-engines)", status: "built", evidence: "7f5e91b (docs 332b226)", substrate: "ext/panel.ts" }, repoA);
+	check("fold: same-status re-append stays unflagged (latest evidence wins)", st.loadStatusRows(repoA).find((r) => r.item === "panel grading (majority-of-available-engines)")?.contradicted === undefined);
+
+	// evidence gate: built rows cite a 7-hex commit or global: state
+	check("fold: every built row cites 7-hex or global: evidence", st.loadStatusRows(repoA).every((r) => r.status !== "built" || /\b[0-9a-f]{7}\b/.test(r.evidence) || /^global: /.test(r.evidence)));
+
+	// lenient parse: a malformed decision payload reads as a plain memory block
+	appendFileSync(join(process.env.MAJORDOME_DIR!, "blocks.jsonl"), JSON.stringify({ id: "junkd:1", session: "j", sessionFile: "/x/j.jsonl", firstTurn: 1, lastTurn: 1, gist: null, intent: null, dims: {}, tokensHybrid: [], head: "", closedAt: "", kind: "decision", decision: { item: "x", status: "maybe", evidence: "", substrate: "" } }) + "\n");
+	const junk = store.loadBlocks().find((b) => b.id === "junkd:1");
+	check("decision store: malformed decision payload reads as a plain block (lenient)", !!junk && !store.isDecisionBlock(junk) && st.loadStatusRows(repoA).length === 2);
+
+	// migration: legacy md → decision blocks, verbatim + idempotent (hermetic
+	// fixture; the REAL ledger migrates on master at merge)
+	const migRepo = join(tmp, "migrate-repo");
+	mkdirSync(migRepo, { recursive: true });
+	const legacy = [
+		"# STATUS — deliverable ledger",
+		"",
+		"| item | status | evidence | substrate |",
+		"|---|---|---|---|",
+		"| sidecar watch mode | parked | 26fde67 prototype only, not wired | durable-sidecar/ |",
+		"| ledger-only deliverable | built | abc0123 (docs def2345) | ext/nothing.ts |",
+		"| weird status row | maybe | — | — |",
+	].join("\n");
+	const migStatus = join(migRepo, "STATUS.md");
+	wfsDec(migStatus, legacy);
+	const dry = mig.migrateStatus({ repoRoot: migRepo, statusPath: migStatus, dryRun: true });
+	check("migrate: dry-run counts without writing", dry.rows === 3 && dry.migrated === 2 && dry.invalid === 1 && st.loadDecisions(migRepo).length === 0);
+	const m1 = mig.migrateStatus({ repoRoot: migRepo, statusPath: migStatus });
+	check("migrate: 2 rows migrated, 1 invalid status rejected", m1.migrated === 2 && m1.invalid === 1);
+	const want = [
+		{ item: "sidecar watch mode", status: "parked", evidence: "26fde67 prototype only, not wired", substrate: "durable-sidecar/" },
+		{ item: "ledger-only deliverable", status: "built", evidence: "abc0123 (docs def2345)", substrate: "ext/nothing.ts" },
+	];
+	check("migrate: fold == legacy rows verbatim (item/status/evidence/substrate, ledger order)", JSON.stringify(st.loadStatusRows(migRepo).map(({ item, status, evidence, substrate }) => ({ item, status, evidence, substrate }))) === JSON.stringify(want));
+	const m2 = mig.migrateStatus({ repoRoot: migRepo, statusPath: migStatus });
+	check("migrate: idempotent — re-run skips migrated items", m2.migrated === 0 && m2.skipped === 2 && st.loadStatusRows(migRepo).length === 2);
+
+	// export: the md door regenerates from the fold, losslessly
+	const exported = st.exportStatusMd(migRepo);
+	const expText = rfsDec(migStatus, "utf8");
+	check("export: STATUS.md regenerated with the generated-export banner", expText.includes("GENERATED EXPORT") && expText.includes("do not edit; source: decision blocks") && exported.includes("2 item(s)"));
+	check("export: parseStatusRows(export) == fold rows (lossless view)", JSON.stringify(st.parseStatusRows(expText)) === JSON.stringify(st.loadStatusRows(migRepo)));
+
+	// GREP PIN: the status data path never reads an md ledger — the fold's
+	// source is blocks.jsonl only
+	const stSrc = rfsDec(new URL("./status.ts", import.meta.url), "utf8");
+	check("pin: ext/status.ts has no readFileSync — the fold never reads an md ledger", !stSrc.includes("readFileSync"));
+
+	// memory surfaces stay clean: decision records feed the fold, never the
+	// map / one-pager projections (they are ledger rows, not recall nodes)
+	const { compileMap } = await import("./map.ts");
+	const { composeOnePager } = await import("./onepager.ts");
+	const memBlock: Block = { id: "memx:1", session: "memx", sessionFile: "/x/memx.jsonl", firstTurn: 1, lastTurn: 2, gist: "a gist about things", intent: null, dims: {}, tokensHybrid: [], head: "", closedAt: "" };
+	const opMd = composeOnePager([...decA, memBlock]).md;
+	check("surfaces: decision records never appear as map / one-pager nodes", !JSON.stringify(compileMap([...decA, memBlock]).json).includes("sidecar watch mode") && opMd.includes("a gist about things") && !opMd.includes("decision-ledger"));
+
+	delete process.env.MAJORDOME_DIR;
+}
+
 // ── housekeeping: safe-fix vs needs-yes policy (ext/housekeep.ts) ────────
 {
 	const hk = await import("./housekeep.ts");
 	const { scanDocDrift } = await import("./docdrift.ts");
 	const fs2 = await import("node:fs");
 
-	// fixture repo: README carrying the proven drift signature + a ledger row
+	// fixture repo: README carrying the proven drift signature; the ledger is
+	// decision blocks in a HERMETIC store (STATUS.md on disk is the generated
+	// export — housekeeping reads the fold, never that file)
 	const repo = mkdtempSync(join(tmpdir(), "majordome-hk-"));
+	process.env.MAJORDOME_DIR = join(tmp, "housekeep-decision-store");
 	fs2.mkdirSync(join(repo, "docs"), { recursive: true });
 	const readme = ["# fixture repo", "", "A sidecar in watch mode keeps each repo's artifacts fresh.", ""].join("\n");
 	fs2.writeFileSync(join(repo, "README.md"), readme);
-	const ledger = "| item | status | evidence | substrate |\n|---|---|---|---|\n| sidecar watch mode | parked | 26fde67 prototype only, not wired | durable-sidecar/ |\n| ledger-only deliverable | built | abc0123 (docs def2345) | ext/nothing.ts |\n";
-	fs2.writeFileSync(join(repo, "STATUS.md"), ledger);
+	const exportMd = "| item | status | evidence | substrate |\n|---|---|---|---|\n| sidecar watch mode | parked | 26fde67 prototype only, not wired | durable-sidecar/ |\n| ledger-only deliverable | built | abc0123 (docs def2345) | ext/nothing.ts |\n";
+	fs2.writeFileSync(join(repo, "STATUS.md"), exportMd);
+	const stmod = await import("./status.ts");
+	stmod.appendDecisionStatus({ item: "sidecar watch mode", status: "parked", evidence: "26fde67 prototype only, not wired", substrate: "durable-sidecar/" }, repo);
+	stmod.appendDecisionStatus({ item: "ledger-only deliverable", status: "built", evidence: "abc0123 (docs def2345)", substrate: "ext/nothing.ts" }, repo);
 	// the corrupt store file the rm proposal names — must survive housekeeping
 	const corrupt = join(repo, "trails.jsonl");
 	fs2.writeFileSync(corrupt, "{not json}\n");
@@ -1371,7 +1468,6 @@ if (process.argv.includes("--parity")) {
 	const res = hk.collectHousekeep({
 		cwd: repo,
 		doctorText: "✓ index: 3 blocks parse\nall clear.",
-		statusText: ledger,
 		readmeText: readme,
 		changelogText: "## 1.0.0 — inbox now ships",
 		gitShas: [], // ledger cites 26fde67 → stale by construction
@@ -1379,6 +1475,7 @@ if (process.argv.includes("--parity")) {
 		storeCorrupt: [corrupt],
 		extraDocs: [],
 	});
+	check("housekeep: ledger line reads the fold (decisions folded, items out)", res.checkLines.some((l) => l.includes("status ledger: 2 decisions folded, 2 item(s)")) && res.rows.length === 2);
 
 	// SAFE class: exactly the README reword, to roadmap tense, allowlisted path
 	const rewords = res.proposals.filter((p) => p.safe && p.kind === "reword");
@@ -1388,10 +1485,11 @@ if (process.argv.includes("--parity")) {
 	const dangerous = res.proposals.filter((p) => !p.safe);
 	check("housekeep: dangerous class listed (rm + git state change)", dangerous.length === 2 && dangerous.some((p) => p.kind === "rm") && dangerous.some((p) => p.kind === "git"));
 
-	// STATUS staleness: built rows citing commits git doesn't know
+	// STATUS staleness: built rows citing commits git doesn't know (rows come
+	// from the decision fold)
 	check("housekeep: stale built-row commit flagged", res.needsYes.some((l) => l.includes("abc0123") && l.includes("not in git log")));
-	// mechanism mention with no STATUS row (CHANGELOG's inbox, no inbox row)
-	check("housekeep: mechanism mention with no STATUS row flagged", res.needsYes.some((l) => l.includes('"inbox"')));
+	// mechanism mention with no ledger row (CHANGELOG's inbox, no inbox row)
+	check("housekeep: mechanism mention with no ledger row flagged", res.needsYes.some((l) => l.includes('"inbox"')));
 
 	// the guard: dangerous kinds refused outright; safe kinds refused outside
 	// the hard path allowlist (code files, traversal)
@@ -1412,7 +1510,9 @@ if (process.argv.includes("--parity")) {
 	check("housekeep: safe-fix applied rewords the fixture README", fixed.length === 1 && after.includes("planned sidecar in watch mode (not yet built — see STATUS.md)"));
 	check("housekeep: reworded README is roadmap-exempt (doc-drift gate quiet)", scanDocDrift(after, () => false).warns.length === 0);
 	check("housekeep: dangerous action listed NOT executed (corrupt file survives)", fs2.existsSync(corrupt) && fixed.every((f) => !f.includes("rm")));
-	check("housekeep: STATUS.md untouched when already canonical", fs2.readFileSync(join(repo, "STATUS.md"), "utf8") === ledger);
+	check("housekeep: generated STATUS.md export untouched (ledger is decision-owned, safe class never writes it)", fs2.readFileSync(join(repo, "STATUS.md"), "utf8") === exportMd);
+
+	delete process.env.MAJORDOME_DIR;
 }
 
 // ── doctor + housekeeping command registration (same registry) ──────────
@@ -1423,6 +1523,7 @@ if (process.argv.includes("--parity")) {
 	check("commands: /majordome housekeeping registered in the extension registry", /cmd === "housekeeping"/.test(idx) && /import \{ housekeeping \} from "\.\/ext\/housekeep\.ts";/.test(idx));
 	check("commands: doctor CLI entry exists (bare tsx must print, never wait on stdin)", exIdx(new URL("../tools/doctor-cli.ts", import.meta.url)));
 	check("recall: status-join wired into the injection path", idx.includes("statusJoinTail(winner)") && idx.includes("loadStatusRows"));
+	check("wiring: status --export md registered (the generated-export door)", idx.includes('"--export md"') && idx.includes("exportStatusMd"));
 	// live smoke: the doctor audit always renders a report (never crashes, never empty)
 	const { doctor } = await import("./doctor.ts");
 	const doc = await doctor();
