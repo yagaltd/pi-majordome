@@ -11,7 +11,7 @@ borrowed ideas land only after mapping onto our primitives.
             intent + the dangerous yes
                   │
              MAJORDOME
-   brain + STATUS ledger + final gates + spawn
+   brain + status.json ledger + final gates + spawn
             │                   │
      concierge(s)          subagents
    one per domain        ephemeral, cold start
@@ -64,7 +64,7 @@ the design.
 | spawn workers/subagents | — | **yes** | **yes** | — | — |
 | first-line gate | — | final (merge) | **first-line** | — | — |
 | merge/push | — | **yes** | — | — | — |
-| write STATUS.md rows | — | **yes** | propose | propose | propose |
+| write status.json rows | — | **yes** | propose | propose | propose |
 | write memory | — | via consolidation | — | own repo trail | — |
 | lateral channel | — | — | — | **no** | — |
 
@@ -90,7 +90,7 @@ worker task; the panel is the gate.
 
 ## Queued by this charter
 
-STATUS watch built-in + ingest source · worker-report panel gate · standing
+status.json watch built-in + ingest source · worker-report panel gate · standing
 instructions per worker · docs naming consolidation (`docs gen`/`docs pull`) ·
 init AGENTS.md scaffold/augment flow (ask-first) · doc-flow trigger stays
 manual until the event-driven sidecar is wired.

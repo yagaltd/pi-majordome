@@ -139,7 +139,7 @@ export async function doctor(): Promise<string> {
 	// code in ext/ or tools/. A present-tense claim with no implementation =
 	// drift WARN naming the line; roadmap-marked wording (planned / prototype /
 	// not yet built) is a note, never a failure. The doctor reports — the fix
-	// (build it, or roadmap-mark it and give it a STATUS.md row) is yours.
+	// (build it, or roadmap-mark it and give it a status.json row) is yours.
 	try {
 		const readmePath = join(process.cwd(), "README.md");
 		if (existsSync(readmePath)) {

@@ -1,11 +1,11 @@
 /**
- * /majordome housekeeping — the doctor's advisory checks plus STATUS.md
+ * /majordome housekeeping — the doctor's advisory checks plus status.json
  * staleness, then a two-class fix policy:
  *
- *   SAFE      — writes ONLY to README.md / docs/*.md / STATUS.md, and only
+ *   SAFE      — writes ONLY to README.md / docs/*.md / status.json, and only
  *               (a) rewording a known drift signature (DRIFT_RULES) to
  *               roadmap tense so the doctor's doc-drift gate goes quiet, or
- *               (b) normalizing STATUS rows (spacing/status case). Applied
+ *               (b) normalizing ledger rows (status case). Applied
  *               automatically by the command.
  *   DANGEROUS — rm, any git state change, any code-file edit. Reported for
  *               explicit user yes, NEVER executed: the executor refuses any
@@ -29,7 +29,7 @@ import { join } from "node:path";
 import { doctor } from "./doctor.ts";
 import { DRIFT_RULES, ROADMAP_RE } from "./docdrift.ts";
 import { majordomeDir } from "./store.ts";
-import { parseStatusRows, normalizeStatusText, type StatusRow } from "./status.ts";
+import { loadStatusRows, normalizeStatusRows, statusFile, type StatusRow } from "./status.ts";
 import { scanProposals, type ProposalsScan } from "./proposals.ts";
 
 // ── the two fix classes ──────────────────────────────────────────────────────
@@ -43,10 +43,10 @@ export type Proposal =
 	| { safe: false; kind: DangerKind; describe: string };
 
 /** Hard path allowlist for the safe class: repo-root-relative doc paths only.
- * No absolute paths, no traversal, nothing outside README/STATUS/docs/*.md.
+ * No absolute paths, no traversal, nothing outside README/status.json/docs/*.md.
  * The executor checks this IN ADDITION to the kind check — a safe kind aimed
  * at a code file is refused exactly like a dangerous one. */
-const SAFE_PATH_RE = /^(README\.md|STATUS\.md|docs\/[^/]+\.md)$/;
+const SAFE_PATH_RE = /^(README\.md|STATUS\.md|status\.json|docs\/[^/]+\.md)$/;
 
 export function isSafeDocPath(p: string): boolean {
 	const norm = p.replace(/\\/g, "/");
@@ -59,7 +59,7 @@ export function isSafeDocPath(p: string): boolean {
 export function canExecute(p: Proposal): boolean {
 	if (!p.safe) return false;
 	if (p.kind === "reword") return isSafeDocPath(p.path);
-	if (p.kind === "normalize-status") return isSafeDocPath("STATUS.md");
+	if (p.kind === "normalize-status") return isSafeDocPath("status.json");
 	return false;
 }
 
@@ -69,8 +69,8 @@ export function canExecute(p: Proposal): boolean {
 export function assertExecutable(p: Proposal): void {
 	if (!p.safe) throw new Error(`refused: ${p.kind} is in the dangerous class — listed for your yes, never executed`);
 	if (!canExecute(p)) {
-		const at = p.kind === "reword" ? p.path : "STATUS.md";
-		throw new Error(`refused: "${at}" is outside the safe path allowlist (README.md, STATUS.md, docs/*.md)`);
+		const at = p.kind === "reword" ? p.path : "status.json";
+		throw new Error(`refused: "${at}" is outside the safe path allowlist (README.md, status.json, docs/*.md)`);
 	}
 }
 
@@ -85,7 +85,7 @@ export function rewordLine(line: string, pattern: RegExp): string | null {
 	const m = re.exec(line);
 	if (!m) return null;
 	if (ROADMAP_RE.test(line)) return null; // already roadmap-marked — nothing to fix
-	const reworded = line.replace(m[0], `planned ${m[0]} (not yet built — see STATUS.md)`);
+	const reworded = line.replace(m[0], `planned ${m[0]} (not yet built — see status.json)`);
 	return reworded === line ? null : reworded;
 }
 
@@ -144,7 +144,7 @@ export function mechanismGapFindings(readme: string, changelog: string, rows: St
 		if (!inReadme && !inChangelog) continue;
 		if (haystack.includes(rule.noun.toLowerCase())) continue;
 		const where = [inReadme ? "README" : null, inChangelog ? "CHANGELOG" : null].filter(Boolean).join(" + ");
-		out.push(`[gap] ${where} mentions "${rule.noun}" with no STATUS.md row — add a row or roadmap-mark the mention`);
+		out.push(`[gap] ${where} mentions "${rule.noun}" with no status.json row — add a row or roadmap-mark the mention`);
 	}
 	return out;
 }
@@ -155,8 +155,9 @@ export interface HousekeepInput {
 	cwd: string;
 	/** doctor audit text (live default: doctor()); tests inject */
 	doctorText?: string;
-	/** ledger text (live default: STATUS.md / MAJORDOME_STATUS_FILE) */
-	statusText?: string;
+	/** ledger rows (live default: status.json / MAJORDOME_STATUS_FILE, with a
+	 * legacy STATUS.md fallback for unmigrated repos) */
+	statusRows?: StatusRow[];
 	readmeText?: string;
 	changelogText?: string;
 	/** full-hex shas from `git log --format=%H` (live default: git) */
@@ -187,10 +188,9 @@ export function collectHousekeep(input: HousekeepInput): HousekeepResult {
 			return undefined as unknown as string;
 		}
 	};
-	const statusText = input.statusText ?? read("STATUS.md") ?? "";
+	const rows = input.statusRows ?? loadStatusRows(cwd);
 	const readmeText = input.readmeText ?? read("README.md") ?? "";
 	const changelogText = input.changelogText ?? read("CHANGELOG.md") ?? "";
-	const rows = parseStatusRows(statusText);
 
 	const checkLines: string[] = [];
 	const proposals: Proposal[] = [];
@@ -221,8 +221,8 @@ export function collectHousekeep(input: HousekeepInput): HousekeepResult {
 	proposals.push(...rewordProposalsFor(readmeText, "README.md", evidenceFor));
 	for (const d of input.extraDocs ?? []) proposals.push(...rewordProposalsFor(d.text, d.path, evidenceFor));
 
-	const st = normalizeStatusText(statusText);
-	if (st.changed) proposals.push({ safe: true, kind: "normalize-status", why: `normalized ${st.rows} ledger row(s) (spacing/status case)` });
+	const st = normalizeStatusRows(rows);
+	if (st.changed) proposals.push({ safe: true, kind: "normalize-status", why: `normalized ${st.rows.length} ledger row(s) (status case)` });
 
 	// staleness: built rows citing commits git doesn't know + mechanisms with
 	// no row — both are ledger-content decisions → needs your yes
@@ -269,12 +269,16 @@ export function applySafeFixes(cwd: string, proposals: Proposal[]): string[] {
 			writeFileSync(full, text.replace(p.from, p.to));
 			fixed.push(`${p.path}: ${p.why}`);
 		} else if (p.kind === "normalize-status") {
-			const full = join(cwd, "STATUS.md");
+			const full = statusFile(cwd);
 			if (!existsSync(full)) continue;
-			const { text, changed } = normalizeStatusText(readFileSync(full, "utf8"));
+			const { rows, changed } = normalizeStatusRows(loadStatusRows(cwd));
 			if (!changed) continue;
-			writeFileSync(full, text);
-			fixed.push(`STATUS.md: ${p.why}`);
+			try {
+				const ledger = JSON.parse(readFileSync(full, "utf8"));
+				ledger.rows = rows;
+				writeFileSync(full, JSON.stringify(ledger, null, 1) + "\n");
+				fixed.push(`status.json: ${p.why}`);
+			} catch { /* unreadable ledger → skip */ }
 		}
 	}
 	return fixed;
@@ -329,7 +333,7 @@ function docsIn(cwd: string): { path: string; text: string }[] {
 	}
 }
 
-/** The /majordome housekeeping command: doctor checks + STATUS staleness,
+/** The /majordome housekeeping command: doctor checks + ledger staleness,
  * safe fixes applied, dangerous class listed for explicit yes. */
 export async function housekeeping(cwd: string = process.cwd(), opts: { apply?: boolean } = {}): Promise<string> {
 	const apply = opts.apply !== false;
@@ -353,7 +357,7 @@ export async function housekeeping(cwd: string = process.cwd(), opts: { apply?: 
 	const needsYes = [...res.needsYes, ...dangerous];
 	const L: string[] = ["╭─ /majordome housekeeping"];
 	for (const l of res.checkLines) L.push(`│ ${l}`);
-	L.push("├─ fixed (safe class — README/STATUS/docs only)");
+	L.push("├─ fixed (safe class — README/status.json/docs only)");
 	L.push(...(fixed.length ? fixed.map((f) => `│ · ${f}`) : ["│ · nothing to fix"]));
 	L.push("├─ needs your yes (listed, never executed)");
 	L.push(...(needsYes.length ? needsYes.map((f) => `│ · ${f}`) : ["│ · nothing"]));

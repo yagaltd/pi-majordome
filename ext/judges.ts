@@ -19,6 +19,7 @@ import { createInterface } from "node:readline";
 import { dirname, join } from "node:path";
 import { trail } from "./trail.ts";
 import { majordomeDir } from "./store.ts";
+import { loadUserPrefs, prefLines } from "./userprefs.ts";
 
 export const HOSTED_URL = "https://api.typellm.ai";
 const TIMEOUT_MS = 30_000;
@@ -647,27 +648,33 @@ function settleShape(res: Record<string, unknown>, judge: string, usage?: unknow
 	return out;
 }
 
-/** Preference lines for shape judgment: user.md under the majordome dir (or
- * MAJORDOME_USER_FILE override) — the user's standing output rules (e.g.
- * STE-80% wording, diagram-first). Comment/blank lines stripped, capped at
- * 12. Missing file = no context. Cached per session (process lifetime);
- * resetUserPrefs() exists for benches and re-reads. */
+/** Preference lines for the shape judgment: user.json (the structured
+ * personal tier — answer_shape + preference pairs, via ext/userprefs.ts)
+ * first, then the user.md prose rules (MAJORDOME_USER_MD_FILE override,
+ * comment/blank lines stripped). Both sources merge, user.json lines first,
+ * capped at 12 total. Missing files = no context from that source. Cached
+ * per session (process lifetime); resetUserPrefs() exists for benches and
+ * re-reads. */
 let userPrefsCache: string[] | null = null;
 export function resetUserPrefs(): void {
 	userPrefsCache = null;
 }
 export function userPrefLines(): string[] {
 	if (userPrefsCache) return userPrefsCache;
-	const f = process.env.MAJORDOME_USER_FILE?.trim() || join(majordomeDir(), "user.md");
+	let lines: string[] = [];
 	try {
-		userPrefsCache = readFileSync(f, "utf8")
-			.split("\n")
-			.map((l) => l.trim())
-			.filter((l) => l && !l.startsWith("#"))
-			.slice(0, 12);
-	} catch {
-		userPrefsCache = []; // missing file = no context
-	}
+		lines = prefLines(loadUserPrefs()); // user.json: answer_shape + preference pairs
+	} catch { /* fail open — preferences must never break the judge */ }
+	try {
+		const md = process.env.MAJORDOME_USER_MD_FILE?.trim() || join(majordomeDir(), "user.md");
+		lines = lines.concat(
+			readFileSync(md, "utf8")
+				.split("\n")
+				.map((l) => l.trim())
+				.filter((l) => l && !l.startsWith("#")),
+		);
+	} catch { /* missing prose file = no context from that source */ }
+	userPrefsCache = lines.slice(0, 12);
 	return userPrefsCache;
 }
 
