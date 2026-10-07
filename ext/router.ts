@@ -372,10 +372,17 @@ export function mergeDecomposed(subs: SubResult[]): { block: Block; score: numbe
  * injectionText — bounded, informational, never an order. */
 export function decomposedInjection(subs: SubResult[], perSub = 2): string {
 	const lines = [`[majordome recall · decomposed · ${subs.map((s) => s.tag).join(" / ")}]`];
+	const seen = new Map<string, number>(); // block id -> line index (cross-label dedupe)
 	for (const s of subs) {
 		for (const h of (s.result?.ranked ?? []).slice(0, perSub)) {
 			const b = h.block;
 			const when = b.closedAt ? ` · ${b.closedAt.slice(0, 10)}` : "";
+			const at = seen.get(b.id);
+			if (at !== undefined) {
+				lines[at] = `${lines[at]} + ${s.tag}`; // same block relevant under another label
+				continue;
+			}
+			seen.set(b.id, lines.length);
 			lines.push(`· ${s.tag}: ${b.gist ?? b.head} (${shortTag(b.session)} turns ${b.firstTurn}–${b.lastTurn}${when})`);
 		}
 	}

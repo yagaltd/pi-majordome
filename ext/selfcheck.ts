@@ -1133,7 +1133,16 @@ if (process.argv.includes("--parity")) {
 	{
 		const storeSrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("./store.ts", import.meta.url), "utf8"));
 		check("store: appendBlock stamps session default at the write seam", storeSrc.includes('"(direct)"'));
-	}
+	{
+		const { decomposedInjection } = await import("./router.ts");
+		const mk = (id: string, g: string) => ({ id, gist: g, head: g, session: "s", firstTurn: 1, lastTurn: 2, closedAt: "2026-10-07T00:00:00Z" });
+		const subs = [
+			{ tag: "alpha", result: { ranked: [{ block: mk("b1", "ga"), score: 2 }] } },
+			{ tag: "beta", result: { ranked: [{ block: mk("b1", "ga"), score: 1.5 }, { block: mk("b2", "gb"), score: 1 }] } },
+		] as never;
+		const t = decomposedInjection(subs);
+		check("recall merge: block hit by two labels printed ONCE, extra label appended", t.includes("alpha: ga") && t.includes("+ beta") && (t.match(/alpha: ga/g) ?? []).length === 1 && t.includes("beta: gb") && !t.includes("beta: ga"));
+	}	}
 	check("wiring: status @slug \u2014 resolveWorkerRef + roster fallback + house default", idxSrc2.includes("resolveWorkerRef(slug, workers)") && idxSrc2.includes("unknown worker") && idxSrc2.includes("formatHouseStatus"));
 	}
 	{
