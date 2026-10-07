@@ -140,9 +140,11 @@ extension custom entries). majordome adds the classified layer on top.
 **Build status (branch `v2`, worktree `../pi-majordome-v2` — 2026-10-03):**
 - ✅ **0** resume bench: 8 probes, pre-registered criteria; immutable baseline `resume-baseline.json`
   (recall-only hit@3 **1/6**, continuation gate 2/2); runs → `resume-last.json`
-- ✅ **1** one-pager: `/majordome one-pager [tag|show]` — composed over GIST atoms, provenance-cited,
+- ✅ **1** one-pager: composed over GIST atoms, provenance-cited,
   stamped; **A/B: 4/6 vs 1/6** (res-decision-soft, res-leaveoff-onepager, res-invalidated-markmap,
-  res-decision-clarify now hit)
+  res-decision-clarify now hit). **REMOVED per captain 2026-10-07** — the
+  /majordome one-pager command and docs/ONE-PAGER.md are deleted; composeOnePager
+  survives only inside the unwired durable-sidecar prototype.
 - ✅ **2** ingest adapter: `/majordome ingest-docs`, sources in `~/.config/pi-majordome/docs-sources.json`
   (smoke: 9 files → 62 blocks, idempotent)
 - ✅ **3** map: `/majordome map` → `.majordome/map.mmd` (Mermaid mindmap, ✗ invalidations) +

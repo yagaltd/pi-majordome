@@ -20,11 +20,10 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
-import { blockMeta, contradicts, decomposeQuery, dimVector, docsVerdict, hasJev, induceDims, loadKey, resetClassifyFn, rewriteQuery, routingIntent, setClassifyFn, setStreamFn, shapeVerdict, simplifyVerdict, userPrefLines, type DocsVerdict } from "./ext/judges.ts";
+import { blockMeta, contradicts, decomposeQuery, dimVector, docsVerdict, hasJev, induceDims, loadKey, OUTPUT_SHAPES, resetClassifyFn, rewriteQuery, routingIntent, setClassifyFn, setStreamFn, shapeVerdict, simplifyVerdict, userPrefLines, type DocsVerdict } from "./ext/judges.ts";
 import { pushInbox, shouldAskSimplify, simplifyHintText } from "./ext/inbox.ts";
 import { confidenceGrill, cursorForDoc, cursorKey, decomposeAllowed, decomposedInjection, docsNudge, grillOptionsLine, injectionText, judgeLine, mergeDecomposed, route, runSubQueries, scanDocsTouched, shapeHintLine, shouldJudgeLine, verdictToNudge } from "./ext/router.ts";
 import { BUILTIN_DOC_WATCH, resolveDocsProfile } from "./ext/docsprofile.ts";
-import { composeOnePager } from "./ext/onepager.ts";
 import { compileMap } from "./ext/map.ts";
 import { ingestDocs } from "./ext/ingest_docs.ts";
 import { listKinds, composeKind } from "./ext/docs.ts";
@@ -36,7 +35,8 @@ import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
 import { appendEntities, extractEntities, knownEntitiesIn } from "./ext/entities.ts";
-import { statusJoinLines, loadStatusRows, formatStatus, formatHouseStatus } from "./ext/status.ts";
+import { statusJoinLines, loadStatusRows, formatStatus, formatHouseStatus, exportStatusMd } from "./ext/status.ts";
+import { loadUserPrefs, renderUserPrefs, setUserPref, resetUserPrefs as resetUserPrefsFile, userFile } from "./ext/userprefs.ts";
 import { housekeeping } from "./ext/housekeep.ts";
 import { appendBlock, appendDecision, blockDims, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
@@ -94,7 +94,7 @@ function shortId(b: Block): string {
 	return `${shortTag(b.session)}:${b.firstTurn}`;
 }
 
-/** Status join (recall ↔ STATUS.md): the injected block's title/gist matched
+/** Status join (recall ↔ status.json): the injected block's title/gist matched
  * against the repo's ledger rows by deterministic token overlap — no model
  * call, nothing fabricated. At most 2 bound lines, and only when a row
  * actually matches (no ledger, no overlap → no lines, the injection stays
@@ -416,7 +416,7 @@ export default function majordome(pi: ExtensionAPI): void {
 			// Non-default shape → ONE suggest-only tail line (advice to the agent —
 			// never a tool call). Fail-open: judges off, no key/classifier, judge
 			// error, or verdict 'default' → nothing appended (byte-identical to
-			// before). user.md preference lines feed the judge as standing context.
+			// before). user.md/user.json preference lines feed the judge as standing context.
 			// Judged on the bare message at this pre-turn seam — the same place the
 			// judge/contra tail lines land — so the hint can shape THIS turn's
 			// answer (turn_end would be too late).
@@ -553,7 +553,7 @@ export default function majordome(pi: ExtensionAPI): void {
 			// situation — a how-to-use question on existing work gets no hint
 			const resume = r.intent === "incident_specific" && r.score >= 0.7;
 			appendTail(lastUser, injectionText(winner, r.terms, resume));
-			// status join: bind the recalled block to the repo's STATUS.md ledger
+			// status join: bind the recalled block to the repo's status.json ledger
 			// (≤2 lines, match-only — see statusJoinTail)
 			for (const line of statusJoinTail(winner)) appendTail(lastUser, line);
 			if (st.routeCache.contraLine) appendTail(lastUser, st.routeCache.contraLine);
@@ -583,7 +583,7 @@ export default function majordome(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("majordome", {
-		description: "Topic memory dashboard (bare) · list · show · forget · run-the-house (bare) · help · doctor · housekeeping · dash · status · orch · one-pager · map · ingest-docs · docs · export · reindex · stats · log · on/off",
+		description: "Topic memory dashboard (bare) · list · show · forget · run-the-house (bare) · help · doctor · housekeeping · dash · status · user · orch · map · ingest-docs · docs · export · reindex · stats · log · on/off",
 		handler: async (args, ctx) => {
 			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
 			const cmd = parts[0];
@@ -629,6 +629,15 @@ export default function majordome(pi: ExtensionAPI): void {
 				return;
 			}
 			if (cmd === "status") {
+				if (a === "--export") {
+					// the one md door: regenerate STATUS.md from the JSON ledger on demand
+					if (b !== "md") return notify("usage: /majordome status --export md (rewrites STATUS.md from status.json)");
+					const rows = loadStatusRows();
+					if (!rows.length) return notify("no status rows — status.json absent or empty");
+					const out = join(process.cwd(), "STATUS.md");
+					writeFileSync(out, exportStatusMd(rows));
+					return notify(`STATUS.md exported (${rows.length} rows) \u2192 ${out} \u2014 the ledger itself is status.json; STATUS.md is a generated view`);
+				}
 				const workers = listWorkers();
 				if (a) {
 					const slug = a.replace(/^@/, "");
@@ -639,6 +648,24 @@ export default function majordome(pi: ExtensionAPI): void {
 				}
 				notify(formatHouseStatus(loadStatusRows(), workers.map((w) => ({ name: w.name, cwd: w.cwd, rows: loadStatusRows(w.cwd) }))));
 				return;
+			}
+			if (cmd === "user") {
+				// user.json — the captain's structured preference file (zero-token view;
+				// shape prefs flow into the shape judge via userPrefLines)
+				if (a === "set") {
+					const key = parts[2];
+					const value = parts.slice(3).join(" ").trim();
+					if (!key || !value) return notify("usage: /majordome user set <key> <value>");
+					if (key === "answer_shape" && value !== "auto" && !OUTPUT_SHAPES.includes(value)) return notify(`unknown answer_shape "${value}" — auto | ${OUTPUT_SHAPES.join(" | ")}`);
+					const prefs = setUserPref(key, value);
+					return notify(`saved ${key}=${value} → ${userFile()}\n\n${renderUserPrefs(prefs)}`);
+				}
+				if (a === "reset") {
+					const prefs = resetUserPrefsFile();
+					return notify(`user preferences reset → ${userFile()}\n\n${renderUserPrefs(prefs)}`);
+				}
+				if (a) return notify(`unknown user subcommand "${a}" — bare /majordome user renders; set <key> <value> | reset`);
+				return notify(renderUserPrefs(loadUserPrefs()));
 			}
 			if (cmd === "list") {
 				const sel = a ? st.blocks.filter((x) => shortTag(x.session).toLowerCase().includes(a.toLowerCase())) : st.blocks;
@@ -781,11 +808,12 @@ export default function majordome(pi: ExtensionAPI): void {
 					"majordome commands:",
 					"  /majordome            run the house (start all workers + report)",
 					"  /majordome orch       menu: start one/all, add /path, remove, status",
-					"  /majordome one-pager  compose the status doc (show to print)",
+					"  /majordome status · status @slug · status --export md  ledger view (status.json; md export on demand)",
+					"  /majordome user · user set <key> <value> · user reset  your preferences (zero-token view)",
 					"  /majordome map        reasoning/topic map (in-chat; 'termaid' for a pane)",
 					"  /majordome init       cold-start memory for this repo",
 					"  /majordome doctor     audit the installation (orphans, lag, coverage)",
-					"  /majordome housekeeping  doctor checks + STATUS staleness; safe doc fixes applied, dangerous listed ('dry-run' previews)",
+					"  /majordome housekeeping  doctor checks + ledger staleness; safe doc fixes applied, dangerous listed ('dry-run' previews)",
 					"  /majordome list | show | forget | export | reindex | stats | log",
 					"  /majordome docs <kind> | ingest-docs | on/off",
 				].join("\n"));
@@ -805,15 +833,6 @@ export default function majordome(pi: ExtensionAPI): void {
 				orch(a && a !== "menu" ? [a, b].filter(Boolean).join(" ") : undefined)
 					.then((m) => notify(m))
 					.catch((e) => notify(`orch failed: ${(e as Error).message}`));
-				return;
-			}
-			if (cmd === "one-pager") {
-				const tag = a && a !== "show" ? a : undefined;
-				const op = composeOnePager(st.blocks, tag);
-				const dir = join(process.cwd(), ".majordome");
-				mkdirSync(dir, { recursive: true });
-				writeFileSync(join(dir, "one-pager.md"), op.md);
-				notify(a === "show" ? op.md : `one-pager \u2192 ${join(dir, "one-pager.md")} (${op.stats.blocks} blocks: ${op.stats.decisions} decisions, ${op.stats.lessons} lessons, ${op.stats.now} now, ${op.stats.open} open)`);
 				return;
 			}
 			if (cmd === "map") {

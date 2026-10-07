@@ -1,0 +1,371 @@
+{
+ "updated": "2026-10-07",
+ "rows": [
+  {
+   "item": "init/doctor AGENTS.md gap report",
+   "status": "built",
+   "evidence": "18e3d51",
+   "substrate": "ext/agentsmd.ts · wired in ext/init.ts + ext/doctor.ts"
+  },
+  {
+   "item": "self-improving recall loop (precision proxy + false-positive specimens)",
+   "status": "built",
+   "evidence": "441e751 (docs beb8f8d)",
+   "substrate": "ext/recall.ts · /majordome stats section"
+  },
+  {
+   "item": "panel grading (majority-of-available-engines)",
+   "status": "built",
+   "evidence": "7f5e91b (docs 332b226)",
+   "substrate": "ext/panel.ts · live judge-graded gates"
+  },
+  {
+   "item": "quality trio: from_untrusted / lessons / simplifyVerdict",
+   "status": "built",
+   "evidence": "6ba17a0 + 2b2cb76 + 11ee775 (docs 8b5057b)",
+   "substrate": "ext/store.ts · ext/router.ts · ext/inbox.ts · ext/consolidate.ts"
+  },
+  {
+   "item": "docs profiles + brownfield init seeding",
+   "status": "built",
+   "evidence": "0aa034d (merge 94221f6)",
+   "substrate": "ext/docsprofile.ts"
+  },
+  {
+   "item": "judge-cost telemetry + trailFile fix",
+   "status": "built",
+   "evidence": "3c664e5 (docs 3bc55f1)",
+   "substrate": "ext/trail.ts · stats + doctor creep note"
+  },
+  {
+   "item": "diagram-first single-line labels",
+   "status": "built",
+   "evidence": "cbd3b30",
+   "substrate": "ext/judges.ts shape enum · ext/router.ts shapeHintLine"
+  },
+  {
+   "item": "doctor audit (orphans, parse health, dims, lag, lifecycle, worker cwds)",
+   "status": "built",
+   "evidence": "1c4047b",
+   "substrate": "ext/doctor.ts"
+  },
+  {
+   "item": "docs/ONE-PAGER.md build-day ledger",
+   "status": "built",
+   "evidence": "e413c2f",
+   "substrate": "docs/ONE-PAGER.md"
+  },
+  {
+   "item": "docs/dev/FUTURE-STYLE-PROFILE.md",
+   "status": "built",
+   "evidence": "3368e7e",
+   "substrate": "docs/dev/FUTURE-STYLE-PROFILE.md"
+  },
+  {
+   "item": "orchestrator deck/workers/inbox",
+   "status": "built",
+   "evidence": "3fe5f4a (push half 6a886b8)",
+   "substrate": "ext/orch.ts · ext/inbox.ts · tools/dispatch.ts"
+  },
+  {
+   "item": "doc-drift gate in doctor + status.json ledger",
+   "status": "built",
+   "evidence": "2d01537 (the housekeeping commit above)",
+   "substrate": "ext/docdrift.ts · ext/doctor.ts check 11 · status.json"
+  },
+  {
+   "item": "housekeeping routine (status-join in recall + doctor/housekeeping commands, safe-fix vs needs-yes)",
+   "status": "built",
+   "evidence": "9df6d18 + this commit",
+   "substrate": "ext/status.ts · ext/housekeep.ts · tools/doctor-cli.ts · index.ts (statusJoinTail + command registry) · ext/selfcheck.ts"
+  },
+  {
+   "item": "sidecar watch mode",
+   "status": "parked",
+   "evidence": "prototype only: 26fde67 durable-sidecar/sidecar.ts (pi-durable watch mode) — NOT wired into ext/ or tools/; README shipped-claim drift caught by doctor and reworded to planned",
+   "substrate": "durable-sidecar/ (unwired prototype)"
+  },
+  {
+   "item": "Concept Cells",
+   "status": "parked",
+   "evidence": "named cbd3b30 — gated on organic graph maturity",
+   "substrate": "docs/OVERVIEW.md"
+  },
+  {
+   "item": "per-task worktrees for orch workers",
+   "status": "parked",
+   "evidence": "firstmate pattern note only — never built",
+   "substrate": "docs/dev/DESIGN.md layering section"
+  },
+  {
+   "item": "zero-token event-driven supervision",
+   "status": "parked",
+   "evidence": "design note: build fs.watch event-driven from day one, inbox as wake surface",
+   "substrate": "docs/DESIGN.md · docs/OVERVIEW.md"
+  },
+  {
+   "item": "AGENTS.md seeding-via-docs",
+   "status": "parked",
+   "evidence": "paused — docs-profile pattern ready when needed (one-pager open queue #3)",
+   "substrate": "docs/ONE-PAGER.md"
+  },
+  {
+   "item": "style-vector slices",
+   "status": "parked",
+   "evidence": "3368e7e — design of record, \"nothing here is wired yet\"",
+   "substrate": "docs/FUTURE-STYLE-PROFILE.md"
+  },
+  {
+   "item": "judgment-mechanism + bench-contract doc",
+   "status": "parked",
+   "evidence": "not started — no doc on disk",
+   "substrate": "(to write)"
+  },
+  {
+   "item": "standalone product (jev-decision-only API / TypeLLM brand book)",
+   "status": "parked",
+   "evidence": "extract-if-proven standalone path, FUTURE-STYLE-PROFILE",
+   "substrate": "docs/FUTURE-STYLE-PROFILE.md"
+  },
+  {
+   "item": "tometo steals (role-model split config, method-rules gap lines, playbook library)",
+   "status": "parked",
+   "evidence": "discussed only — no code, no doc",
+   "substrate": "conversation notes"
+  },
+  {
+   "item": "supermemory read (hot/warm/cold)",
+   "status": "parked",
+   "evidence": "research, dogfood window (one-pager open queue #5)",
+   "substrate": "docs/ONE-PAGER.md"
+  },
+  {
+   "item": "delegate tool",
+   "status": "dropped",
+   "evidence": "duplicate of pi-core-subagents — never committed (absent from history)",
+   "substrate": "decision record"
+  },
+  {
+   "item": "jev-guard",
+   "status": "dropped",
+   "evidence": "uninstalled (not in ~/.pi/agent/extensions); from_untrusted guards the recall channel independently",
+   "substrate": "docs/ONE-PAGER.md env decisions"
+  },
+  {
+   "item": "max-of-two re-grade",
+   "status": "dropped",
+   "evidence": "replaced by panel grading — its lean (absence must be evidenced by omission) preserved in the panel rationale",
+   "substrate": "ext/panel.ts header"
+  },
+  {
+   "item": "mailbox-parser add-failed mystery",
+   "status": "dropped",
+   "evidence": "CORRECTED: repo exists (/home/aurel/Documents/github/mailbox-parser) and is a registered worker; the add-failure was ~ path expansion, fixed 44a536c",
+   "substrate": "44a536c"
+  },
+  {
+   "item": "docs/ROLES.md roles + communication charter (revised: integration pass — room dropped, loops corrected)",
+   "status": "built",
+   "evidence": "1227a67",
+   "substrate": "origin study: codync rooms/team-MCP + firstmate pyramid; R1-R10"
+  },
+  {
+   "item": "guard upstream notes (origin study: jev-guard)",
+   "status": "dropped",
+   "evidence": "owner decision 2026-10-06: not for us, case closed",
+   "substrate": "row retired"
+  },
+  {
+   "item": "docs command naming consolidation (docs gen/pull)",
+   "status": "pending",
+   "evidence": "gap surfaced by ROLES charter §gaps #4",
+   "substrate": "replaces docs <kind> vs ingest-docs"
+  },
+  {
+   "item": "AGENTS.md (this repo) + docs taxonomy (docs/dev/, bench/ eval plans) + code-parser parked-dependency bullet",
+   "status": "built",
+   "evidence": "035231b",
+   "substrate": "ROLES.md v2 five-rule charter same commit"
+  },
+  {
+   "item": "init AGENTS.md scaffold/augment flow (absent → propose template, present → gap-report ask-first)",
+   "status": "built",
+   "evidence": "881bb8e",
+   "substrate": "captain approved 2026-10-06"
+  },
+  {
+   "item": "status.json docs-watch built-in (nudge trigger)",
+   "status": "built",
+   "evidence": "881bb8e",
+   "substrate": "captain approved 2026-10-06 · ext/docsprofile.ts micro-slice"
+  },
+  {
+   "item": "housekeeping + consolidation refresh on pi-vcc compaction (captain triggers vcc compaction → mechanically keeps summary → majordome follows with housekeeping --brief + consolidation; closes the 10-session refresh lag)",
+   "status": "pending",
+   "evidence": "feasibility: does pi-vcc expose a compaction event/hook, or detect via session-state marker",
+   "substrate": "cadence per captain 2026-10-06: every compaction (manual 30-40% or pi-auto) is the mechanical trigger; scheduler escalation stays gated on house >5 repos · pi extension compaction event → tools/doctor-cli.ts brief"
+  },
+  {
+   "item": "swarm measurement-discipline rule (one shared bench script per research swarm)",
+   "status": "pending",
+   "evidence": "cognition swarm study 2026-10-06 — effort XS, impact latent until first research swarm",
+   "substrate": "ROLES.md patterns line"
+  },
+  {
+   "item": "proposals lifecycle (.majordome/proposals/ — OKF metadata state, butler-stamped, advisory staleness)",
+   "status": "built",
+   "evidence": "fcc8519 + declined-rejected fix",
+   "substrate": "ext/proposals.ts spec header; README §Proposals"
+  },
+  {
+   "item": "sqlite storage engine — one DB per repo + one global (blocks/trails/proposals tables; FTS5 replaces vocab index)",
+   "status": "pending",
+   "evidence": "leviathan study 2026-10-06 + pi-durable openNodeSqliteStorage; triggers (independent): writer contention / house >5 repos / next storage-touching feature; Concept Cells is a consumer, not a dependency — it lands on sqlite when it un-gates",
+   "substrate": "store.ts contract swap; steal: indexed-token single-match, BM25×boosts, atomic swap, safe FTS5 expressions"
+  },
+  {
+   "item": "orch add: eager init at link time (currently lazy — first worker start)",
+   "status": "pending",
+   "evidence": "captain request 2026-10-06 — mechanism exists, delta is timing",
+   "substrate": "orch.ts add → headless initRepo; offers land as pending proposals"
+  },
+  {
+   "item": "pre-push mechanical gate (.githooks/pre-push — selfcheck+docsbench block red pushes)",
+   "status": "built",
+   "evidence": "6e2dcd6",
+   "substrate": "jev-guard shape, deterministic checks, no classifier; installed via core.hooksPath"
+  },
+  {
+   "item": "judge-credit warning (degraded judges surface in UI)",
+   "status": "pending",
+   "evidence": "trail records ok:false but no first-class credit/auth-exhaustion warning exists",
+   "substrate": "consecutive judge failures → doctor/init injection warning"
+  },
+  {
+   "item": "status as UI: /majordome status renders the ledger (this slice: the view; queue-as-query at sqlite later)",
+   "status": "built",
+   "evidence": "6c5fb1b",
+   "substrate": "captain direction 2026-10-06: data-first, display in UI like list/dash, docs only as triggered exports; proposals get a view too (files stay as artifacts)"
+  },
+  {
+   "item": "/majordome status house view + @slug (any repo's ledger from any session; cold = not init'd)",
+   "status": "built",
+   "evidence": "b21221f",
+   "substrate": "formatHouseStatus + listWorkers/resolveWorkerRef"
+  },
+  {
+   "item": "cross-repo attribution: repo-stamp at consolidation for direct-mode work + legacy sweep (traceability/recall)",
+   "status": "pending",
+   "evidence": "captain confirmed 2026-10-06 — blocks carry substance, attribution keys on origin session today",
+   "substrate": "consolidation stamps repo; doctor flags crash-dir debris blocks"
+  },
+  {
+   "item": "near-instant freshness: per-turn posthook (local append + pointer registry, resolved via vcc_recall exact-turn) with dirty-mark incremental drain (CognitiveOS pattern — housekeep/consolidate drains markers; no sqlite needed)",
+   "status": "pending",
+   "evidence": "captain request 2026-10-06 — WAL + async-replication shape (sharding analogy); recall resolves pointers to exact local turns",
+   "substrate": "posthook on turn end; pairs with sqlite slice"
+  },
+  {
+   "item": "proposals → store-backed (kind=proposal blocks, pending/approved/rejected + superseded lifecycle) with CLI-shaped views: proposal list · show @id · decide @id approve-or-reject; export = only md door; file proposals migrate once",
+   "status": "pending",
+   "evidence": "captain refinement 2026-10-06 — recallable proposals = anti-re-proposal evidence files never gave; zero-token views; aligns with sqlite era",
+   "substrate": "ext/proposals.ts backing swap; replaces the files-as-artifacts compromise"
+  },
+  {
+   "item": "substring surface over trails.jsonl with fold pointers — verbatim recall, originals-only (trail:N in block slug:K)",
+   "status": "pending",
+   "evidence": "EARNED: proven need — every verify-what-we-said answer tonight was a manual trails grep",
+   "substrate": "ext/trail.ts read fn; assembly-order + compactor-retry DROPPED (no measured pain — revisit on cache-hit telemetry or gist-quality complaints)"
+  },
+  {
+   "item": "leiden communities + community-boost in router scoring (M) — new ext/cluster.ts; jaccard core already live in consolidate.ts (pair detection ≥0.19), this row adds communities + the router term only; feeds concept cells",
+   "status": "pending",
+   "evidence": "rustlm study + codebase audit 2026-10-07: jaccard EXISTS (consolidate.ts:39), communities don't; attacks router.ts:137 dims-collision (live wrong-thread hits tonight)",
+   "substrate": "ext/cluster.ts (leiden-ts zero-dep candidate) + router.ts"
+  },
+  {
+   "item": "ambient memory view + zoom (M-L) — bounded deterministic window injected every turn regardless of query, zoom(blockId) drills to trail originals; optchat's core trick",
+   "status": "parked",
+   "evidence": "optchat study — the guarantee side our push-recall lacks (continuity for infinite chat, model-pull bounds cost)",
+   "substrate": "ext/recall.ts injection mode + tool; revisit when freshness lands"
+  },
+  {
+   "item": "recall index v2 — build-own mindmap-shaped JSON index in ext/ (nodes/edges = pure data; borrowed logic: CognitiveOS graphindex + RRF fusion + jaccard + leiden communities; leiden row merges here; NO @statelyai dependency, no PR — captain call)",
+   "status": "parked",
+   "evidence": "captain decision 2026-10-07: adapt structure+logic, not the app; effort M-L honest (communities algo is the heavy part — TS leiden lib option)",
+   "substrate": "ext/ index module + router scoring"
+  },
+  {
+   "item": "workflow library: workflows as markdown + OKF frontmatter run by a TS interpreter — multi-route missions (parallel lanes by subject, impartial inspection), objective frontmatter = validation judge's rubric, bounded recursion (gap → new lane → re-validate; stability/round-cap stop), final synthesis stage; fixed stage vocabulary + script-node escape hatch; rounds pattern + cited-md report from pi-research study (lead continue/stop replaced by typed-rubric validation); promote to dedicated extension on: ≥3 workflows · used beyond this house · capability-trait cleanliness (pi-codemap precedent); split-lane research row = first workflow",
+   "status": "pending",
+   "evidence": "captain options A/B/C decided 2026-10-07: C with B absorbed; tinyflows = GPL-3.0 Rust library, design-only borrow",
+   "substrate": "tools/workflows/*.md + interpreter + skill; reuses ext/ functions as node catalog"
+  },
+  {
+   "item": "unified majordome CLI (one entry wrapping ext/ commands; retires 5 scattered CLIs) + typellm_judge tool registration (wraps judges client) — bash/tools.bash = tier-1 access for codemode and every agent",
+   "status": "pending",
+   "evidence": "captain direction 2026-10-07; pattern proven by typesafe_evaluate; doctor-cli/dispatch/init-cli already partial",
+   "substrate": "tools/cli.ts + ext/tools registerTool"
+  },
+  {
+   "item": "worker report = summary + pointer (pane id, session-file path, commit) — details stay in the pane session, majordome pulls on demand",
+   "status": "pending",
+   "evidence": "captain insight 2026-10-07 — report-bloat fix; the data-first rule applied to R4 reports",
+   "substrate": "R4 refinement: brief unchanged, report gains pointer line"
+  },
+  {
+   "item": "isolation follows write-risk: dispatch gains --isolation worktree-or-checkout (default by task type — read/research/status = plain checkout zero-disk; concurrent writes = worktree; branch-only skipped)",
+   "status": "pending",
+   "evidence": "captain question 2026-10-07 — orch headless/pane workers ALREADY run plain checkout (dispatch.ts); rule makes it explicit",
+   "substrate": "tools/dispatch.ts flag + charter note"
+  },
+  {
+   "item": "workflow engine decision: TS core + md/OKF declarative workflows over the node catalog (CLI verbs + typellm_judge + leiden) — constrained expression evaluator, script-node escape hatch, tinyflows Features as semantics checklist (ports/fan-out/barriers/sub_workflow); A (Rust tinyflows/GPL) rejected as dependency, kept as spec; B (JS authoring) demoted to escape hatch",
+   "status": "pending",
+   "evidence": "tinyflows study 2026-10-07 — capability-trait split validated (engine no-I/O, host provides); built with the research funnel as workflow #1",
+   "substrate": "ext/workflows.ts (parser+evaluator+runner) + SKILL.md authoring format"
+  },
+  {
+   "item": "query decomposition v1 (EASIEST-NOW): decomposeQuery with per-boundary cohesion judge (≤3 sub-questions; consecutive-linked questions stay together) → probability gate (jev-guard pattern: p ≥ 0.9 proceed soft / p < 0.9 grill-with-options: 2-3 interpretations + defaults / dangerous = deny) → parallel recall → merged injection → feedback loop (captain answer re-decomposes, 2-round cap)",
+   "status": "built",
+   "evidence": "7981471",
+   "substrate": "jev-guard pattern verified: jev.js returns p/confidence per question, guard.js thresholds → allow/ask/deny; RoutingIntent needClarification seam already exists"
+  },
+  {
+   "item": "grill protocol: facts/decisions/language separation in funnel stage 0 + concierge briefs + charter router rule (ambiguous → route; grill only material decisions, ≤1-2 questions with defaults; never ask what's readable)",
+   "status": "pending",
+   "evidence": "grill-for-unknowns + pi-workflows study 2026-10-07 — skill already installed; borrow = discipline, not code",
+   "substrate": "research-funnel stage 0 + R4 brief template + charter rule"
+  },
+  {
+   "item": "split-lane research: training-recall lane (blind, facts-only, own session file) → judge flags inconsistency/risk/no-source/outdated → targeted web-validation lane on flagged claims; silo lanes by domain (white-hat facts first); first workflow for the engine",
+   "status": "pending",
+   "evidence": "captain RAG idea 2026-10-07 — lanes isolated from context influence; cheap training lane + targeted web lane, not open-ended scrape",
+   "substrate": "workflow engine + typesafe/typellm judges"
+  },
+  {
+   "item": "entity registry: per-turn deterministic extraction (URLs · repo paths · file paths → zero judge) + judge canonicalization only when ambiguous; per-turn entity field + registry table (sqlite: table); recall matches entities exactly",
+   "status": "built",
+   "evidence": "7981471",
+   "substrate": "false-positive specimen 2026-10-07 (jev-guard tokens → deck-init block) + audit: local path in 0 blocks, upstream URL only as substring luck; kills the token-soup recall class"
+  },
+  {
+   "item": "dependency-due-diligence workflow (lanes: license · maintenance health · API surface · benchmark validity · fit) — first file when the workflow engine lands; stately-dd run = known-answer validation",
+   "status": "pending",
+   "evidence": "captain audit 2026-10-07: adoption decided single-lane, scout bypassed — mechanize the discipline",
+   "substrate": "workflow engine · stately-dd session = validation case"
+  },
+  {
+   "item": "user.json query profile: deterministic query-style metrics per turn (topics · length · imperative ratio) + judge classification on feedback events only → calibrates decompose confidence + personalizes split instructions; user.md stays prose",
+   "status": "pending",
+   "evidence": "captain request 2026-10-07 — 0.95 confidence measured split-clarity, not understanding; profile calibrates to the user",
+   "substrate": "posthook metrics + feedback-event judge + user.json"
+  },
+  {
+   "item": "office-parser orch add (worker registration)",
+   "status": "built",
+   "evidence": "global: orchestrator.json 2026-10-06 — 4th worker, path verified",
+   "substrate": "lazy-init on first start"
+  }
+ ]
+}

@@ -117,7 +117,7 @@ the lowest long-term cost for this repository and note it in the commit.
 
 ## Structure & Placement
 
-- Repo root: \`README.md\` (product truth) · \`CHANGELOG.md\` (append-only history) · \`STATUS.md\` (deliverable ledger).
+- Repo root: \`README.md\` (product truth) · \`CHANGELOG.md\` (append-only history) · \`status.json\` (deliverable ledger).
 - \`docs/\` — product documentation. \`docs/dev/\` — research and design, never product claims.
 - New files go next to similar code; never a new top-level directory without proposing it first.
 

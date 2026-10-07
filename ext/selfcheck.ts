@@ -421,13 +421,13 @@ if (process.argv.includes("--parity")) {
 		return wr.test('"path":"docs/README.md"') && wr.test('"repo\\\\README.md"') && !wr.test("plain README.md prose") && !wr.test('"x/footer-readme.md"') && watchRegexFor("docs/").test('"path":"docs/api"') && !watchRegexFor("docs/").test('"path":"docsx/api"');
 	})());
 
-	// 1b. STATUS built-in (the deliverable ledger): touch regex mirrors
-	// CHANGELOG's, coding default grows to README+CHANGELOG+STATUS+docs/,
+	// 1b. status.json built-in (the deliverable ledger): touch regex mirrors
+	// CHANGELOG's, coding default grows to README+CHANGELOG+status.json+docs/,
 	// generic stays docs/ only, custom overrides still win
-	check("watch: built-ins are README+CHANGELOG+STATUS+docs/", JSON.stringify(BUILTIN_DOC_WATCH) === JSON.stringify(["README", "CHANGELOG", "STATUS", "docs/"]));
-	check("watch: STATUS touch regex mirrors CHANGELOG (path boundary, case-insensitive)", (() => {
-		const wr = watchRegexFor("STATUS");
-		return wr.test('"path":"docs/STATUS.md"') && wr.test('"repo\\\\STATUS.md"') && wr.test('"x/status.md"') && !wr.test("plain STATUS.md prose") && !wr.test('"x/footer-status.md"') && !watchRegexFor("CHANGELOG").test('"path":"STATUS.md"');
+	check("watch: built-ins are README+CHANGELOG+status.json+docs/", JSON.stringify(BUILTIN_DOC_WATCH) === JSON.stringify(["README", "CHANGELOG", "status.json", "docs/"]));
+	check("watch: status.json touch regex mirrors CHANGELOG (path boundary, case-insensitive)", (() => {
+		const wr = watchRegexFor("status.json");
+		return wr.test('"path":"docs/status.json"') && wr.test('"repo\\\\status.json"') && wr.test('"x/status.json"') && !wr.test("plain status.json prose") && !wr.test('"x/footer-status.json"') && !watchRegexFor("CHANGELOG").test('"path":"status.json"');
 	})());
 	check("profile: custom override still wins over the detected coding default", (() => {
 		const repoO = join(tmp, "prof-override-coding");
@@ -437,15 +437,15 @@ if (process.argv.includes("--parity")) {
 		const r = resolveDocsProfile(repoO, null);
 		return r.source === "override" && r.watch.join(",") === "NOTES";
 	})());
-	// a STATUS.md touch satisfies the docs nudge like README/CHANGELOG: the
+	// a status.json touch satisfies the docs nudge like README/CHANGELOG: the
 	// cursor advances (the exact index.ts turn_end wiring) and covers the work
 	const { cursorKey } = await import("./router.ts");
 	const SFS = "/h/.pi/agent/sessions/--home-u-repos--/s.jsonl";
 	const implS = ["a", "b", "c"].map((g, i) => ({ sessionFile: SFS, intent: "implementation", gist: `built ${g}`, closedAt: `2026-10-0${i + 1}T12:00:00Z` }));
 	const stCur: Record<string, string> = {};
-	for (const doc of scanDocsTouched('"file":"/repo/STATUS.md"')) stCur[cursorKey("--home-u-repos--", doc)] = "2026-10-02T00:00:00Z";
-	check("nudge: STATUS.md touch scans as a built-in and satisfies the nudge (cursor covers)", scanDocsTouched('"file":"/repo/STATUS.md"').join(",") === "STATUS" && stCur["--home-u-repos--:STATUS"] === "2026-10-02T00:00:00Z" && docsNudge(implS as any, SFS, stCur) === null);
-	check("nudge: without the STATUS touch the nudge still fires at 3", (docsNudge(implS as any, SFS, {}) ?? "").includes("3 implementation blocks"));
+	for (const doc of scanDocsTouched('"file":"/repo/status.json"')) stCur[cursorKey("--home-u-repos--", doc)] = "2026-10-02T00:00:00Z";
+	check("nudge: status.json touch scans as a built-in and satisfies the nudge (cursor covers)", scanDocsTouched('"file":"/repo/status.json"').join(",") === "status.json" && stCur["--home-u-repos--:status.json"] === "2026-10-02T00:00:00Z" && docsNudge(implS as any, SFS, stCur) === null);
+	check("nudge: without the status.json touch the nudge still fires at 3", (docsNudge(implS as any, SFS, {}) ?? "").includes("3 implementation blocks"));
 
 	// 2. profile resolution precedence: override > stored > detected
 	const repoC = join(tmp, "prof-coding");
@@ -453,7 +453,10 @@ if (process.argv.includes("--parity")) {
 	mkd(join(repoC, "lib"), { recursive: true });
 	writeFileSync(join(repoC, "Cargo.toml"), "[package]\n");
 	mkd(join(repoG, "docs"), { recursive: true });
-	check("profile: code manifest → coding (README+CHANGELOG+STATUS+docs/)", JSON.stringify(detectDocsProfile(repoC)) === JSON.stringify({ watch: [...BUILTIN_DOC_WATCH], source: "detected-coding" }));
+	check("profile: code manifest → coding (README+CHANGELOG+status.json+docs/)", JSON.stringify(detectDocsProfile(repoC)) === JSON.stringify({ watch: [...BUILTIN_DOC_WATCH], source: "detected-coding" }));
+	// legacy stored profiles (pre-status.json "STATUS" entries) normalize at
+	// resolve time — a repo that adopted before the rename keeps watching the ledger
+	check("profile: stored legacy STATUS watch normalizes to status.json", resolveDocsProfile(repoC, { watch: ["README", "STATUS", "NOTES"], source: "detected-coding" }).watch.join(",") === "README,status.json,NOTES");
 	const repoCabal = join(tmp, "prof-cabal");
 	mkd(repoCabal, { recursive: true });
 	writeFileSync(join(repoCabal, "majordome.cabal"), "cabal-version: 3.0\n");
@@ -543,12 +546,17 @@ if (process.argv.includes("--parity")) {
 	check("shape: canned Jev choice parses to a verdict", vTab?.shape === "table");
 	check("shape: default verdict → zero injection (null line)", shapeHintLine("default", "ok") === null && shapeHintLine("table", "comparing parsers") !== null);
 
-	// user.md fixture must exist BEFORE the preference-context judge below:
-	// userPrefLines() reads MAJORDOME_USER_FILE at judge time (cached per
-	// session), so the env has to be in place first
+	// preference fixtures must exist BEFORE the preference-context judge below:
+	// userPrefLines() reads MAJORDOME_USER_FILE (user.json) + MAJORDOME_USER_MD_FILE
+	// (user.md prose) at judge time (cached per session), so env has to be in
+	// place first. user.json lines come FIRST (answer_shape + preference pairs),
+	// prose fills after — the merge the shape judge sees.
+	const userJsonFile = join(tmp, "user-fixture.json");
+	writeFileSync(userJsonFile, JSON.stringify({ updated: "2026-10-07", answer_shape: "diagram-first", preferences: [{ key: "naming", value: "our app's name, never the origin tool's", added: "2026-10-07", source: "captain" }], query_style: { avg_topics_per_query: 0, samples: 0, imperative_ratio: 0 }, confidence_calibration: [] }));
 	const userFile = join(tmp, "user-fixture.md");
 	writeFileSync(userFile, "# personal rules (comment line)\n\n- Prefer a diagram over prose for flow questions.\n- Keep answers STE-80 short.\n");
-	process.env.MAJORDOME_USER_FILE = userFile;
+	process.env.MAJORDOME_USER_FILE = userJsonFile;
+	process.env.MAJORDOME_USER_MD_FILE = userFile;
 	resetUserPrefs();
 
 	let seenState: any = null;
@@ -583,14 +591,25 @@ if (process.argv.includes("--parity")) {
 	const lines2 = userPrefLines(); // same process → cached
 	resetUserPrefs();
 	const lines3 = userPrefLines(); // re-read
-	process.env.MAJORDOME_USER_FILE = join(tmp, "definitely-missing-user.md");
+	process.env.MAJORDOME_USER_MD_FILE = join(tmp, "definitely-missing-user.md");
 	resetUserPrefs();
-	const lines4 = userPrefLines();
+	const lines4 = userPrefLines(); // json still read, prose missing → json only
 	resetUserPrefs();
 	delete process.env.MAJORDOME_USER_FILE;
+	delete process.env.MAJORDOME_USER_MD_FILE;
 	delete process.env.MAJORDOME_TRAIL_FILE;
-	check("shape: user.md lines read, comments/blanks stripped", lines1.length === 2 && lines1[0].includes("diagram") && !lines1.join("|").includes("personal rules"));
-	check("shape: prefs cached per session until reset", lines2.length === 2 && lines3.length === 1 && lines4.length === 0);
+	check("shape: user.json lines first (answer_shape + prefs), user.md prose after, comments/blanks stripped", lines1.length === 4 && lines1[0] === "user's standing output preference: answer_shape=diagram-first" && lines1[1] === "naming=our app's name, never the origin tool's" && (lines1[2] ?? "").includes("diagram") && !lines1.join("|").includes("personal rules"));
+	check("shape: prefs cached per session until reset", lines2.length === 4 && lines3.length === 3 && lines4.length === 2);
+	check("shape: user.json absent → defaults (auto shape, no lines)", (() => {
+		process.env.MAJORDOME_USER_FILE = join(tmp, "definitely-missing-user.json");
+		process.env.MAJORDOME_USER_MD_FILE = join(tmp, "definitely-missing-user.md");
+		resetUserPrefs();
+		const none = userPrefLines();
+		delete process.env.MAJORDOME_USER_FILE;
+		delete process.env.MAJORDOME_USER_MD_FILE;
+		resetUserPrefs();
+		return none.length === 0;
+	})());
 }
 
 // ── panel grading (majority-of-available-engines, ext/panel.ts) ──
@@ -1085,10 +1104,10 @@ if (process.argv.includes("--parity")) {
 	const scan = pr.scanProposals(pRepo, { now: "2025-01-09" });
 	wfAg(join(pRepo, ".majordome", "AGENTS.proposal.md"), "# legacy review copy\n");
 	const legacyScan = pr.scanProposals(pRepo, { now: "2025-01-09" });
-	const hkRes = hk.collectHousekeep({ cwd: pRepo, statusText: "", readmeText: "", changelogText: "", extraDocs: [], proposals: legacyScan });
+	const hkRes = hk.collectHousekeep({ cwd: pRepo, statusRows: [], readmeText: "", changelogText: "", extraDocs: [], proposals: legacyScan });
 	check("proposals: scanProposals — flat-dir counts (3 parsed · 2 pending · 2 stale) + legacy flag", scan.entries.length === 3 && scan.pending === 2 && scan.stale === 2 && scan.legacy === false && legacyScan.legacy === true);
 	check("housekeep: pending proposals listed as needs-your-yes, never decided (file stays pending)", hkRes.needsYes.some((l) => l.includes("[proposals] 2 pending proposal(s)") && l.includes("2 stale >7d") && l.includes("deciding is the captain's") && l.includes("never auto-decides")) && hkRes.needsYes.some((l) => l.includes("legacy proposal file") && l.includes("re-run init to regenerate under proposals/ or move manually")) && rfsAg(p2, "utf8").includes("status: pending"));
-	check("housekeep: safe class unchanged — proposal paths stay outside the README/STATUS/docs allowlist", !hk.isSafeDocPath(".majordome/proposals/2025-01-01-agents-scaffold.md") && hk.isSafeDocPath("docs/x.md") && hk.isSafeDocPath("STATUS.md"));
+	check("housekeep: safe class unchanged — proposal paths stay outside the README/status.json/docs allowlist", !hk.isSafeDocPath(".majordome/proposals/2025-01-01-agents-scaffold.md") && hk.isSafeDocPath("docs/x.md") && hk.isSafeDocPath("STATUS.md") && hk.isSafeDocPath("status.json"));
 
 	// agentsmd stays provably write-free: no write call AND no proposals import
 	// that would smuggle a write path in transitively
@@ -1292,30 +1311,32 @@ if (process.argv.includes("--parity")) {
 	check("docdrift: real evidence — inbox/orchestrator/panel grading/one-pager all map to code", DRIFT_RULES.filter((r) => r.noun !== "sidecar").every((r) => evidenceOk(repoRoot, r)));
 	check("docdrift: sidecar has NO ext/ tools/ evidence (prototype lives unwired in durable-sidecar/)", !evidenceOk(repoRoot, DRIFT_RULES.find((r) => r.noun === "sidecar")!));
 
-	// STATUS.md ledger — parsed by the SHARED parser (ext/status.ts: the same
-	// rows the recall status-join and housekeeping read). Raw-shape checks pin
-	// the table form; parser checks pin the semantics.
-	const stPath = new URL("../STATUS.md", import.meta.url);
+	// status.json ledger — loaded by the SHARED loader (ext/status.ts: the same
+	// rows the recall status-join and housekeeping read). Checks pin the
+	// migration (every legacy row preserved verbatim) + the ledger semantics.
+	const stPath = new URL("../status.json", import.meta.url);
 	const statusMod = await import("./status.ts");
-	check("STATUS.md: exists at repo root", ex6(stPath));
-	const stText = rfs6(stPath, "utf8");
-	const stLines = stText.split("\n").filter((l) => l.trim().startsWith("|"));
-	const stHeader = stLines[0] ?? "";
-	const stRows = statusMod.parseStatusRows(stText);
-	const cells = (l: string) => l.split("|").map((s) => s.trim());
-	check("STATUS.md: table header is item | status | evidence | substrate", ["item", "status", "evidence", "substrate"].every((h) => cells(stHeader).includes(h)));
-	check("STATUS.md: has rows", stRows.length >= 20);
-	check("STATUS.md: every row has exactly 4 columns (raw rows all parse)", stLines.length - 2 === stRows.length);
+	check("status.json: exists at repo root", ex6(stPath));
+	check("status.json: STATUS.md demoted — gone from the repo root (the only md door is --export)", !ex6(new URL("../STATUS.md", import.meta.url)));
+	const stLedger = JSON.parse(rfs6(stPath, "utf8")) as { updated: string; rows: unknown };
+	const stRows = statusMod.loadStatusRows(new URL("..", import.meta.url).pathname);
 	const STATUSES = new Set(["built", "parked", "dropped", "pending"]);
-	check("STATUS.md: statuses limited to built/parked/dropped/pending", stRows.every((r) => STATUSES.has(r.status)));
-	check("STATUS.md: exactly one row per item (no duplicate items)", new Set(stRows.map((r) => r.item)).size === stRows.length);
-	check("STATUS.md: every built row cites a 7-hex commit or global-state evidence", stRows.every((r) => r.status !== "built" || /\b[0-9a-f]{7}\b/.test(r.evidence) || /^global: /.test(r.evidence)));
-	check("STATUS.md: real ledger already canonical (normalizer is a no-op)", !statusMod.normalizeStatusText(stText).changed);
+	check("status.json: shape {updated, rows[]} with an ISO updated stamp", typeof stLedger.updated === "string" && /^\d{4}-\d{2}-\d{2}/.test(stLedger.updated) && Array.isArray(stLedger.rows));
+	check("status.json: migration preserved every legacy row (loader reads all of them)", stRows.length >= 60 && stRows.length === stLedger.rows.length);
+	check("status.json: every row has item/status/evidence/substrate strings", stRows.every((r) => typeof r.item === "string" && r.item && typeof r.status === "string" && r.status && typeof r.evidence === "string" && typeof r.substrate === "string"));
+	check("status.json: statuses limited to built/parked/dropped/pending", stRows.every((r) => STATUSES.has(r.status)));
+	check("status.json: exactly one row per item (no duplicate items)", new Set(stRows.map((r) => r.item)).size === stRows.length);
+	check("status.json: every built row cites a 7-hex commit or global-state evidence", stRows.every((r) => r.status !== "built" || /\b[0-9a-f]{7}\b/.test(r.evidence) || /^global: /.test(r.evidence)));
+	check("status.json: one-pager deliverable dropped (removed per captain 2026-10-07)", stRows.some((r) => r.item === "docs/ONE-PAGER.md build-day ledger" && r.status === "dropped" && r.evidence.includes("removed per captain 2026-10-07")));
+	check("status.json: no BUILT row still points at the deleted one-pager doc", stRows.every((r) => r.status !== "built" || !/docs\/ONE-PAGER\.md/.test(`${r.evidence} ${r.substrate}`)));
+	check("status.json: export md door roundtrips (exportStatusMd → parseStatusRows === rows)", JSON.stringify(statusMod.parseStatusRows(statusMod.exportStatusMd(stRows))) === JSON.stringify(stRows));
+	check("status.json: canonical row statuses (json normalizer is a no-op on the real ledger)", !statusMod.normalizeStatusRows(stRows).changed);
 }
 
 // ── status join + shared STATUS parser (ext/status.ts) ──────────────────
 {
-	const { parseStatusRows, normalizeStatusText, statusJoinLines } = await import("./status.ts");
+	const { parseStatusRows, normalizeStatusText, normalizeStatusRows, exportStatusMd, loadStatusRows, statusFile, statusJoinLines } = await import("./status.ts");
+	const fsSt = await import("node:fs");
 
 	// parser: header + separator skipped, malformed rows skipped, cells trimmed
 	const ragged = parseStatusRows("| item | status | evidence | substrate |\n|---|---|---|---|\n| ok row | built | abc1234 | ext/x.ts |\n| just | two |\n|   |   |   |   |\n");
@@ -1349,6 +1370,25 @@ if (process.argv.includes("--parity")) {
 	const nrm = normalizeStatusText("| item | status | evidence | substrate |\n|---|---|---|---|\n| x | Built |   abc1234  | y |\n");
 	check("status normalize: status case + cell spacing", nrm.changed && nrm.text.includes("| x | built | abc1234 | y |"));
 	check("status normalize: idempotent on its own output", !normalizeStatusText(nrm.text).changed);
+
+	// json normalizer + loader: lenient rows, corrupt ledger inert, legacy md
+	// fallback for unmigrated worker repos, env override respected
+	const nrmRows = normalizeStatusRows([{ item: "x", status: "Built", evidence: "abc1234", substrate: "y" }, { item: "y", status: "weird", evidence: "", substrate: "" }]);
+	check("status json normalize: known statuses lowercased, unknown untouched", nrmRows.changed && nrmRows.rows[0].status === "built" && nrmRows.rows[1].status === "weird");
+	const jsonRepo = join(tmp, "status-json-repo");
+	fsSt.mkdirSync(jsonRepo, { recursive: true });
+	fsSt.writeFileSync(join(jsonRepo, "status.json"), JSON.stringify({ updated: "2026-10-07", rows: [{ item: "sidecar watch mode", status: "parked", evidence: "26fde67", substrate: "durable-sidecar/" }, { item: "junk" }, null, { item: "no-status" }] }));
+	const jsonRows = loadStatusRows(jsonRepo);
+	check("status json loader: good rows kept, junk skipped, fields coerced", jsonRows.length === 1 && jsonRows[0].item === "sidecar watch mode" && jsonRows[0].evidence === "26fde67");
+	fsSt.writeFileSync(join(jsonRepo, "status.json"), "{corrupt");
+	check("status json loader: corrupt ledger → [] (inert, never fatal)", loadStatusRows(jsonRepo).length === 0);
+	const mdRepo = join(tmp, "status-md-repo");
+	fsSt.mkdirSync(mdRepo, { recursive: true });
+	fsSt.writeFileSync(join(mdRepo, "STATUS.md"), "| item | status | evidence | substrate |\n|---|---|---|---|\n| legacy row | parked | note | docs/ |\n");
+	check("status loader md fallback: unmigrated STATUS.md still reads", loadStatusRows(mdRepo).length === 1 && loadStatusRows(mdRepo)[0].item === "legacy row");
+	process.env.MAJORDOME_STATUS_FILE = join(jsonRepo, "status.json");
+	check("status file env: MAJORDOME_STATUS_FILE overrides the repo-root path", statusFile("/elsewhere").endsWith("status.json") && statusFile("/elsewhere") === join(jsonRepo, "status.json"));
+	delete process.env.MAJORDOME_STATUS_FILE;
 }
 
 // ── housekeeping: safe-fix vs needs-yes policy (ext/housekeep.ts) ────────
@@ -1362,8 +1402,12 @@ if (process.argv.includes("--parity")) {
 	fs2.mkdirSync(join(repo, "docs"), { recursive: true });
 	const readme = ["# fixture repo", "", "A sidecar in watch mode keeps each repo's artifacts fresh.", ""].join("\n");
 	fs2.writeFileSync(join(repo, "README.md"), readme);
-	const ledger = "| item | status | evidence | substrate |\n|---|---|---|---|\n| sidecar watch mode | parked | 26fde67 prototype only, not wired | durable-sidecar/ |\n| ledger-only deliverable | built | abc0123 (docs def2345) | ext/nothing.ts |\n";
-	fs2.writeFileSync(join(repo, "STATUS.md"), ledger);
+	const ledgerRows = [
+		{ item: "sidecar watch mode", status: "parked", evidence: "26fde67 prototype only, not wired", substrate: "durable-sidecar/" },
+		{ item: "ledger-only deliverable", status: "built", evidence: "abc0123 (docs def2345)", substrate: "ext/nothing.ts" },
+	];
+	const ledgerText = JSON.stringify({ updated: "2026-10-07", rows: ledgerRows }, null, 1) + "\n";
+	fs2.writeFileSync(join(repo, "status.json"), ledgerText);
 	// the corrupt store file the rm proposal names — must survive housekeeping
 	const corrupt = join(repo, "trails.jsonl");
 	fs2.writeFileSync(corrupt, "{not json}\n");
@@ -1371,7 +1415,6 @@ if (process.argv.includes("--parity")) {
 	const res = hk.collectHousekeep({
 		cwd: repo,
 		doctorText: "✓ index: 3 blocks parse\nall clear.",
-		statusText: ledger,
 		readmeText: readme,
 		changelogText: "## 1.0.0 — inbox now ships",
 		gitShas: [], // ledger cites 26fde67 → stale by construction
@@ -1409,10 +1452,10 @@ if (process.argv.includes("--parity")) {
 	// listed, not executed — corrupt file survives, nothing else written
 	const fixed = hk.applySafeFixes(repo, res.proposals);
 	const after = fs2.readFileSync(join(repo, "README.md"), "utf8");
-	check("housekeep: safe-fix applied rewords the fixture README", fixed.length === 1 && after.includes("planned sidecar in watch mode (not yet built — see STATUS.md)"));
+	check("housekeep: safe-fix applied rewords the fixture README", fixed.length === 1 && after.includes("planned sidecar in watch mode (not yet built — see status.json)"));
 	check("housekeep: reworded README is roadmap-exempt (doc-drift gate quiet)", scanDocDrift(after, () => false).warns.length === 0);
 	check("housekeep: dangerous action listed NOT executed (corrupt file survives)", fs2.existsSync(corrupt) && fixed.every((f) => !f.includes("rm")));
-	check("housekeep: STATUS.md untouched when already canonical", fs2.readFileSync(join(repo, "STATUS.md"), "utf8") === ledger);
+	check("housekeep: status.json untouched when already canonical", fs2.readFileSync(join(repo, "status.json"), "utf8") === ledgerText);
 }
 
 // ── doctor + housekeeping command registration (same registry) ──────────
@@ -1422,6 +1465,9 @@ if (process.argv.includes("--parity")) {
 	check("commands: /majordome doctor registered in the extension registry", /cmd === "doctor"/.test(idx) && /import \{ doctor \} from "\.\/ext\/doctor\.ts";/.test(idx));
 	check("commands: /majordome housekeeping registered in the extension registry", /cmd === "housekeeping"/.test(idx) && /import \{ housekeeping \} from "\.\/ext\/housekeep\.ts";/.test(idx));
 	check("commands: doctor CLI entry exists (bare tsx must print, never wait on stdin)", exIdx(new URL("../tools/doctor-cli.ts", import.meta.url)));
+	check("commands: one-pager command removed (composeOnePager stays sidecar-only)", !/cmd === "one-pager"/.test(idx) && !idx.includes("composeOnePager"));
+	check("commands: /majordome user registered (render + set + reset via userprefs)", /cmd === "user"/.test(idx) && idx.includes("renderUserPrefs") && idx.includes("setUserPref") && idx.includes("resetUserPrefsFile"));
+	check("commands: /majordome status --export md door registered (the only md write)", idx.includes('a === "--export"') && idx.includes("exportStatusMd"));
 	check("recall: status-join wired into the injection path", idx.includes("statusJoinTail(winner)") && idx.includes("loadStatusRows"));
 	// live smoke: the doctor audit always renders a report (never crashes, never empty)
 	const { doctor } = await import("./doctor.ts");

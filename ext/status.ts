@@ -1,11 +1,16 @@
 /**
- * STATUS.md — the repo's deliverable ledger, parsed once and shared.
+ * status.json — the repo's deliverable ledger, loaded once and shared.
  *
- * Row shape (see STATUS.md header): `| item | status | evidence | substrate |`,
- * statuses limited to built/parked/dropped/pending; built rows cite a 7-hex
- * commit. The parser used to live inline in ext/selfcheck.ts (14 ledger checks
- * parsed rows ad hoc) — extracted here so the recall injection path (status
- * join) and the housekeeping checks read the SAME rows selfcheck grades.
+ * File shape (repo root): { updated: "YYYY-MM-DD", rows: [{ item, status,
+ * evidence, substrate }] }, statuses limited to built/parked/dropped/pending;
+ * built rows cite a 7-hex commit. STATUS.md is no longer the source — it is a
+ * generated view (/majordome status --export md, the only md door). The md
+ * parser/serializer stay here for that door and for unmigrated worker repos
+ * whose ledger is still a STATUS.md table (loadStatusRows falls back to it).
+ *
+ * The parser used to live inline in ext/selfcheck.ts (14 ledger checks parsed
+ * rows ad hoc) — extracted so the recall injection path (status join) and the
+ * housekeeping checks read the SAME rows selfcheck grades.
  *
  * The status join is deterministic token overlap only: block title/gist tokens
  * vs row-item tokens (core.ts tokenizer — stopwords stripped). No model call,
@@ -25,9 +30,15 @@ export interface StatusRow {
 	substrate: string;
 }
 
-/** Parse STATUS.md table rows: skip the header and the `|---|` separator,
- * keep exactly-4-column rows, trim cells, drop empties. Lenient by design —
- * a malformed row is skipped, never fatal (fail-open like every reader here). */
+export interface StatusLedger {
+	updated: string;
+	rows: StatusRow[];
+}
+
+/** Parse a legacy STATUS.md table: skip the header and the `|---|` separator,
+ * keep exactly-4-column rows, trim cells, drop empties. Kept for the --export
+ * md door's roundtrip and for worker repos not yet migrated to status.json.
+ * Lenient by design — a malformed row is skipped, never fatal. */
 export function parseStatusRows(text: string): StatusRow[] {
 	const lines = text.split("\n").filter((l) => l.trim().startsWith("|"));
 	const rows: StatusRow[] = [];
@@ -39,6 +50,21 @@ export function parseStatusRows(text: string): StatusRow[] {
 		rows.push({ item, status, evidence: evidence ?? "", substrate: substrate ?? "" });
 	}
 	return rows;
+}
+
+/** Serialize rows back to the legacy STATUS.md table (the --export md door). */
+export function exportStatusMd(rows: StatusRow[]): string {
+	return [
+		"# STATUS — deliverable ledger",
+		"",
+		"Every discussed deliverable gets exactly one row. built rows cite a commit.",
+		"Update on land or drop — never leave a row stale past the session that changed it.",
+		"",
+		"| item | status | evidence | substrate |",
+		"|---|---|---|---|",
+		...rows.map((r) => `| ${r.item} | ${r.status} | ${r.evidence} | ${r.substrate} |`),
+		"",
+	].join("\n");
 }
 
 /** Normalize a ledger back to canonical single-spaced 4-column rows (status
@@ -75,25 +101,57 @@ export function normalizeStatusText(text: string): { text: string; changed: bool
 	return { text: out.join("\n"), changed, rows: parseStatusRows(text).length };
 }
 
-/** STATUS.md path: the repo root's ledger, `MAJORDOME_STATUS_FILE` overrides
+/** Normalize JSON rows: known statuses lowercased (a hand-edited "Built" is
+ * the JSON-era equivalent of the old spacing drift). */
+export function normalizeStatusRows(rows: StatusRow[]): { rows: StatusRow[]; changed: boolean } {
+	let changed = false;
+	const next = rows.map((r) => {
+		const status = STATUS_STATUSES.includes(r.status.toLowerCase()) ? r.status.toLowerCase() : r.status;
+		if (status !== r.status) changed = true;
+		return { ...r, status };
+	});
+	return { rows: next, changed };
+}
+
+/** Ledger path: the repo root's status.json, `MAJORDOME_STATUS_FILE` overrides
  * for hermetic runs (same pattern as MAJORDOME_FP_FILE / MAJORDOME_TRAIL_FILE). */
 export function statusFile(repoRoot: string = process.cwd()): string {
-	return process.env.MAJORDOME_STATUS_FILE?.trim() || join(repoRoot, "STATUS.md");
+	return process.env.MAJORDOME_STATUS_FILE?.trim() || join(repoRoot, "status.json");
 }
 
-/** Load rows from disk. Absent/unreadable ledger → [] (no ledger, no join
- * lines — the feature is inert outside repos that keep one). */
+/** Lenient row reader: objects with item+status strings survive; evidence/
+ * substrate coerce to strings; everything else is skipped. */
+function rowsOf(raw: unknown): StatusRow[] {
+	if (!Array.isArray(raw)) return [];
+	const out: StatusRow[] = [];
+	for (const r of raw) {
+		const o = (r ?? {}) as Record<string, unknown>;
+		if (typeof o.item !== "string" || !o.item || typeof o.status !== "string" || !o.status) continue;
+		out.push({ item: o.item, status: o.status, evidence: typeof o.evidence === "string" ? o.evidence : "", substrate: typeof o.substrate === "string" ? o.substrate : "" });
+	}
+	return out;
+}
+
+/** Load rows from disk: status.json first (the ledger); an unmigrated repo
+ * with only a legacy STATUS.md still reads (md fallback), so cross-repo
+ * status views keep working before each worker migrates. Absent/unreadable →
+ * [] (no ledger, no join lines — the feature is inert outside repos that
+ * keep one). */
 export function loadStatusRows(repoRoot: string = process.cwd()): StatusRow[] {
 	const p = statusFile(repoRoot);
-	if (!existsSync(p)) return [];
 	try {
-		return parseStatusRows(readFileSync(p, "utf8"));
+		if (existsSync(p)) return rowsOf(JSON.parse(readFileSync(p, "utf8"))?.rows);
 	} catch {
-		return [];
+		return []; // corrupt ledger → inert (fail-open like every reader here)
 	}
+	try {
+		const legacy = join(repoRoot, "STATUS.md");
+		if (existsSync(legacy)) return parseStatusRows(readFileSync(legacy, "utf8"));
+	} catch { /* unreadable → no rows */ }
+	return [];
 }
 
-// ── the status join (recall injection ↔ STATUS.md rows) ─────────────────────
+// ── the status join (recall injection ↔ status.json rows) ────────────────────
 
 /** Deterministic match: ≥2 shared non-stopword tokens between the block text
  * (title/gist) and the row item. One shared token is too polysemous ("sidecar"
@@ -131,7 +189,7 @@ export function statusJoinLines(blockText: string, rows: StatusRow[], max = 2): 
 
 /** Render the ledger as the /majordome status panel: pending items in full
  * (ledger order), parked inline, built/dropped as counts. Data stays in
- * STATUS.md — this is a view, not a source. */
+ * status.json — this is a view, not a source. */
 export function formatStatus(rows: StatusRow[]): string {
 	const by = (st: string) => rows.filter((r) => r.status === st);
 	const pending = by("pending");
@@ -143,7 +201,7 @@ export function formatStatus(rows: StatusRow[]): string {
 		`│ pending (${pending.length})`,
 		...(pending.length ? pending.map((r) => `│ · ${r.item}`) : ["│ · (none — queue clear)"]),
 		`│ parked (${parked.length}): ${parked.map((r) => r.item).join(" · ") || "(none)"}`,
-		`│ built ${built.length} · dropped ${dropped.length} — evidence in STATUS.md`,
+		`│ built ${built.length} · dropped ${dropped.length} — evidence in status.json`,
 		"╰─",
 	].join("\n");
 }

@@ -34,10 +34,9 @@ the domain differs.
 ## Structure & Placement
 
 - Repo root: `README.md` (product truth) · `CHANGELOG.md` (append-only
-  history) · `STATUS.md` (deliverable ledger — butler-owned; reports propose,
+  history) · `status.json` (deliverable ledger — butler-owned; reports propose,
   the butler disposes).
-- `docs/` — **product documentation only** (OVERVIEW, ORCHESTRATION, ROLES,
-  ONE-PAGER).
+- `docs/` — **product documentation only** (OVERVIEW, ORCHESTRATION, ROLES).
 - `docs/dev/` — **research and design**: studies, design ledgers, future
   profiles. Never product claims.
 - `bench/` — **all evaluation**: harnesses, eval-plan docs, fixtures, keys,
@@ -68,7 +67,7 @@ the domain differs.
 - **Negatives need positive proof** — an existence claim requires an explicit
   test (`test -d`, exit codes), never an empty grep/ls; check the other side
   too (did it land somewhere else?). Tables and queues are derived from
-  STATUS.md by reading it, never from session memory.
+  status.json by reading it, never from session memory.
 - **Verify before push, gates before commit** — never chain a gate and a push
   in one command; a red gate stops the chain. The push itself is
   hook-enforced: `.githooks/pre-push` (installed via
@@ -80,7 +79,7 @@ the domain differs.
 - `docs/ROLES.md` is the communication charter: spawn flows down, artifacts
   flow up, no lateral channels; spawn = verify; specs down, artifacts up;
   gates end every loop; the dangerous class only the captain approves.
-- `STATUS.md` rows are flipped only by the butler at land/drop. Worker and
+- `status.json` rows are flipped only by the butler at land/drop. Worker and
   subagent reports may propose a row change; they never write one.
 - Memory has one writer (consolidation); the ledger has one writer (the
   butler); docs carry `generated_by` stamps; `verified:` is human-only.

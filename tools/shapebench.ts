@@ -96,7 +96,8 @@ process.env.MAJORDOME_DIR = mjdDir;
 process.env.MAJORDOME_KEY_FILE = join(tmpRoot, "no-key-on-purpose"); // missing → judges fail open
 process.env.MAJORDOME_TRAIL_FILE = join(mjdDir, "trails.jsonl");
 process.env.MAJORDOME_INIT_STATE = join(mjdDir, "init.json");
-process.env.MAJORDOME_USER_FILE = join(tmpRoot, "user-fixture.md");
+process.env.MAJORDOME_USER_FILE = join(tmpRoot, "user-fixture.json");
+process.env.MAJORDOME_USER_MD_FILE = join(tmpRoot, "user-fixture.md");
 delete process.env.TYPELLM_API_KEY;
 
 // fixture user.md — the user's real standing preference lines (quoted; the
@@ -105,7 +106,8 @@ const PREF_LINES = [
 	"- When explaining concepts or trade-offs, write ~80% ASD-STE100: short sentences, one term per concept, imperative voice, no idioms. Keep code identifiers and technical terms as-is. Never drop facts for style.",
 	"- Prefer a diagram over prose for architecture and flow questions — mermaid or ascii graph first, brief prose after.",
 ];
-writeFileSync(process.env.MAJORDOME_USER_FILE, "# personal rules (majordome personal tier — injected into every session)\n\n" + PREF_LINES.join("\n") + "\n");
+writeFileSync(process.env.MAJORDOME_USER_FILE, JSON.stringify({ updated: "2026-10-07", answer_shape: "auto", preferences: [], query_style: { avg_topics_per_query: 0, samples: 0, imperative_ratio: 0 }, confidence_calibration: [] }) + "\n");
+writeFileSync(process.env.MAJORDOME_USER_MD_FILE, "# personal rules (majordome personal tier — injected into every session)\n\n" + PREF_LINES.join("\n") + "\n");
 
 const { OUTPUT_SHAPES, shapeVerdict, userPrefLines, resetUserPrefs, loadKey, setClassifyFn, resetClassifyFn, generate } = await import("../ext/judges.ts");
 const { shapeHintLine } = await import("../ext/router.ts");
@@ -178,7 +180,7 @@ const PREFS = userPrefLines();
 const SECRET_MSG = "XSECRET-never-on-the-trail-X";
 
 console.log(`shapebench (outputShape routing) — sandbox ${tmpRoot}`);
-console.log(`prefs loaded: ${PREFS.length} line(s) from MAJORDOME_USER_FILE`);
+console.log(`prefs loaded: ${PREFS.length} line(s) from MAJORDOME_USER_FILE + MAJORDOME_USER_MD_FILE`);
 
 // ── gate (a): fail-open + preference context ────────────────────────────────
 console.log("\n── gate (a): fail-open (no key, no classifier) + user.md context ──");
@@ -197,11 +199,12 @@ console.log("\n── gate (a): fail-open (no key, no classifier) + user.md cont
 	probes.push(["null verdict → null line → zero injection", shapeHintLine("default") === null && shapeHintLine("bogus-shape") === null]);
 	probes.push(["prefs: fixture lines read, comments/blanks stripped", PREFS.length === 2 && PREFS[0].startsWith("- When explaining")]);
 	resetUserPrefs();
-	process.env.MAJORDOME_USER_FILE = join(tmpRoot, "definitely-missing-user.md");
+	process.env.MAJORDOME_USER_FILE = join(tmpRoot, "definitely-missing-user.json");
+	process.env.MAJORDOME_USER_MD_FILE = join(tmpRoot, "definitely-missing-user.md");
 	resetUserPrefs();
 	const none = userPrefLines();
 	probes.push(["prefs: missing file → no context (empty)", none.length === 0]);
-	process.env.MAJORDOME_USER_FILE = join(tmpRoot, "user-fixture.md");
+	process.env.MAJORDOME_USER_MD_FILE = join(tmpRoot, "user-fixture.md");
 	resetUserPrefs();
 	probes.push(["prefs: resetUserPrefs() re-reads", userPrefLines().length === 2]);
 	const aPass = probes.filter((p) => p[1]).length;

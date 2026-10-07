@@ -60,14 +60,15 @@ Each worker completion passes a **simplifyVerdict** judge (once per run, suggest
 notices to the deck inbox, and everything lands in one global brain
 (`~/.pi/majordome`) — never per-repo state. Planned, not yet built: a sidecar
 in watch mode that keeps each repo's artifacts fresh (prototype only, unwired,
-in `durable-sidecar/`; see [STATUS.md](STATUS.md)).
+in `durable-sidecar/`; see [status.json](status.json)).
 
 ### Commands
 
 ```
 /majordome                  run the house (start all workers + report)
 /majordome orch             menu: start one/all, add /path, remove, status
-/majordome one-pager        compose/refresh the status doc (show to print)
+/majordome status          ledger view (status.json) · @slug detail · --export md
+/majordome user            preferences (user.json) · set <key> <value> · reset
 /majordome map              reasoning/topic map (termaid for a pane view)
 /majordome init             cold-start/backfill memory for this repo (then consolidates)
 /majordome doctor           audit: orphans, parse health, dims coverage, index lag, lifecycle distribution
@@ -96,7 +97,7 @@ in `durable-sidecar/`; see [STATUS.md](STATUS.md)).
   `from_untrusted` and their recall lines say `· unverified source`. Mistakes
   and lessons are a first-class index class (`lesson` blocks): boosted on
   lesson/failure queries, merged by consolidation ("same mistake twice" is the
-  pair-judge), surfaced as a generated Lessons section in the one-pager.
+  pair-judge).
 - **@slug scoping**: prefix a query with `@repo-slug` to hard-scope recall to
   that repo (`@office-parser what did we decide about the export loop?`) —
   overrides priors, kills cross-repo noise; lifecycle and intent scopes still
@@ -110,15 +111,15 @@ in `durable-sidecar/`; see [STATUS.md](STATUS.md)).
   surface superseded ones. `/majordome doctor` reports the distribution.
 - **Contradiction check**: a strong hit that REVERSES a recalled decision
   tells the agent to confirm before acting.
-- **Personal tier**: `~/.pi/majordome/user.md` — your cross-project rules,
-  injected into every session. Point to it from your `AGENTS.md` (one line)
-  as the guaranteed-delivery fallback.
+- **Personal tier**: `~/.pi/majordome/user.json` — structured preferences
+  (`answer_shape`, key/value pairs via `/majordome user set <key> <value>`,
+  rendered by `/majordome user`) plus `user.md` prose rules; both inject as
+  standing context, user.json lines first.
 - **Judge modes**: the per-turn ambiguity judge is deliberately context-blind;
   soft mode (default) advises, strict orders clarify-first. Messages pointing
   at inspectable artifacts (URL, path, repo, error output) are never flagged.
-- **Composition**: pi-clm compatible (it curates the window, majordome
-  supplies memory — verified co-loading). Majordome never talks to the user —
-  the agent stays the interface; tone lives in your `AGENTS.md`.
+- **Interface**: Majordome never talks to the user — the agent stays the
+  interface; tone lives in your `AGENTS.md`.
 
 ### Recall feedback (the self-improving loop)
 
@@ -129,7 +130,7 @@ weak-match). Specimens become bench probes — fixes stay fixed.
 
 ### Output shape (v2.6)
 
-A pre-turn judge reads your message (+ your `user.md` preferences) and, when a
+A pre-turn judge reads your message (+ your user.json/user.md preferences) and, when a
 non-default shape serves better, injects one suggest-only line to the agent:
 `[majordome shape] diagram-first — lead with the graph; prose short. Keep every
 fact.` The ladder: `terse · diagram-first · table · walkthrough · artifact`
@@ -199,7 +200,7 @@ tiers. The bench found and fixed a real recall bug
 
 ```
 index.ts                  extension entry (chat commands, session hooks, injection)
-STATUS.md                 deliverable status ledger — one row per discussed item (built/parked/dropped/pending + evidence)
+status.json               deliverable status ledger — {updated, rows: item·status·evidence·substrate}; STATUS.md is a generated export
 ext/store.ts              JSONL store: blocks, meta, vocab, lifecycle sidecar
 ext/core.ts               retrieval primitives (BM25 binary-tf, cosine, federation)
 ext/router.ts             intent → arm routing, scopeByLifecycle, evidence floor
@@ -256,15 +257,15 @@ Agents that lack permission to act leave a **proposal** instead:
 header (`kind`, `status: pending|approved|rejected`, `added`, `source`;
 decision adds `decided`, `by`, `reason`). Flat folder, state in metadata, the
 file never moves; body edits are append-only (`revised:`). Decisions are
-stamped by the butler and mirrored into STATUS.md; housekeeping lists pending
+stamped by the butler and mirrored into status.json; housekeeping lists pending
 and stale (>7d) proposals — it never decides. An explicit UI decline is a
 decision: recorded rejected, not pending. Spec: `ext/proposals.ts` header.
 
 ## Status
 
 - **Shipped (v2.x)**: lifecycle states + consolidation (v2.4, bench-gated),
-  orchestrator (deck / workers / inbox / one-pager), evidence floor
-  in recall, personal tier (`user.md`), visibility scopes (repo · user ·
+  orchestrator (deck / workers / inbox), evidence floor
+  in recall, personal tier (`user.json` + `user.md` prose), visibility scopes (repo · user ·
   shared), doctor audits, lifecyclebench v2 (IR metrics + LongMemEval
   abilities + scale tier).
 - **Next (consolidation era)**: organic supersession pairs from the dogfood
