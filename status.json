@@ -51,9 +51,9 @@
   },
   {
    "item": "docs/ONE-PAGER.md build-day ledger",
-   "status": "built",
-   "evidence": "e413c2f",
-   "substrate": "docs/ONE-PAGER.md"
+   "status": "dropped",
+   "evidence": "removed per captain 2026-10-07",
+   "substrate": "docs/ONE-PAGER.md (deleted 2026-10-07)"
   },
   {
    "item": "docs/dev/FUTURE-STYLE-PROFILE.md",
@@ -366,6 +366,12 @@
    "status": "built",
    "evidence": "global: orchestrator.json 2026-10-06 — 4th worker, path verified",
    "substrate": "lazy-init on first start"
+  },
+  {
+   "item": "DECISION-BLOCK STORE (supersedes docs-pull + consistency-judge + STATUS-json rows): blocks.jsonl = the ONLY store; every agreement = a decision block (item · status · evidence · supersedes); /majordome status FOLDS the stream on the fly (latest block per item wins, contradictions flagged); STATUS.md demotes to --export md; migration: 40 hand-curated rows → 40 decision blocks",
+   "status": "pending",
+   "evidence": "captain proposal 2026-10-07 — 'only blocks.jsonl, status built on the fly'; deletes both sync seams; proof: tonight's workflow decision invisible to recall (STATUS.md:59 vs 0 corpus hits)",
+   "substrate": "ext/status.ts fold + migration script + selfcheck rebuild"
   }
  ]
 }
