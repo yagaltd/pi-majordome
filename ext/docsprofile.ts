@@ -3,16 +3,16 @@
  *
  * A docs profile says which docs a repo watches for the nudge pipeline:
  *   { watch: string[] }  — names are built-ins ("README", "CHANGELOG",
- *   "status.json", "docs/") or custom doc names ("NOTES" → matches /notes\.md
+ *   "STATUS", "docs/") or custom doc names ("NOTES" → matches /notes\.md
  *   at a path boundary, case-insensitive).
  *
  * Resolution order (resolveDocsProfile):
  *   1. repo override  .majordome/docs.json  {"watch":[...]}
  *   2. stored profile (index.json docsProfile — detected at init)
  *   3. detected default: any code manifest in the repo cwd → coding
- *      (README+CHANGELOG+status.json+docs/ — status.json is the deliverable
- *      ledger, a ledger edit is a docs touch like a CHANGELOG entry); else
- *      generic (docs/ only)
+ *      (README+CHANGELOG+STATUS+docs/ — STATUS is the deliverable ledger, a
+ *      ledger edit is a docs touch like a CHANGELOG entry); else generic
+ *      (docs/ only)
  *
  * Init is sometimes HEADLESS (worker cold-start) — detection never prompts;
  * the init output notes the resolution and the override path instead.
@@ -33,7 +33,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 /** Built-in watch names — these keep their exact touch regexes (scanDocsTouched). */
-export const BUILTIN_DOC_WATCH: readonly string[] = ["README", "CHANGELOG", "status.json", "docs/"];
+export const BUILTIN_DOC_WATCH: readonly string[] = ["README", "CHANGELOG", "STATUS", "docs/"];
 
 export interface DocsProfile {
 	watch: string[]; // doc names watched by the nudge pipeline
@@ -59,7 +59,7 @@ export function isValidDocsProfile(p: unknown): p is DocsProfile {
 export function watchRegexFor(name: string): RegExp {
 	if (name === "README") return /[/"\\]readme\.md/i;
 	if (name === "CHANGELOG") return /[/"\\]changelog\.md/i;
-	if (name === "status.json") return /[/"\\]status\.json/i;
+	if (name === "STATUS") return /[/"\\]status\.(md|json)/i; // export (status.md) or a json shape of the same rows
 	if (name === "docs/") return /[/"\\]docs\//i;
 	const esc = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 	return new RegExp(`[/\\\\]${esc}\\.md`, "i");
@@ -67,14 +67,12 @@ export function watchRegexFor(name: string): RegExp {
 
 /** Normalize an override watch entry: built-ins canonicalized (case/shape),
  * custom names trimmed. Unknown shapes kept as trimmed names — the custom
- * matcher is case-insensitive anyway. Legacy "STATUS"/"status.md" entries
- * (override files or stored profiles from before the JSON ledger) normalize
- * to the new built-in name. */
+ * matcher is case-insensitive anyway. */
 function normalizeWatchName(n: string): string {
 	const t = n.trim();
 	if (/^readme$/i.test(t)) return "README";
 	if (/^changelog$/i.test(t)) return "CHANGELOG";
-	if (/^status(\.md|\.json)?$/i.test(t)) return "status.json";
+	if (/^status$/i.test(t)) return "STATUS";
 	if (/^docs\/?$/i.test(t)) return "docs/";
 	return t;
 }
@@ -124,14 +122,10 @@ export function detectDocsProfile(cwd: string): DocsProfile {
 
 /** Resolution: override > stored > detected. Invalid overrides fail open to
  * the stored/detected default (doctor reports them). */
-/** Resolution: override > stored > detected. Invalid overrides fail open to
- * the stored/detected default (doctor reports them). Stored profiles pass
- * through normalizeWatchName too — pre-status.json profiles stored with
- * "STATUS" keep watching the ledger after the rename. */
 export function resolveDocsProfile(cwd: string, stored?: DocsProfile | null): DocsProfile {
 	const ov = readDocsOverride(cwd);
 	if (ov !== null && ov !== "invalid") return { watch: ov.watch, source: "override" };
-	if (isValidDocsProfile(stored)) return { watch: [...new Set(stored.watch.map(normalizeWatchName))], source: stored.source };
+	if (isValidDocsProfile(stored)) return stored;
 	return detectDocsProfile(cwd);
 }
 

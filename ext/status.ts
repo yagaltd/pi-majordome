@@ -1,44 +1,63 @@
 /**
- * status.json — the repo's deliverable ledger, loaded once and shared.
+ * The deliverable ledger — data layer + views (v2.11).
  *
- * File shape (repo root): { updated: "YYYY-MM-DD", rows: [{ item, status,
- * evidence, substrate }] }, statuses limited to built/parked/dropped/pending;
- * built rows cite a 7-hex commit. STATUS.md is no longer the source — it is a
- * generated view (/majordome status --export md, the only md door). The md
- * parser/serializer stay here for that door and for unmigrated worker repos
- * whose ledger is still a STATUS.md table (loadStatusRows falls back to it).
+ * SOURCE: decision blocks in the store (blocks.jsonl, the only store). Every
+ * status agreement is an APPENDED decision block (appendDecisionStatus →
+ * appendBlock, DECISION_SESSION channel, per-repo key = sessionFile). The
+ * fold (foldDecisions) groups by item and takes the LATEST appended block —
+ * the live ledger is computed on the fly, never maintained.
  *
- * The parser used to live inline in ext/selfcheck.ts (14 ledger checks parsed
- * rows ad hoc) — extracted so the recall injection path (status join) and the
- * housekeeping checks read the SAME rows selfcheck grades.
+ * EXPORT: STATUS.md demoted to a generated export (`/majordome status
+ * --export md`, exportStatusMd → statusFile, MAJORDOME_STATUS_FILE names the
+ * export path). parseStatusRows/normalizeStatusText survive as the md-form
+ * parser/normalizer for that one door: the export round-trips through them,
+ * and tools/migrate-status.ts used them to read the legacy hand-curated
+ * ledger (one-time, run at merge on master).
+ *
+ * Row shape (the fold output, identical to the legacy table row):
+ * `| item | status | evidence | substrate |`, statuses limited to
+ * built/parked/dropped/pending; built rows cite a 7-hex commit. When two
+ * folded decisions for one item DISAGREE on status, the latest still wins and
+ * the row is flagged (contradicted) — a contradiction is surfaced, never
+ * hidden and never auto-resolved by anything but append order.
  *
  * The status join is deterministic token overlap only: block title/gist tokens
  * vs row-item tokens (core.ts tokenizer — stopwords stripped). No model call,
  * nothing invented — a line is emitted only when a row actually matches, and
  * never more than two per injection.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { writeFileSync } from "node:fs";
 import { tokens } from "./core.ts";
+import {
+	DECISION_SESSION,
+	DECISION_STATUSES,
+	appendBlock,
+	isDecisionBlock,
+	loadBlocks,
+	type Block,
+	type DecisionStatus,
+} from "./store.ts";
 
-export const STATUS_STATUSES: readonly string[] = ["built", "parked", "dropped", "pending"];
+export const STATUS_STATUSES: readonly string[] = DECISION_STATUSES;
 
 export interface StatusRow {
 	item: string;
 	status: string;
 	evidence: string;
 	substrate: string;
+	/** Decision-fold flag: ≥2 decisions folded into this item disagreed on
+	 * status. Latest appended won; the flag says the history is split. */
+	contradicted?: boolean;
 }
 
-export interface StatusLedger {
-	updated: string;
-	rows: StatusRow[];
-}
+// ── md form (the export door — parse + normalize, no file reads here) ───────
 
-/** Parse a legacy STATUS.md table: skip the header and the `|---|` separator,
- * keep exactly-4-column rows, trim cells, drop empties. Kept for the --export
- * md door's roundtrip and for worker repos not yet migrated to status.json.
- * Lenient by design — a malformed row is skipped, never fatal. */
+/** Parse STATUS.md table rows: skip the header and the `|---|` separator,
+ * keep exactly-4-column rows, trim cells, drop empties. Lenient by design —
+ * a malformed row is skipped, never fatal (fail-open like every reader here).
+ * Used by the export round-trip and the legacy-ledger migration; the fold
+ * NEVER reads this file (grep-pinned in selfcheck). */
 export function parseStatusRows(text: string): StatusRow[] {
 	const lines = text.split("\n").filter((l) => l.trim().startsWith("|"));
 	const rows: StatusRow[] = [];
@@ -50,21 +69,6 @@ export function parseStatusRows(text: string): StatusRow[] {
 		rows.push({ item, status, evidence: evidence ?? "", substrate: substrate ?? "" });
 	}
 	return rows;
-}
-
-/** Serialize rows back to the legacy STATUS.md table (the --export md door). */
-export function exportStatusMd(rows: StatusRow[]): string {
-	return [
-		"# STATUS — deliverable ledger",
-		"",
-		"Every discussed deliverable gets exactly one row. built rows cite a commit.",
-		"Update on land or drop — never leave a row stale past the session that changed it.",
-		"",
-		"| item | status | evidence | substrate |",
-		"|---|---|---|---|",
-		...rows.map((r) => `| ${r.item} | ${r.status} | ${r.evidence} | ${r.substrate} |`),
-		"",
-	].join("\n");
 }
 
 /** Normalize a ledger back to canonical single-spaced 4-column rows (status
@@ -101,57 +105,132 @@ export function normalizeStatusText(text: string): { text: string; changed: bool
 	return { text: out.join("\n"), changed, rows: parseStatusRows(text).length };
 }
 
-/** Normalize JSON rows: known statuses lowercased (a hand-edited "Built" is
- * the JSON-era equivalent of the old spacing drift). */
-export function normalizeStatusRows(rows: StatusRow[]): { rows: StatusRow[]; changed: boolean } {
-	let changed = false;
-	const next = rows.map((r) => {
-		const status = STATUS_STATUSES.includes(r.status.toLowerCase()) ? r.status.toLowerCase() : r.status;
-		if (status !== r.status) changed = true;
-		return { ...r, status };
-	});
-	return { rows: next, changed };
-}
-
-/** Ledger path: the repo root's status.json, `MAJORDOME_STATUS_FILE` overrides
- * for hermetic runs (same pattern as MAJORDOME_FP_FILE / MAJORDOME_TRAIL_FILE). */
+/** STATUS.md path — the EXPORT path now: where /majordome status --export md
+ * writes the generated ledger (and where the legacy migration read it),
+ * `MAJORDOME_STATUS_FILE` overrides for hermetic runs (same pattern as
+ * MAJORDOME_FP_FILE / MAJORDOME_TRAIL_FILE). Nothing in the live data path
+ * reads this file — the fold reads decision blocks. */
 export function statusFile(repoRoot: string = process.cwd()): string {
-	return process.env.MAJORDOME_STATUS_FILE?.trim() || join(repoRoot, "status.json");
+	return process.env.MAJORDOME_STATUS_FILE?.trim() || join(repoRoot, "STATUS.md");
 }
 
-/** Lenient row reader: objects with item+status strings survive; evidence/
- * substrate coerce to strings; everything else is skipped. */
-function rowsOf(raw: unknown): StatusRow[] {
-	if (!Array.isArray(raw)) return [];
-	const out: StatusRow[] = [];
-	for (const r of raw) {
-		const o = (r ?? {}) as Record<string, unknown>;
-		if (typeof o.item !== "string" || !o.item || typeof o.status !== "string" || !o.status) continue;
-		out.push({ item: o.item, status: o.status, evidence: typeof o.evidence === "string" ? o.evidence : "", substrate: typeof o.substrate === "string" ? o.substrate : "" });
-	}
-	return out;
+// ── the decision-block store layer (append + fold) ──────────────────────────
+
+/** slug-of-item for ids/tags: lowercase, non-alphanumeric runs → "-". */
+function itemSlug(item: string): string {
+	return item.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
 }
 
-/** Load rows from disk: status.json first (the ledger); an unmigrated repo
- * with only a legacy STATUS.md still reads (md fallback), so cross-repo
- * status views keep working before each worker migrates. Absent/unreadable →
- * [] (no ledger, no join lines — the feature is inert outside repos that
- * keep one). */
-export function loadStatusRows(repoRoot: string = process.cwd()): StatusRow[] {
-	const p = statusFile(repoRoot);
+/** True when a decision block belongs to the repo at `repoRoot` — the ledger
+ * key is the block's sessionFile (stored = the resolved repo root). */
+function decisionInRepo(b: Block, repoRoot: string): boolean {
 	try {
-		if (existsSync(p)) return rowsOf(JSON.parse(readFileSync(p, "utf8"))?.rows);
+		return resolve(b.sessionFile) === resolve(repoRoot);
 	} catch {
-		return []; // corrupt ledger → inert (fail-open like every reader here)
+		return false;
 	}
-	try {
-		const legacy = join(repoRoot, "STATUS.md");
-		if (existsSync(legacy)) return parseStatusRows(readFileSync(legacy, "utf8"));
-	} catch { /* unreadable → no rows */ }
-	return [];
 }
 
-// ── the status join (recall injection ↔ status.json rows) ────────────────────
+/** Append one status agreement as a decision block: { item, status, evidence,
+ * substrate } verbatim, DECISION_SESSION session, firstTurn/lastTurn 0 (not a
+ * session artifact), tags ["decision","status",<slug-of-item>]. Never
+ * updates — a changed mind appends a new block and the fold moves. */
+export function appendDecisionStatus(
+	d: { item: string; status: DecisionStatus; evidence: string; substrate: string },
+	repoRoot: string = process.cwd(),
+): Block {
+	const slug = itemSlug(d.item);
+	const block: Block = {
+		id: `decision:${slug}:${Date.now().toString(36)}`,
+		session: DECISION_SESSION,
+		sessionFile: resolve(repoRoot),
+		firstTurn: 0,
+		lastTurn: 0,
+		gist: null,
+		intent: null,
+		dims: {},
+		tokensHybrid: [],
+		head: d.item,
+		closedAt: new Date().toISOString(),
+		kind: "decision",
+		decision: { item: d.item, status: d.status, evidence: d.evidence, substrate: d.substrate },
+		tags: ["decision", "status", slug],
+	};
+	appendBlock(block);
+	return block;
+}
+
+/** Read this repo's decision blocks, in append order (file order — the fold's
+ * recency is append order, nothing else). Absent store → []. */
+export function loadDecisions(repoRoot: string = process.cwd()): Block[] {
+	return loadBlocks().filter((b) => isDecisionBlock(b) && decisionInRepo(b, repoRoot));
+}
+
+/** THE FOLD: group decision blocks by item, LATEST appended wins → the live
+ * StatusRow[] (same shape the legacy md table parsed to, so every consumer —
+ * formatStatus, formatHouseStatus, housekeep, the status join — keeps
+ * working unchanged). Disagreeing statuses within one item's history: latest
+ * wins + `contradicted` on the row. Non-decision blocks in the input are
+ * ignored (defensive lenient — callers may pass raw store reads). */
+export function foldDecisions(decisions: Block[]): StatusRow[] {
+	const byItem = new Map<string, { row: StatusRow; statuses: Set<string> }>();
+	for (const b of decisions) {
+		if (!isDecisionBlock(b)) continue;
+		const d = b.decision;
+		const prev = byItem.get(d.item);
+		const statuses = prev?.statuses ?? new Set<string>();
+		statuses.add(d.status);
+		byItem.set(d.item, {
+			row: {
+				item: d.item,
+				status: d.status,
+				evidence: d.evidence,
+				substrate: d.substrate,
+				...(statuses.size > 1 ? { contradicted: true } : {}),
+			},
+			statuses,
+		});
+	}
+	return [...byItem.values()].map((e) => e.row);
+}
+
+/** The live ledger of one repo = the fold of its decision blocks. Same return
+ * type as the legacy file read — all consumers unchanged. */
+export function loadStatusRows(repoRoot: string = process.cwd()): StatusRow[] {
+	return foldDecisions(loadDecisions(repoRoot));
+}
+
+// ── the md export (STATUS.md demoted to generated output) ───────────────────
+
+/** Render the fold as the canonical export text: generated-export banner +
+ * the 4-column table, rows in fold order (append order). parseStatusRows of
+ * this text returns exactly `rows` — the export is a lossless view. */
+export function statusExportText(rows: StatusRow[]): string {
+	const table = [
+		"| item | status | evidence | substrate |",
+		"|---|---|---|---|",
+		...rows.map((r) => `| ${r.item} | ${r.status} | ${r.evidence} | ${r.substrate} |`),
+	];
+	return [
+		"# STATUS — generated export",
+		"",
+		"GENERATED EXPORT — do not edit; source: decision blocks (blocks.jsonl).",
+		"Regenerate with /majordome status --export md.",
+		"",
+		...table,
+		"",
+	].join("\n");
+}
+
+/** Write STATUS.md (statusFile — MAJORDOME_STATUS_FILE names the export path)
+ * from the live fold. Returns the one-line summary for the command output. */
+export function exportStatusMd(repoRoot: string = process.cwd()): string {
+	const rows = loadStatusRows(repoRoot);
+	writeFileSync(statusFile(repoRoot), statusExportText(rows));
+	return `STATUS.md exported: ${rows.length} item(s) from the decision fold — do not edit; source: decision blocks`;
+}
+
+// ── the status join (recall injection ↔ ledger rows) ─────────────────────
 
 /** Deterministic match: ≥2 shared non-stopword tokens between the block text
  * (title/gist) and the row item. One shared token is too polysemous ("sidecar"
@@ -188,8 +267,8 @@ export function statusJoinLines(blockText: string, rows: StatusRow[], max = 2): 
 }
 
 /** Render the ledger as the /majordome status panel: pending items in full
- * (ledger order), parked inline, built/dropped as counts. Data stays in
- * status.json — this is a view, not a source. */
+ * (fold order), parked inline, built/dropped as counts. Data lives in the
+ * decision blocks — this is a view, not a source. */
 export function formatStatus(rows: StatusRow[]): string {
 	const by = (st: string) => rows.filter((r) => r.status === st);
 	const pending = by("pending");
@@ -201,7 +280,7 @@ export function formatStatus(rows: StatusRow[]): string {
 		`│ pending (${pending.length})`,
 		...(pending.length ? pending.map((r) => `│ · ${r.item}`) : ["│ · (none — queue clear)"]),
 		`│ parked (${parked.length}): ${parked.map((r) => r.item).join(" · ") || "(none)"}`,
-		`│ built ${built.length} · dropped ${dropped.length} — evidence in status.json`,
+		`│ built ${built.length} · dropped ${dropped.length} — evidence in decision blocks`,
 		"╰─",
 	].join("\n");
 }
@@ -209,7 +288,8 @@ export function formatStatus(rows: StatusRow[]): string {
 export interface HouseWorkerStatus { name: string; cwd: string; rows: StatusRow[] }
 
 /** House view: this repo's ledger summary + every registered worker's line
- * (rows count by status, or an honest "no ledger" for cold repos). */
+ * (rows count by status, or an honest "no ledger" for repos with no decision
+ * blocks of their own). */
 export function formatHouseStatus(local: StatusRow[], workers: HouseWorkerStatus[]): string {
 	const cnt = (rows: StatusRow[], st: string) => rows.filter((r) => r.status === st).length;
 	const lines = [

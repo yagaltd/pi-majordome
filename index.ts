@@ -94,7 +94,7 @@ function shortId(b: Block): string {
 	return `${shortTag(b.session)}:${b.firstTurn}`;
 }
 
-/** Status join (recall ↔ status.json): the injected block's title/gist matched
+/** Status join (recall ↔ STATUS.md): the injected block's title/gist matched
  * against the repo's ledger rows by deterministic token overlap — no model
  * call, nothing fabricated. At most 2 bound lines, and only when a row
  * actually matches (no ledger, no overlap → no lines, the injection stays
@@ -553,7 +553,7 @@ export default function majordome(pi: ExtensionAPI): void {
 			// situation — a how-to-use question on existing work gets no hint
 			const resume = r.intent === "incident_specific" && r.score >= 0.7;
 			appendTail(lastUser, injectionText(winner, r.terms, resume));
-			// status join: bind the recalled block to the repo's status.json ledger
+			// status join: bind the recalled block to the repo's STATUS.md ledger
 			// (≤2 lines, match-only — see statusJoinTail)
 			for (const line of statusJoinTail(winner)) appendTail(lastUser, line);
 			if (st.routeCache.contraLine) appendTail(lastUser, st.routeCache.contraLine);
@@ -629,15 +629,9 @@ export default function majordome(pi: ExtensionAPI): void {
 				return;
 			}
 			if (cmd === "status") {
-				if (a === "--export") {
-					// the one md door: regenerate STATUS.md from the JSON ledger on demand
-					if (b !== "md") return notify("usage: /majordome status --export md (rewrites STATUS.md from status.json)");
-					const rows = loadStatusRows();
-					if (!rows.length) return notify("no status rows — status.json absent or empty");
-					const out = join(process.cwd(), "STATUS.md");
-					writeFileSync(out, exportStatusMd(rows));
-					return notify(`STATUS.md exported (${rows.length} rows) \u2192 ${out} \u2014 the ledger itself is status.json; STATUS.md is a generated view`);
-				}
+				// --export md: regenerate STATUS.md from the decision fold (the one
+				// md door — the file is a generated export, never hand-edited)
+				if (a === "--export md" || a === "export md") return notify(exportStatusMd());
 				const workers = listWorkers();
 				if (a) {
 					const slug = a.replace(/^@/, "");
@@ -808,7 +802,7 @@ export default function majordome(pi: ExtensionAPI): void {
 					"majordome commands:",
 					"  /majordome            run the house (start all workers + report)",
 					"  /majordome orch       menu: start one/all, add /path, remove, status",
-					"  /majordome status · status @slug · status --export md  ledger view (status.json; md export on demand)",
+					"  /majordome status · status @slug · status --export md  ledger view (fold of decision blocks; md export on demand)",
 					"  /majordome user · user set <key> <value> · user reset  your preferences (zero-token view)",
 					"  /majordome map        reasoning/topic map (in-chat; 'termaid' for a pane)",
 					"  /majordome init       cold-start memory for this repo",

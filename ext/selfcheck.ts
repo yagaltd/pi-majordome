@@ -424,10 +424,10 @@ if (process.argv.includes("--parity")) {
 	// 1b. status.json built-in (the deliverable ledger): touch regex mirrors
 	// CHANGELOG's, coding default grows to README+CHANGELOG+status.json+docs/,
 	// generic stays docs/ only, custom overrides still win
-	check("watch: built-ins are README+CHANGELOG+status.json+docs/", JSON.stringify(BUILTIN_DOC_WATCH) === JSON.stringify(["README", "CHANGELOG", "status.json", "docs/"]));
-	check("watch: status.json touch regex mirrors CHANGELOG (path boundary, case-insensitive)", (() => {
-		const wr = watchRegexFor("status.json");
-		return wr.test('"path":"docs/status.json"') && wr.test('"repo\\\\status.json"') && wr.test('"x/status.json"') && !wr.test("plain status.json prose") && !wr.test('"x/footer-status.json"') && !watchRegexFor("CHANGELOG").test('"path":"status.json"');
+	check("watch: built-ins are README+CHANGELOG+STATUS+docs/", JSON.stringify(BUILTIN_DOC_WATCH) === JSON.stringify(["README", "CHANGELOG", "STATUS", "docs/"]));
+	check("watch: STATUS touch regex mirrors CHANGELOG (path boundary, case-insensitive; export md + status.json)", (() => {
+		const wr = watchRegexFor("STATUS");
+		return wr.test('"path":"docs/STATUS.md"') && wr.test('"repo\\\\STATUS.md"') && wr.test('"x/status.md"') && wr.test('"x/status.json"') && !wr.test("plain STATUS.md prose") && !wr.test('"x/footer-status.md"') && !wr.test('"x/footer-status.json"') && !watchRegexFor("CHANGELOG").test('"path":"STATUS.md"');
 	})());
 	check("profile: custom override still wins over the detected coding default", (() => {
 		const repoO = join(tmp, "prof-override-coding");
@@ -437,15 +437,16 @@ if (process.argv.includes("--parity")) {
 		const r = resolveDocsProfile(repoO, null);
 		return r.source === "override" && r.watch.join(",") === "NOTES";
 	})());
-	// a status.json touch satisfies the docs nudge like README/CHANGELOG: the
-	// cursor advances (the exact index.ts turn_end wiring) and covers the work
+	// a STATUS touch (the generated export md, or any status.json shape of the
+	// same rows) satisfies the docs nudge like README/CHANGELOG: the cursor
+	// advances (the exact index.ts turn_end wiring) and covers the work
 	const { cursorKey } = await import("./router.ts");
 	const SFS = "/h/.pi/agent/sessions/--home-u-repos--/s.jsonl";
 	const implS = ["a", "b", "c"].map((g, i) => ({ sessionFile: SFS, intent: "implementation", gist: `built ${g}`, closedAt: `2026-10-0${i + 1}T12:00:00Z` }));
 	const stCur: Record<string, string> = {};
-	for (const doc of scanDocsTouched('"file":"/repo/status.json"')) stCur[cursorKey("--home-u-repos--", doc)] = "2026-10-02T00:00:00Z";
-	check("nudge: status.json touch scans as a built-in and satisfies the nudge (cursor covers)", scanDocsTouched('"file":"/repo/status.json"').join(",") === "status.json" && stCur["--home-u-repos--:status.json"] === "2026-10-02T00:00:00Z" && docsNudge(implS as any, SFS, stCur) === null);
-	check("nudge: without the status.json touch the nudge still fires at 3", (docsNudge(implS as any, SFS, {}) ?? "").includes("3 implementation blocks"));
+	for (const doc of scanDocsTouched('"file":"/repo/STATUS.md"')) stCur[cursorKey("--home-u-repos--", doc)] = "2026-10-02T00:00:00Z";
+	check("nudge: STATUS.md touch scans as a built-in and satisfies the nudge (cursor covers)", scanDocsTouched('"file":"/repo/STATUS.md"').join(",") === "STATUS" && stCur["--home-u-repos--:STATUS"] === "2026-10-02T00:00:00Z" && docsNudge(implS as any, SFS, stCur) === null);
+	check("nudge: without the STATUS touch the nudge still fires at 3", (docsNudge(implS as any, SFS, {}) ?? "").includes("3 implementation blocks"));
 
 	// 2. profile resolution precedence: override > stored > detected
 	const repoC = join(tmp, "prof-coding");
@@ -453,10 +454,10 @@ if (process.argv.includes("--parity")) {
 	mkd(join(repoC, "lib"), { recursive: true });
 	writeFileSync(join(repoC, "Cargo.toml"), "[package]\n");
 	mkd(join(repoG, "docs"), { recursive: true });
-	check("profile: code manifest → coding (README+CHANGELOG+status.json+docs/)", JSON.stringify(detectDocsProfile(repoC)) === JSON.stringify({ watch: [...BUILTIN_DOC_WATCH], source: "detected-coding" }));
-	// legacy stored profiles (pre-status.json "STATUS" entries) normalize at
-	// resolve time — a repo that adopted before the rename keeps watching the ledger
-	check("profile: stored legacy STATUS watch normalizes to status.json", resolveDocsProfile(repoC, { watch: ["README", "STATUS", "NOTES"], source: "detected-coding" }).watch.join(",") === "README,status.json,NOTES");
+	check("profile: code manifest → coding (README+CHANGELOG+STATUS+docs/)", JSON.stringify(detectDocsProfile(repoC)) === JSON.stringify({ watch: [...BUILTIN_DOC_WATCH], source: "detected-coding" }));
+	// legacy stored profiles canonicalize at resolve time — a pre-rename
+	// "STATUS" entry keeps watching the ledger under the canonical name
+	check("profile: stored legacy STATUS watch canonicalizes to STATUS", resolveDocsProfile(repoC, { watch: ["README", "STATUS", "NOTES"], source: "detected-coding" }).watch.join(",") === "README,STATUS,NOTES");
 	const repoCabal = join(tmp, "prof-cabal");
 	mkd(repoCabal, { recursive: true });
 	writeFileSync(join(repoCabal, "majordome.cabal"), "cabal-version: 3.0\n");
@@ -1104,10 +1105,10 @@ if (process.argv.includes("--parity")) {
 	const scan = pr.scanProposals(pRepo, { now: "2025-01-09" });
 	wfAg(join(pRepo, ".majordome", "AGENTS.proposal.md"), "# legacy review copy\n");
 	const legacyScan = pr.scanProposals(pRepo, { now: "2025-01-09" });
-	const hkRes = hk.collectHousekeep({ cwd: pRepo, statusRows: [], readmeText: "", changelogText: "", extraDocs: [], proposals: legacyScan });
+	const hkRes = hk.collectHousekeep({ cwd: pRepo, decisions: [], readmeText: "", changelogText: "", extraDocs: [], proposals: legacyScan });
 	check("proposals: scanProposals — flat-dir counts (3 parsed · 2 pending · 2 stale) + legacy flag", scan.entries.length === 3 && scan.pending === 2 && scan.stale === 2 && scan.legacy === false && legacyScan.legacy === true);
 	check("housekeep: pending proposals listed as needs-your-yes, never decided (file stays pending)", hkRes.needsYes.some((l) => l.includes("[proposals] 2 pending proposal(s)") && l.includes("2 stale >7d") && l.includes("deciding is the captain's") && l.includes("never auto-decides")) && hkRes.needsYes.some((l) => l.includes("legacy proposal file") && l.includes("re-run init to regenerate under proposals/ or move manually")) && rfsAg(p2, "utf8").includes("status: pending"));
-	check("housekeep: safe class unchanged — proposal paths stay outside the README/status.json/docs allowlist", !hk.isSafeDocPath(".majordome/proposals/2025-01-01-agents-scaffold.md") && hk.isSafeDocPath("docs/x.md") && hk.isSafeDocPath("STATUS.md") && hk.isSafeDocPath("status.json"));
+	check("housekeep: safe class unchanged — proposal paths stay outside the README/docs allowlist (the ledger export is decision-owned)", !hk.isSafeDocPath(".majordome/proposals/2025-01-01-agents-scaffold.md") && hk.isSafeDocPath("docs/x.md") && hk.isSafeDocPath("README.md") && !hk.isSafeDocPath("STATUS.md"));
 
 	// agentsmd stays provably write-free: no write call AND no proposals import
 	// that would smuggle a write path in transitively
@@ -1311,31 +1312,37 @@ if (process.argv.includes("--parity")) {
 	check("docdrift: real evidence — inbox/orchestrator/panel grading/one-pager all map to code", DRIFT_RULES.filter((r) => r.noun !== "sidecar").every((r) => evidenceOk(repoRoot, r)));
 	check("docdrift: sidecar has NO ext/ tools/ evidence (prototype lives unwired in durable-sidecar/)", !evidenceOk(repoRoot, DRIFT_RULES.find((r) => r.noun === "sidecar")!));
 
-	// status.json ledger — loaded by the SHARED loader (ext/status.ts: the same
-	// rows the recall status-join and housekeeping read). Checks pin the
-	// migration (every legacy row preserved verbatim) + the ledger semantics.
-	const stPath = new URL("../status.json", import.meta.url);
+	// STATUS.md — since v2.11 the GENERATED EXPORT of the decision fold (the
+	// source is blocks.jsonl). The jsonsurf interim (status.json at the repo
+	// root) was migrated verbatim into decision blocks at the superseding
+	// merge, then demoted like the md it once replaced. The export must still
+	// parse to exactly the rows it was generated from, so the raw-shape checks
+	// keep grading the file; the fold itself and its gates live in the
+	// decision-store section below.
+	const stPath = new URL("../STATUS.md", import.meta.url);
 	const statusMod = await import("./status.ts");
-	check("status.json: exists at repo root", ex6(stPath));
-	check("status.json: STATUS.md demoted — gone from the repo root (the only md door is --export)", !ex6(new URL("../STATUS.md", import.meta.url)));
-	const stLedger = JSON.parse(rfs6(stPath, "utf8")) as { updated: string; rows: unknown };
-	const stRows = statusMod.loadStatusRows(new URL("..", import.meta.url).pathname);
+	check("STATUS.md: exists at repo root", ex6(stPath));
+	check("STATUS.md: status.json demoted — gone from the repo root (its rows are decision blocks now)", !ex6(new URL("../status.json", import.meta.url)));
+	const stText = rfs6(stPath, "utf8");
+	const stLines = stText.split("\n").filter((l) => l.trim().startsWith("|"));
+	const stHeader = stLines[0] ?? "";
+	const stRows = statusMod.parseStatusRows(stText);
+	const cells = (l: string) => l.split("|").map((s) => s.trim());
+	check("STATUS.md: table header is item | status | evidence | substrate", ["item", "status", "evidence", "substrate"].every((h) => cells(stHeader).includes(h)));
+	check("STATUS.md: has rows", stRows.length >= 20);
+	check("STATUS.md: every row has exactly 4 columns (raw rows all parse)", stLines.length - 2 === stRows.length);
 	const STATUSES = new Set(["built", "parked", "dropped", "pending"]);
-	check("status.json: shape {updated, rows[]} with an ISO updated stamp", typeof stLedger.updated === "string" && /^\d{4}-\d{2}-\d{2}/.test(stLedger.updated) && Array.isArray(stLedger.rows));
-	check("status.json: migration preserved every legacy row (loader reads all of them)", stRows.length >= 60 && stRows.length === stLedger.rows.length);
-	check("status.json: every row has item/status/evidence/substrate strings", stRows.every((r) => typeof r.item === "string" && r.item && typeof r.status === "string" && r.status && typeof r.evidence === "string" && typeof r.substrate === "string"));
-	check("status.json: statuses limited to built/parked/dropped/pending", stRows.every((r) => STATUSES.has(r.status)));
-	check("status.json: exactly one row per item (no duplicate items)", new Set(stRows.map((r) => r.item)).size === stRows.length);
-	check("status.json: every built row cites a 7-hex commit or global-state evidence", stRows.every((r) => r.status !== "built" || /\b[0-9a-f]{7}\b/.test(r.evidence) || /^global: /.test(r.evidence)));
-	check("status.json: one-pager deliverable dropped (removed per captain 2026-10-07)", stRows.some((r) => r.item === "docs/ONE-PAGER.md build-day ledger" && r.status === "dropped" && r.evidence.includes("removed per captain 2026-10-07")));
-	check("status.json: no BUILT row still points at the deleted one-pager doc", stRows.every((r) => r.status !== "built" || !/docs\/ONE-PAGER\.md/.test(`${r.evidence} ${r.substrate}`)));
-	check("status.json: export md door roundtrips (exportStatusMd → parseStatusRows === rows)", JSON.stringify(statusMod.parseStatusRows(statusMod.exportStatusMd(stRows))) === JSON.stringify(stRows));
-	check("status.json: canonical row statuses (json normalizer is a no-op on the real ledger)", !statusMod.normalizeStatusRows(stRows).changed);
+	check("STATUS.md: statuses limited to built/parked/dropped/pending", stRows.every((r) => STATUSES.has(r.status)));
+	check("STATUS.md: exactly one row per item (no duplicate items)", new Set(stRows.map((r) => r.item)).size === stRows.length);
+	check("STATUS.md: every built row cites a 7-hex commit or global-state evidence", stRows.every((r) => r.status !== "built" || /\b[0-9a-f]{7}\b/.test(r.evidence) || /^global: /.test(r.evidence)));
+	check("ledger: one-pager deliverable dropped (removed per captain 2026-10-07)", stRows.some((r) => r.item === "docs/ONE-PAGER.md build-day ledger" && r.status === "dropped" && r.evidence.includes("removed per captain 2026-10-07")));
+	check("ledger: no BUILT row still points at the deleted one-pager doc", stRows.every((r) => r.status !== "built" || !/docs\/ONE-PAGER\.md/.test(`${r.evidence} ${r.substrate}`)));
+	check("STATUS.md: real export already canonical (normalizer is a no-op)", !statusMod.normalizeStatusText(stText).changed);
 }
 
 // ── status join + shared STATUS parser (ext/status.ts) ──────────────────
 {
-	const { parseStatusRows, normalizeStatusText, normalizeStatusRows, exportStatusMd, loadStatusRows, statusFile, statusJoinLines } = await import("./status.ts");
+	const { parseStatusRows, normalizeStatusText, loadStatusRows, statusFile, statusJoinLines } = await import("./status.ts");
 	const fsSt = await import("node:fs");
 
 	// parser: header + separator skipped, malformed rows skipped, cells trimmed
@@ -1371,24 +1378,108 @@ if (process.argv.includes("--parity")) {
 	check("status normalize: status case + cell spacing", nrm.changed && nrm.text.includes("| x | built | abc1234 | y |"));
 	check("status normalize: idempotent on its own output", !normalizeStatusText(nrm.text).changed);
 
-	// json normalizer + loader: lenient rows, corrupt ledger inert, legacy md
-	// fallback for unmigrated worker repos, env override respected
-	const nrmRows = normalizeStatusRows([{ item: "x", status: "Built", evidence: "abc1234", substrate: "y" }, { item: "y", status: "weird", evidence: "", substrate: "" }]);
-	check("status json normalize: known statuses lowercased, unknown untouched", nrmRows.changed && nrmRows.rows[0].status === "built" && nrmRows.rows[1].status === "weird");
-	const jsonRepo = join(tmp, "status-json-repo");
-	fsSt.mkdirSync(jsonRepo, { recursive: true });
-	fsSt.writeFileSync(join(jsonRepo, "status.json"), JSON.stringify({ updated: "2026-10-07", rows: [{ item: "sidecar watch mode", status: "parked", evidence: "26fde67", substrate: "durable-sidecar/" }, { item: "junk" }, null, { item: "no-status" }] }));
-	const jsonRows = loadStatusRows(jsonRepo);
-	check("status json loader: good rows kept, junk skipped, fields coerced", jsonRows.length === 1 && jsonRows[0].item === "sidecar watch mode" && jsonRows[0].evidence === "26fde67");
-	fsSt.writeFileSync(join(jsonRepo, "status.json"), "{corrupt");
-	check("status json loader: corrupt ledger → [] (inert, never fatal)", loadStatusRows(jsonRepo).length === 0);
-	const mdRepo = join(tmp, "status-md-repo");
-	fsSt.mkdirSync(mdRepo, { recursive: true });
-	fsSt.writeFileSync(join(mdRepo, "STATUS.md"), "| item | status | evidence | substrate |\n|---|---|---|---|\n| legacy row | parked | note | docs/ |\n");
-	check("status loader md fallback: unmigrated STATUS.md still reads", loadStatusRows(mdRepo).length === 1 && loadStatusRows(mdRepo)[0].item === "legacy row");
-	process.env.MAJORDOME_STATUS_FILE = join(jsonRepo, "status.json");
-	check("status file env: MAJORDOME_STATUS_FILE overrides the repo-root path", statusFile("/elsewhere").endsWith("status.json") && statusFile("/elsewhere") === join(jsonRepo, "status.json"));
+	// loader: an absent/corrupt store reads inert ([] — never fatal). The fold
+	// never reads md/json ledger files, so no legacy fallback exists by design
+	// (grep-pinned in the decision-store section); MAJORDOME_STATUS_FILE names
+	// the EXPORT path (where --export md writes).
+	const emptyRepo = join(tmp, "status-empty-repo");
+	fsSt.mkdirSync(emptyRepo, { recursive: true });
+	process.env.MAJORDOME_DIR = join(tmp, "status-empty-store");
+	check("status loader: absent store → [] (inert, never fatal)", loadStatusRows(emptyRepo).length === 0);
+	delete process.env.MAJORDOME_DIR;
+	check("status file env: MAJORDOME_STATUS_FILE names the export path (STATUS.md)", statusFile("/elsewhere").endsWith("STATUS.md"));
+	process.env.MAJORDOME_STATUS_FILE = join(tmp, "export-override", "STATUS.md");
+	check("status file env: MAJORDOME_STATUS_FILE overrides the default export path", statusFile("/elsewhere") === join(tmp, "export-override", "STATUS.md"));
 	delete process.env.MAJORDOME_STATUS_FILE;
+}
+
+// ── decision-block store: append + fold + migration + md export (v2.11) ──
+{
+	const { mkdirSync, readFileSync: rfsDec, writeFileSync: wfsDec, appendFileSync } = await import("node:fs");
+	process.env.MAJORDOME_DIR = join(tmp, "decision-store");
+	const store = await import("./store.ts");
+	const st = await import("./status.ts");
+	const mig = await import("../tools/migrate-status.ts");
+
+	// the schema: appendDecisionStatus → a decision block on the ledger channel
+	const repoA = join(tmp, "decision-repo-a");
+	st.appendDecisionStatus({ item: "sidecar watch mode", status: "parked", evidence: "26fde67 prototype only, not wired", substrate: "durable-sidecar/" }, repoA);
+	st.appendDecisionStatus({ item: "panel grading (majority-of-available-engines)", status: "built", evidence: "7f5e91b", substrate: "ext/panel.ts" }, repoA);
+	const decA = st.loadDecisions(repoA);
+	check("decision store: appendDecisionStatus → kind=decision blocks on the ledger channel", decA.length === 2 && decA.every((b) => store.isDecisionBlock(b)) && decA.every((b) => b.session === store.DECISION_SESSION && b.firstTurn === 0 && b.lastTurn === 0));
+	check("decision store: payload fields stored verbatim", decA[0].decision.item === "sidecar watch mode" && decA[0].decision.evidence === "26fde67 prototype only, not wired" && decA[0].decision.substrate === "durable-sidecar/");
+	check("decision store: tags are decision+status+slug-of-item", decA[0].tags?.join(",") === "decision,status,sidecar-watch-mode");
+
+	// scoping: another repo's decisions don't leak, memory blocks never fold in
+	const repoB = join(tmp, "decision-repo-b");
+	st.appendDecisionStatus({ item: "other repo row", status: "pending", evidence: "x", substrate: "y" }, repoB);
+	store.appendBlock({ id: "mem:1", session: "mem", sessionFile: "/x/mem.jsonl", firstTurn: 1, lastTurn: 2, gist: null, intent: null, dims: {}, tokensHybrid: [], head: "", closedAt: "" });
+	check("decision store: loadDecisions scopes to the repo, ignores memory blocks", st.loadDecisions(repoB).length === 1 && st.loadDecisions(repoA).length === 2 && st.loadStatusRows(repoB)[0].item === "other repo row");
+
+	// the fold: latest appended wins; disagreeing statuses flag contradicted
+	st.appendDecisionStatus({ item: "sidecar watch mode", status: "built", evidence: "abc1234", substrate: "ext/x.ts" }, repoA);
+	const rowsA = st.loadStatusRows(repoA);
+	const side = rowsA.find((r) => r.item === "sidecar watch mode")!;
+	check("fold: latest appended decision wins (older superseded by append order)", side.status === "built" && side.evidence === "abc1234" && side.substrate === "ext/x.ts");
+	check("fold: disagreeing statuses flag contradicted, others don't", side.contradicted === true && rowsA.find((r) => r.item === "panel grading (majority-of-available-engines)")?.contradicted === undefined);
+	st.appendDecisionStatus({ item: "panel grading (majority-of-available-engines)", status: "built", evidence: "7f5e91b (docs 332b226)", substrate: "ext/panel.ts" }, repoA);
+	check("fold: same-status re-append stays unflagged (latest evidence wins)", st.loadStatusRows(repoA).find((r) => r.item === "panel grading (majority-of-available-engines)")?.contradicted === undefined);
+
+	// evidence gate: built rows cite a 7-hex commit or global: state
+	check("fold: every built row cites 7-hex or global: evidence", st.loadStatusRows(repoA).every((r) => r.status !== "built" || /\b[0-9a-f]{7}\b/.test(r.evidence) || /^global: /.test(r.evidence)));
+
+	// lenient parse: a malformed decision payload reads as a plain memory block
+	appendFileSync(join(process.env.MAJORDOME_DIR!, "blocks.jsonl"), JSON.stringify({ id: "junkd:1", session: "j", sessionFile: "/x/j.jsonl", firstTurn: 1, lastTurn: 1, gist: null, intent: null, dims: {}, tokensHybrid: [], head: "", closedAt: "", kind: "decision", decision: { item: "x", status: "maybe", evidence: "", substrate: "" } }) + "\n");
+	const junk = store.loadBlocks().find((b) => b.id === "junkd:1");
+	check("decision store: malformed decision payload reads as a plain block (lenient)", !!junk && !store.isDecisionBlock(junk) && st.loadStatusRows(repoA).length === 2);
+
+	// migration: legacy md → decision blocks, verbatim + idempotent (hermetic
+	// fixture; the REAL ledger migrates on master at merge)
+	const migRepo = join(tmp, "migrate-repo");
+	mkdirSync(migRepo, { recursive: true });
+	const legacy = [
+		"# STATUS — deliverable ledger",
+		"",
+		"| item | status | evidence | substrate |",
+		"|---|---|---|---|",
+		"| sidecar watch mode | parked | 26fde67 prototype only, not wired | durable-sidecar/ |",
+		"| ledger-only deliverable | built | abc0123 (docs def2345) | ext/nothing.ts |",
+		"| weird status row | maybe | — | — |",
+	].join("\n");
+	const migStatus = join(migRepo, "STATUS.md");
+	wfsDec(migStatus, legacy);
+	const dry = mig.migrateStatus({ repoRoot: migRepo, statusPath: migStatus, dryRun: true });
+	check("migrate: dry-run counts without writing", dry.rows === 3 && dry.migrated === 2 && dry.invalid === 1 && st.loadDecisions(migRepo).length === 0);
+	const m1 = mig.migrateStatus({ repoRoot: migRepo, statusPath: migStatus });
+	check("migrate: 2 rows migrated, 1 invalid status rejected", m1.migrated === 2 && m1.invalid === 1);
+	const want = [
+		{ item: "sidecar watch mode", status: "parked", evidence: "26fde67 prototype only, not wired", substrate: "durable-sidecar/" },
+		{ item: "ledger-only deliverable", status: "built", evidence: "abc0123 (docs def2345)", substrate: "ext/nothing.ts" },
+	];
+	check("migrate: fold == legacy rows verbatim (item/status/evidence/substrate, ledger order)", JSON.stringify(st.loadStatusRows(migRepo).map(({ item, status, evidence, substrate }) => ({ item, status, evidence, substrate }))) === JSON.stringify(want));
+	const m2 = mig.migrateStatus({ repoRoot: migRepo, statusPath: migStatus });
+	check("migrate: idempotent — re-run skips migrated items", m2.migrated === 0 && m2.skipped === 2 && st.loadStatusRows(migRepo).length === 2);
+
+	// export: the md door regenerates from the fold, losslessly
+	const exported = st.exportStatusMd(migRepo);
+	const expText = rfsDec(migStatus, "utf8");
+	check("export: STATUS.md regenerated with the generated-export banner", expText.includes("GENERATED EXPORT") && expText.includes("do not edit; source: decision blocks") && exported.includes("2 item(s)"));
+	check("export: parseStatusRows(export) == fold rows (lossless view)", JSON.stringify(st.parseStatusRows(expText)) === JSON.stringify(st.loadStatusRows(migRepo)));
+
+	// GREP PIN: the status data path never reads an md ledger — the fold's
+	// source is blocks.jsonl only
+	const stSrc = rfsDec(new URL("./status.ts", import.meta.url), "utf8");
+	check("pin: ext/status.ts has no readFileSync — the fold never reads an md ledger", !stSrc.includes("readFileSync"));
+
+	// memory surfaces stay clean: decision records feed the fold, never the
+	// map / one-pager projections (they are ledger rows, not recall nodes)
+	const { compileMap } = await import("./map.ts");
+	const { composeOnePager } = await import("./onepager.ts");
+	const memBlock: Block = { id: "memx:1", session: "memx", sessionFile: "/x/memx.jsonl", firstTurn: 1, lastTurn: 2, gist: "a gist about things", intent: null, dims: {}, tokensHybrid: [], head: "", closedAt: "" };
+	const opMd = composeOnePager([...decA, memBlock]).md;
+	check("surfaces: decision records never appear as map / one-pager nodes", !JSON.stringify(compileMap([...decA, memBlock]).json).includes("sidecar watch mode") && opMd.includes("a gist about things") && !opMd.includes("decision-ledger"));
+
+	delete process.env.MAJORDOME_DIR;
 }
 
 // ── housekeeping: safe-fix vs needs-yes policy (ext/housekeep.ts) ────────
@@ -1397,17 +1488,19 @@ if (process.argv.includes("--parity")) {
 	const { scanDocDrift } = await import("./docdrift.ts");
 	const fs2 = await import("node:fs");
 
-	// fixture repo: README carrying the proven drift signature + a ledger row
+	// fixture repo: README carrying the proven drift signature; the ledger is
+	// decision blocks in a HERMETIC store (STATUS.md on disk is the generated
+	// export — housekeeping reads the fold, never that file)
 	const repo = mkdtempSync(join(tmpdir(), "majordome-hk-"));
+	process.env.MAJORDOME_DIR = join(tmp, "housekeep-decision-store");
 	fs2.mkdirSync(join(repo, "docs"), { recursive: true });
 	const readme = ["# fixture repo", "", "A sidecar in watch mode keeps each repo's artifacts fresh.", ""].join("\n");
 	fs2.writeFileSync(join(repo, "README.md"), readme);
-	const ledgerRows = [
-		{ item: "sidecar watch mode", status: "parked", evidence: "26fde67 prototype only, not wired", substrate: "durable-sidecar/" },
-		{ item: "ledger-only deliverable", status: "built", evidence: "abc0123 (docs def2345)", substrate: "ext/nothing.ts" },
-	];
-	const ledgerText = JSON.stringify({ updated: "2026-10-07", rows: ledgerRows }, null, 1) + "\n";
-	fs2.writeFileSync(join(repo, "status.json"), ledgerText);
+	const exportMd = "| item | status | evidence | substrate |\n|---|---|---|---|\n| sidecar watch mode | parked | 26fde67 prototype only, not wired | durable-sidecar/ |\n| ledger-only deliverable | built | abc0123 (docs def2345) | ext/nothing.ts |\n";
+	fs2.writeFileSync(join(repo, "STATUS.md"), exportMd);
+	const stmod = await import("./status.ts");
+	stmod.appendDecisionStatus({ item: "sidecar watch mode", status: "parked", evidence: "26fde67 prototype only, not wired", substrate: "durable-sidecar/" }, repo);
+	stmod.appendDecisionStatus({ item: "ledger-only deliverable", status: "built", evidence: "abc0123 (docs def2345)", substrate: "ext/nothing.ts" }, repo);
 	// the corrupt store file the rm proposal names — must survive housekeeping
 	const corrupt = join(repo, "trails.jsonl");
 	fs2.writeFileSync(corrupt, "{not json}\n");
@@ -1422,6 +1515,7 @@ if (process.argv.includes("--parity")) {
 		storeCorrupt: [corrupt],
 		extraDocs: [],
 	});
+	check("housekeep: ledger line reads the fold (decisions folded, items out)", res.checkLines.some((l) => l.includes("status ledger: 2 decisions folded, 2 item(s)")) && res.rows.length === 2);
 
 	// SAFE class: exactly the README reword, to roadmap tense, allowlisted path
 	const rewords = res.proposals.filter((p) => p.safe && p.kind === "reword");
@@ -1431,10 +1525,11 @@ if (process.argv.includes("--parity")) {
 	const dangerous = res.proposals.filter((p) => !p.safe);
 	check("housekeep: dangerous class listed (rm + git state change)", dangerous.length === 2 && dangerous.some((p) => p.kind === "rm") && dangerous.some((p) => p.kind === "git"));
 
-	// STATUS staleness: built rows citing commits git doesn't know
+	// STATUS staleness: built rows citing commits git doesn't know (rows come
+	// from the decision fold)
 	check("housekeep: stale built-row commit flagged", res.needsYes.some((l) => l.includes("abc0123") && l.includes("not in git log")));
-	// mechanism mention with no STATUS row (CHANGELOG's inbox, no inbox row)
-	check("housekeep: mechanism mention with no STATUS row flagged", res.needsYes.some((l) => l.includes('"inbox"')));
+	// mechanism mention with no ledger row (CHANGELOG's inbox, no inbox row)
+	check("housekeep: mechanism mention with no ledger row flagged", res.needsYes.some((l) => l.includes('"inbox"')));
 
 	// the guard: dangerous kinds refused outright; safe kinds refused outside
 	// the hard path allowlist (code files, traversal)
@@ -1452,10 +1547,12 @@ if (process.argv.includes("--parity")) {
 	// listed, not executed — corrupt file survives, nothing else written
 	const fixed = hk.applySafeFixes(repo, res.proposals);
 	const after = fs2.readFileSync(join(repo, "README.md"), "utf8");
-	check("housekeep: safe-fix applied rewords the fixture README", fixed.length === 1 && after.includes("planned sidecar in watch mode (not yet built — see status.json)"));
+	check("housekeep: safe-fix applied rewords the fixture README", fixed.length === 1 && after.includes("planned sidecar in watch mode (not yet built — see STATUS.md)"));
 	check("housekeep: reworded README is roadmap-exempt (doc-drift gate quiet)", scanDocDrift(after, () => false).warns.length === 0);
 	check("housekeep: dangerous action listed NOT executed (corrupt file survives)", fs2.existsSync(corrupt) && fixed.every((f) => !f.includes("rm")));
-	check("housekeep: status.json untouched when already canonical", fs2.readFileSync(join(repo, "status.json"), "utf8") === ledgerText);
+	check("housekeep: generated STATUS.md export untouched (ledger is decision-owned, safe class never writes it)", fs2.readFileSync(join(repo, "STATUS.md"), "utf8") === exportMd);
+
+	delete process.env.MAJORDOME_DIR;
 }
 
 // ── doctor + housekeeping command registration (same registry) ──────────
@@ -1467,8 +1564,9 @@ if (process.argv.includes("--parity")) {
 	check("commands: doctor CLI entry exists (bare tsx must print, never wait on stdin)", exIdx(new URL("../tools/doctor-cli.ts", import.meta.url)));
 	check("commands: one-pager command removed (composeOnePager stays sidecar-only)", !/cmd === "one-pager"/.test(idx) && !idx.includes("composeOnePager"));
 	check("commands: /majordome user registered (render + set + reset via userprefs)", /cmd === "user"/.test(idx) && idx.includes("renderUserPrefs") && idx.includes("setUserPref") && idx.includes("resetUserPrefsFile"));
-	check("commands: /majordome status --export md door registered (the only md write)", idx.includes('a === "--export"') && idx.includes("exportStatusMd"));
+	check("commands: /majordome status --export md door — the merged handler shape (both spellings, write via exportStatusMd)", idx.includes('a === "--export md" || a === "export md"') && idx.includes("exportStatusMd()"));
 	check("recall: status-join wired into the injection path", idx.includes("statusJoinTail(winner)") && idx.includes("loadStatusRows"));
+	check("wiring: status --export md registered (the generated-export door)", idx.includes('"--export md"') && idx.includes("exportStatusMd"));
 	// live smoke: the doctor audit always renders a report (never crashes, never empty)
 	const { doctor } = await import("./doctor.ts");
 	const doc = await doctor();

@@ -10,7 +10,7 @@
  * pointers — the machine side, cited by one-pager sections).
  */
 import { shortTag } from "./core.ts";
-import type { Block } from "./store.ts";
+import { isDecisionBlock, type Block } from "./store.ts";
 
 const DROPPED = /\b(dropped|rejected|reverted|instead of|not adopt|won't use|will not use|no longer)\b/i;
 const clean = (s: string) =>
@@ -24,6 +24,7 @@ export interface CompiledMap {
 export function compileMap(blocks: Block[], root = "work"): CompiledMap {
 	const bySession = new Map<string, Block[]>();
 	for (const b of blocks) {
+		if (isDecisionBlock(b)) continue; // decision-ledger records are the status fold's input, not map nodes
 		if (!bySession.has(b.session)) bySession.set(b.session, []);
 		bySession.get(b.session)!.push(b);
 	}
