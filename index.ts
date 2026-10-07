@@ -20,9 +20,9 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
-import { blockMeta, contradicts, dimVector, docsVerdict, hasJev, induceDims, loadKey, resetClassifyFn, routingIntent, setClassifyFn, setStreamFn, shapeVerdict, simplifyVerdict, userPrefLines, type DocsVerdict } from "./ext/judges.ts";
+import { blockMeta, contradicts, decomposeQuery, dimVector, docsVerdict, hasJev, induceDims, loadKey, resetClassifyFn, rewriteQuery, routingIntent, setClassifyFn, setStreamFn, shapeVerdict, simplifyVerdict, userPrefLines, type DocsVerdict } from "./ext/judges.ts";
 import { pushInbox, shouldAskSimplify, simplifyHintText } from "./ext/inbox.ts";
-import { cursorForDoc, cursorKey, docsNudge, injectionText, judgeLine, scanDocsTouched, shapeHintLine, shouldJudgeLine, route, verdictToNudge } from "./ext/router.ts";
+import { confidenceGrill, cursorForDoc, cursorKey, decomposeAllowed, decomposedInjection, docsNudge, grillOptionsLine, injectionText, judgeLine, mergeDecomposed, route, runSubQueries, scanDocsTouched, shapeHintLine, shouldJudgeLine, verdictToNudge } from "./ext/router.ts";
 import { BUILTIN_DOC_WATCH, resolveDocsProfile } from "./ext/docsprofile.ts";
 import { composeOnePager } from "./ext/onepager.ts";
 import { compileMap } from "./ext/map.ts";
@@ -35,6 +35,7 @@ import { doctor } from "./ext/doctor.ts";
 import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
+import { appendEntities, extractEntities, knownEntitiesIn } from "./ext/entities.ts";
 import { statusJoinLines, loadStatusRows, formatStatus, formatHouseStatus } from "./ext/status.ts";
 import { housekeeping } from "./ext/housekeep.ts";
 import { appendBlock, appendDecision, blockDims, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
@@ -46,7 +47,7 @@ interface St {
 	blocks: Block[];
 	vocab: string[];
 	indexedKeys: Set<string>;
-	routeCache: { query: string; result: Awaited<ReturnType<typeof route>>; contraLine: string | null } | null;
+	routeCache: { query: string; result: Awaited<ReturnType<typeof route>>; contraLine: string | null; decomp: DecompPayload | null } | null;
 	shapeCache: { query: string; line: string | null } | null; // outputShape verdict per fresh user turn
 	uiCtx: { hasUI: boolean; ui: { setStatus(k: string, v: string): void } } | null;
 	injects: number;
@@ -56,6 +57,17 @@ interface St {
 	docsWatch: string[]; // resolved per-repo docs profile watch (session-scoped)
 	lastNudgeCount: number;
 	simplifyAsked: boolean; // simplifyVerdict once-per-worker-run guard (MJDX_WORKER sessions)
+}
+
+/** A decomposed turn's injection payload (query decomposition v1): the
+ * labeled-sections recall line, the guard's grill-options line when the
+ * confidence gate says ask (null at 0.9+), and the merged best block for the
+ * decision log + status join. Null = single-pipeline turn (no decomposition). */
+interface DecompPayload {
+	grill: string | null;
+	line: string;
+	top: Block | null;
+	topScore: number;
 }
 
 const st: St = {
@@ -140,6 +152,30 @@ function inFlightTurn(): number {
 	} catch {
 		return 0; // unreadable store → unstamped (proxy treats it as unmeasurable)
 	}
+}
+
+/** The measured noise gate (bench/results/live): true positive 0.707, all
+ * noise ≤ 0.63 — suppress weak dims matches and empty lex matches. One home
+ * for the rule: the single pipeline AND each decomposed sub-question gate
+ * through the same fn. */
+function suppressedResult(rr: { winner?: Block | null; arm?: string; score?: number } | null, minScore: number): boolean {
+	return !rr?.winner?.gist || (rr.arm === "dims" && (rr.score ?? 0) < minScore) || (rr.arm === "lex" && rr.score === 0);
+}
+
+/** Decompose round cap (query decomposition v1): the grill-options interaction
+ * is captain-side — the posthook never loops on the answer. Max 2 decompose
+ * judge calls per turn cursor (inFlightTurn); a deterministic guard, not a
+ * prompt. Counts CALLS made (a failed call spends its budget too). */
+const decompCalls: { turn: number; count: number } = { turn: 0, count: 0 };
+function useDecomposeBudget(): boolean {
+	const turn = inFlightTurn();
+	if (decompCalls.turn !== turn) {
+		decompCalls.turn = turn;
+		decompCalls.count = 0;
+	}
+	if (!decomposeAllowed(decompCalls.count)) return false;
+	decompCalls.count++;
+	return true;
 }
 
 function status(): void {
@@ -328,6 +364,17 @@ export default function majordome(pi: ExtensionAPI): void {
 				setTrailTurn(turns);
 			} catch { /* telemetry never breaks a turn */ }
 			await indexSession();
+			// entity registry (deterministic, zero judge): extract URL/repo/file-path
+			// entities from this turn's text; fresh ones append to the registry
+			// (exact repeats dedupe in-memory per run). Subagent scratch sessions
+			// are excluded like every sweep. Fail-open — never breaks a turn.
+			try {
+				if (st.sessionFile && !isSubagentSession(st.sessionFile)) {
+					const turnsNow = parseSession(st.sessionFile);
+					const lastTurn = turnsNow.at(-1);
+					if (lastTurn) appendEntities(extractEntities(`${lastTurn.user}\n${lastTurn.text}`), sessionSlug(st.sessionFile), loadMeta().turns ?? 0);
+				}
+			} catch { /* registry never breaks a turn */ }
 				if (process.env.MJDX_WORKER) {
 					// push half: one line to the deck inbox — the orchestrator learns we finished
 					const mine = loadBlocks().filter((x) => x.sessionFile === st.sessionFile);
@@ -401,6 +448,7 @@ export default function majordome(pi: ExtensionAPI): void {
 					routingIntent: (m) => routingIntent(m, recent ? textof(recent.content) : ""),
 					queryDims: (q) => (st.vocab.length ? dimVector(q, st.vocab, "message") : Promise.resolve(null)),
 					tokens,
+					knownEntities: knownEntitiesIn(query), // entity registry v1: exact-match boost
 				});
 				// strong-hit post-checks (once per query): duplicate-work hint +
 				// single-pair contradiction judgment on the winner
@@ -412,7 +460,44 @@ export default function majordome(pi: ExtensionAPI): void {
 						}
 					} catch { /* fail open */ }
 				}
-				st.routeCache = { query, result, contraLine };
+				// query decomposition v1: single-pass rewrites collapse multi-topic
+				// asks — decompose (≤3 cohesion sub-questions + confidence), recall
+				// per sub-question in parallel, merge with provenance. Fires only on
+				// recall-classified turns (route returned a result; continuation →
+				// no recall at all). Fail-open: judge absent/failed/≤1 sub-question →
+				// null → today's single pipeline, byte-identical. Round cap: ≤2
+				// decompose calls per turn (useDecomposeBudget) — the grill is
+				// captain-side, the posthook never loops.
+				let decomp: DecompPayload | null = null;
+				if (result && useDecomposeBudget()) {
+					try {
+						const dec = await decomposeQuery(query);
+						if (dec && dec.subquestions.length > 1) {
+							const minScore = Number(process.env.MAJORDOME_MIN_SCORE ?? 0.6);
+							const subs = (await runSubQueries({
+								subquestions: dec.subquestions,
+								intent: result.intent,
+								blocks: st.blocks,
+								currentSession: sessionSlug(st.sessionFile),
+								currentTurn: turnCount,
+								currentSessionFile: st.sessionFile,
+								rewriteQuery,
+								queryDims: (q) => (st.vocab.length ? dimVector(q, st.vocab, "message") : Promise.resolve(null)),
+								tokens,
+							})).filter((s) => !suppressedResult(s.result, minScore));
+							const mergedTop = subs.length ? mergeDecomposed(subs)[0] ?? null : null;
+							if (mergedTop) {
+								decomp = {
+									grill: confidenceGrill(dec) ? grillOptionsLine(dec.subquestions, dec.confidence) : null,
+									line: decomposedInjection(subs),
+									top: mergedTop.block,
+									topScore: mergedTop.score,
+								};
+							}
+						}
+					} catch { /* fail open — decomposition must never break routing */ }
+				}
+				st.routeCache = { query, result, contraLine, decomp };
 			}
 			const r = st.routeCache.result;
 			// judge line: ambiguity verdict surfaces to the AGENT even when memory
@@ -426,9 +511,29 @@ export default function majordome(pi: ExtensionAPI): void {
 			// measured noise gate (bench/results/live): true positive 0.707, all
 			// noise ≤ 0.63 — suppress weak dims matches and empty lex matches
 			const minScore = Number(process.env.MAJORDOME_MIN_SCORE ?? 0.6);
-			const suppressed = !r?.winner?.gist
-				|| (r.arm === "dims" && r.score < minScore)
-				|| (r.arm === "lex" && r.score === 0);
+			const suppressed = suppressedResult(r, minScore);
+			const dc = st.routeCache.decomp;
+			if (dc) {
+				// decomposed injection (query decomposition v1): grill-options first
+				// (guard pattern — the options line and the judge line are one
+				// ambiguity surface, never stacked), then the labeled sections; the
+				// status join binds the MERGED top block. The single pipeline's
+				// contraLine is skipped here: it judged a winner we are not injecting.
+				if (dc.grill) appendTail(lastUser, dc.grill);
+				appendTail(lastUser, dc.line);
+				if (dc.top) for (const line of statusJoinTail(dc.top)) appendTail(lastUser, line);
+				if (!dc.grill && judge) appendTail(lastUser, judge);
+				emitDocsNudge(lastUser);
+				st.injects++;
+				if (fresh) appendDecision({
+					ts: new Date().toISOString(), query, intent: r?.intent ?? "?",
+					arm: "decomp", winner: dc.top ? shortId(dc.top) : null,
+					score: dc.top ? Math.round(dc.topScore * 1000) / 1000 : null, injected: true,
+					sessionFile: st.sessionFile ?? undefined, turn: inFlightTurn(),
+				});
+				status();
+				return;
+			}
 			if (suppressed) {
 				if (fresh) appendDecision({
 					ts: new Date().toISOString(), query, intent: r?.intent ?? "continuation",

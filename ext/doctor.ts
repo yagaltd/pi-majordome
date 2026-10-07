@@ -16,6 +16,7 @@ import { isSubagentSession } from "./core.ts";
 import { readDocsOverride, resolveDocsProfile } from "./docsprofile.ts";
 import { agentsReport } from "./agentsmd.ts";
 import { scanDocDrift, evidenceOk, DRIFT_RULES } from "./docdrift.ts";
+import { entitiesAdvisoryLine } from "./entities.ts";
 
 const dir = majordomeDir();
 
@@ -147,6 +148,13 @@ export async function doctor(): Promise<string> {
 			for (const n of drift.notes) L.push(`· ${n}`);
 			if (!drift.warns.length && !drift.notes.length && DRIFT_RULES.length) ok("doc drift: README mechanism claims all map to ext/ tools/ code");
 		}
+	} catch { /* advisory never fails the doctor */ }
+
+	// 12. entity registry (advisory): distinct entities + kind split. The
+	// registry fills as sessions mention URLs/repo refs/paths — empty is a
+	// fine state, never a warning.
+	try {
+		L.push(entitiesAdvisoryLine());
 	} catch { /* advisory never fails the doctor */ }
 
 	L.push(warns ? `\n${warns} issue(s) found — fixes are actions you choose (see hints above).` : "\nall clear.");

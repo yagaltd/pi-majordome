@@ -54,6 +54,7 @@ export function trail(judge: string, fields: Record<string, unknown>): void {
 export const JUDGE_LINES: readonly string[] = [
 	"blockMeta", "induceDims", "rewriteQuery", "keyPhrases", "routingIntent",
 	"contradicts", "docsVerdict", "shapeVerdict", "lifecycleVerdict", "dimVector", "simplifyVerdict",
+	"decomposeQuery", // query decomposition v1 (one line per split call)
 	"panelGrade", // one line per panel grader attempt (ext/panel.ts; the panelVerdict summary is a decision record)
 ];
 
@@ -70,6 +71,7 @@ export const JUDGE_TAGS: Record<string, string> = {
 	contradicts: "contra",
 	dimVector: "dimvec",
 	simplifyVerdict: "simpl",
+	decomposeQuery: "decomp",
 	panelGrade: "panel",
 };
 
