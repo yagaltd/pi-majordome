@@ -219,6 +219,131 @@ export async function rewriteQuery(text: string): Promise<string | null> {
 	return ok ? (v as string).trim() : null;
 }
 
+// ── query decomposition (v1, multi-topic asks) ──────────────────────────────
+
+export interface SubQuestion {
+	q: string; // the self-contained question
+	tag: string; // 1-2 word topic (section label downstream)
+}
+
+export interface Decomposition {
+	subquestions: SubQuestion[];
+	confidence: number; // 0-1 that the split reflects what the user wants
+	vague: boolean; // too ambiguous to split reliably
+}
+
+const DECOMPOSE_INSTRUCTIONS =
+	"Split this user input into at most 3 self-contained sub-questions. For each: q = the self-contained question, tag = 1-2 word topic. " +
+	"If consecutive questions continue the SAME topic, keep them together (cohesion). " +
+	"Output one sub-question per line as `tag :: question` (3 lines max, no numbering, no commentary).";
+
+/** vague=true only on a confident yes (same fail-open shape as lessonOf). */
+function vagueOf(v: unknown): boolean {
+	if (v === true) return true;
+	if (v && typeof v === "object" && typeof (v as any).noul === "boolean") return (v as any).noul;
+	return typeof v === "string" && /^(yes|true)$/i.test(v.trim());
+}
+
+/** Lenient sub-question list: array of {q, tag} objects (structured output)
+ * OR one sub-question per line as `tag :: question` (string transports; the
+ * line form tolerates leading numbering). Junk entries are skipped, never
+ * fatal; the cap is 3 — the spec's cohesion bound. */
+export function subquestionsOf(v: unknown): SubQuestion[] {
+	const cap = (arr: SubQuestion[]): SubQuestion[] => arr.slice(0, 3);
+	if (Array.isArray(v)) {
+		const out: SubQuestion[] = [];
+		for (const e of v) {
+			const o = e as Record<string, unknown> | null;
+			const q = typeof o?.q === "string" ? o.q.trim() : typeof o?.question === "string" ? (o.question as string).trim() : "";
+			if (!q) continue;
+			const tag = typeof o?.tag === "string" ? o.tag.trim().slice(0, 24) : "";
+			out.push({ q, tag: tag || "topic" });
+		}
+		return cap(out);
+	}
+	if (typeof v === "string") {
+		const out: SubQuestion[] = [];
+		for (const line of v.split("\n")) {
+			const t = line.replace(/^\s*\d+[.)]\s*/, "").trim();
+			if (!t) continue;
+			const m = t.match(/^(.{1,24}?)\s*(?:::|\||—|–|:)\s*(.+)$/);
+			if (m && m[2].trim()) out.push({ q: m[2].trim(), tag: m[1].trim().slice(0, 24) || "topic" });
+			else out.push({ q: t, tag: "topic" });
+		}
+		return cap(out);
+	}
+	return [];
+}
+
+/** Verdict → Decomposition; null when no usable sub-questions or confidence
+ * (fail-open: callers keep today's single-pipeline behavior — never a guessed
+ * split). Exported as the offline fixture seam, same role as parseDims. */
+export function settleDecompose(res: Record<string, unknown>, judge: string, usage?: unknown): Decomposition | null {
+	const subs = subquestionsOf(res.subquestions);
+	const raw = res.confidence;
+	const n = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+	const conf = Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : null;
+	if (!subs.length || conf === null) {
+		trail("decomposeQuery", { judge, ok: false, ...tkf({ usage }) });
+		return null;
+	}
+	const out: Decomposition = { subquestions: subs, confidence: conf, vague: vagueOf(res.vague) };
+	trail("decomposeQuery", { judge, ok: true, n: subs.length, confidence: out.confidence, vague: out.vague, ...tkf({ usage }) });
+	return out;
+}
+
+/** Split a user message into ≤3 self-contained sub-questions — ONE structured
+ * call (subquestions + confidence + vague). TypeLLM primary; classifier seam
+ * when no key (stub/fail-open — a classifier that cannot emit lists degrades
+ * to a 1-line answer, and callers treat ≤1 sub-question as no decomposition).
+ * Null on any failure — callers fail open to today's single-pipeline recall. */
+export async function decomposeQuery(text: string): Promise<Decomposition | null> {
+	if (loadKey()) {
+		const r = await generate(text.slice(0, 1200), {
+			subquestions: { type: "string", instructions: DECOMPOSE_INSTRUCTIONS },
+			confidence: {
+				type: "number",
+				instructions: "0-1 confidence that you understood what the user wants well enough to split it reliably. Use the full range; 0.9+ only when the split is unambiguous.",
+			},
+			vague: {
+				type: "string",
+				enum: ["yes", "no"],
+				instructions: "yes if the input is too ambiguous to split reliably (missing subjects, unclear referents); casually phrased but readable input is no.",
+			},
+		});
+		if (!r?.result) {
+			trail("decomposeQuery", { judge: "typellm", ok: false }); // gap-rule: dead transport is still a judge call
+			return null;
+		}
+		return settleDecompose(r.result, "typellm", r.usage);
+	}
+	if (classifyFn) {
+		try {
+			const res = await classifyFn(
+				{ msg: text.slice(0, 500) },
+				{
+					subquestions: {
+						type: "choice",
+						instructions: DECOMPOSE_INSTRUCTIONS,
+						criteria: { splittable: "2-3 self-contained sub-questions exist", single: "one topic only — no split" },
+					},
+					confidence: { type: "noul", instructions: "State field 'msg' is a user chat message. yes if you understood it well enough to split it reliably, no otherwise." },
+					vague: { type: "noul", instructions: "Is msg too ambiguous to split reliably (missing subjects, unclear referents)? Answer yes/no." },
+				},
+			);
+			if (!res?.answers) {
+				trail("decomposeQuery", { judge: "jev", ok: false }); // gap-rule: unusable answer is still a judge call
+				return null;
+			}
+			return settleDecompose(res.answers, "jev", res.usage);
+		} catch {
+			trail("decomposeQuery", { judge: "jev", ok: false }); // gap-rule: classifier raised — fail-open call recorded
+			return null;
+		}
+	}
+	return null;
+}
+
 /** Self-Index key evolution (v2.4): 3-5 terse retrieval phrases that would
  * surface `segment` for `query`. Faithfulness/specificity gated at the call
  * site; fail-open empty. */

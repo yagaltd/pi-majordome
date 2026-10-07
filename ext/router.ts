@@ -157,6 +157,22 @@ export interface RouteResult {
 	slugScope: string[] | null; // known @slugs matched by the query (null = none)
 }
 
+// ── entity exact-match boost (entity registry, deterministic) ────────────────
+
+/** Boost weight for a block whose text contains a query entity the registry
+ * has already seen (verbatim substring — exact strings, no substring luck on
+ * single tokens). Deliberately larger than the intent priors (0.25): an exact
+ * entity hit is the strongest precision signal the registry can offer. */
+export const ENTITY_BOOST = 2;
+
+/** +ENTITY_BOOST when any known entity appears verbatim in the block's text
+ * surface (head/gist — the text a reader sees). Pure, deterministic, no IO. */
+export function blockEntityBoost(entities: string[], b: { head?: string; gist?: string | null }): number {
+	if (!entities.length) return 0;
+	const hay = `${b.head ?? ""} ${b.gist ?? ""}`;
+	return entities.some((e) => e && hay.includes(e)) ? ENTITY_BOOST : 0;
+}
+
 /** Full route. judges injected: dag intent + query dims. Null dag or
  * continuation → no retrieval. Empty candidates → no retrieval. */
 export async function route(opts: {
@@ -168,6 +184,7 @@ export async function route(opts: {
 	routingIntent: (m: string) => Promise<Pick<RoutingIntent, "intent" | "searchTerms" | "needClarification" | "clarifyWhy"> | null>;
 	queryDims: (q: string) => Promise<Map<string, number> | null>;
 	tokens: (s: string) => Set<string>;
+	knownEntities?: string[]; // query entities the registry has seen (entity registry v1)
 }): Promise<RouteResult | null> {
 	const dag = await opts.routingIntent(opts.userMessage);
 	if (!dag || dag.intent === "continuation") return null;
@@ -230,6 +247,14 @@ export async function route(opts: {
 			}))
 			.sort((a, b) => b.score - a.score);
 	}
+	// entity exact-match boost (entity registry): boost, never exclude — it
+	// refines the ranking of evidenced blocks (the evidence floor above stays
+	// the gate), deterministic, no judge.
+	if (opts.knownEntities?.length) {
+		ranked = ranked
+			.map((s) => ({ block: s.block, score: s.score + blockEntityBoost(opts.knownEntities!, s.block) }))
+			.sort((a, b) => b.score - a.score);
+	}
 	return {
 		intent: dag.intent,
 		arm,
@@ -290,6 +315,124 @@ export function injectionText(w: Block, terms?: string, resume = false): string 
 	if (resume) bits.push("This looks like work already done — resume it rather than redoing it.");
 	bits.push("If relevant, continue that thread; otherwise ignore.");
 	return bits.join(" ");
+}
+
+// ── query decomposition v1 (cohesion + confidence grill gate) ────────────────
+
+/** Proceed threshold (jev-guard pattern: p ≥ 0.9 proceed soft / below → ask):
+ * at 0.9+ the split is treated as what the user wants; below, the recall
+ * still runs (soft-proceed) but the injection is prefixed with the options
+ * line so the captain can redirect. vague=true forces the ask regardless. */
+export const DECOMPOSE_PROCEED_CONFIDENCE = 0.9;
+
+/** The guard's ask-branch test: grill when vague or confidence < 0.9. Pure. */
+export function confidenceGrill(d: { confidence: number; vague: boolean }): boolean {
+	return d.vague || d.confidence < DECOMPOSE_PROCEED_CONFIDENCE;
+}
+
+/** The grill-with-options line: the sub-questions ARE the 2-3 probable
+ * interpretations. Suggest-only advice to the agent — the user replies with
+ * a number or rephrases; recall has already soft-proceeded on the best guess.
+ * The posthook never loops on the answer (round cap lives with the caller). */
+export function grillOptionsLine(subquestions: { q: string }[], confidence: number): string {
+	const opts = subquestions.slice(0, 3).map((s, i) => `${i + 1}) ${s.q}`).join("  ");
+	return `[majordome judge] Multi-topic ask — confidence ${Math.round(confidence * 100)}%. Possible readings: ${opts} (reply with a number or rephrase; soft-proceed on best guess)`;
+}
+
+/** One decomposed sub-question's recall output. `result` is null when the
+ * sub-pipeline failed (allSettled rejection) — a failed sub degrades to
+ * nothing, never kills its siblings. */
+export interface SubResult {
+	tag: string;
+	q: string;
+	result: Pick<RouteResult, "ranked"> | null;
+}
+
+/** Merge per-sub-question rankings: dedupe blocks by id keeping the best
+ * score, tags accumulate as provenance (which sub-questions surfaced it).
+ * Sorted best-first — the head is the merged winner (decision log + status
+ * join). Single-sub input degenerates to that sub's ranked order unchanged
+ * (the no-regression shape). */
+export function mergeDecomposed(subs: SubResult[]): { block: Block; score: number; tags: string[] }[] {
+	const byId = new Map<string, { block: Block; score: number; tags: string[] }>();
+	for (const s of subs) {
+		for (const h of s.result?.ranked ?? []) {
+			const cur = byId.get(h.block.id);
+			if (cur) {
+				if (!cur.tags.includes(s.tag)) cur.tags.push(s.tag);
+				if (h.score > cur.score) cur.score = h.score;
+			} else byId.set(h.block.id, { block: h.block, score: h.score, tags: [s.tag] });
+		}
+	}
+	return [...byId.values()].sort((a, b) => b.score - a.score);
+}
+
+/** Decomposed injection: sections labeled by sub-question tag, one line per
+ * hit (top `perSub` per sub after the noise gate). Same tail contract as
+ * injectionText — bounded, informational, never an order. */
+export function decomposedInjection(subs: SubResult[], perSub = 2): string {
+	const lines = [`[majordome recall · decomposed · ${subs.map((s) => s.tag).join(" / ")}]`];
+	for (const s of subs) {
+		for (const h of (s.result?.ranked ?? []).slice(0, perSub)) {
+			const b = h.block;
+			const when = b.closedAt ? ` · ${b.closedAt.slice(0, 10)}` : "";
+			lines.push(`· ${s.tag}: ${b.gist ?? b.head} (${shortTag(b.session)} turns ${b.firstTurn}–${b.lastTurn}${when})`);
+		}
+	}
+	lines.push("Each line answers its labeled sub-question; if relevant, continue that thread, otherwise ignore.");
+	return lines.join("\n");
+}
+
+/** Decompose round cap: max decompose judge calls per turn cursor. The
+ * grill-options interaction is captain-side — the posthook never loops. */
+export const DECOMPOSE_MAX_PER_TURN = 2;
+
+export function decomposeAllowed(callsThisTurn: number): boolean {
+	return callsThisTurn < DECOMPOSE_MAX_PER_TURN;
+}
+
+/** Per-sub-question recall: the EXISTING route() pipeline on each sub-question
+ * — rewriteQuery as the search-term judge (fail-open to the raw sub-question),
+ * the parent intent as the arm (the full query already passed the continuation
+ * gate), dims/BM25 as usual. Parallel (allSettled); a failed sub degrades to
+ * result:null without touching its siblings. */
+export async function runSubQueries(opts: {
+	subquestions: { q: string; tag: string }[];
+	intent: string;
+	blocks: Block[];
+	currentSession: string;
+	currentTurn: number;
+	currentSessionFile?: string;
+	rewriteQuery: (q: string) => Promise<string | null>;
+	queryDims: (q: string) => Promise<Map<string, number> | null>;
+	tokens: (s: string) => Set<string>;
+}): Promise<SubResult[]> {
+	const settled = await Promise.allSettled(
+		opts.subquestions.map(async (sq) => ({
+			tag: sq.tag,
+			q: sq.q,
+			result: await route({
+				userMessage: sq.q,
+				blocks: opts.blocks,
+				currentSession: opts.currentSession,
+				currentTurn: opts.currentTurn,
+				currentSessionFile: opts.currentSessionFile,
+				routingIntent: async () => ({
+					intent: opts.intent as RoutingIntent["intent"],
+					searchTerms: (await opts.rewriteQuery(sq.q)) ?? sq.q,
+					needClarification: false,
+					clarifyWhy: "",
+				}),
+				queryDims: opts.queryDims,
+				tokens: opts.tokens,
+			}),
+		})),
+	);
+	return settled.map((s, i) => ({
+		tag: opts.subquestions[i].tag,
+		q: opts.subquestions[i].q,
+		result: s.status === "fulfilled" ? s.value.result : null,
+	}));
 }
 
 /** Judge-line gate: ambiguity verdict, debounced — skip when the agent's last

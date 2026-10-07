@@ -1420,6 +1420,144 @@ if (process.argv.includes("--parity")) {
 	check("doctor: audit renders a non-empty report (incl. advisory checks)", typeof doc === "string" && doc.includes("✓") === true && (doc.includes("all clear") || doc.includes("issue(s) found")));
 }
 
+// ── query decomposition v1 (cohesion cap, confidence grill gate, merge) ──
+{
+	process.env.MAJORDOME_KEY_FILE = join(tmp, "no-key-on-purpose"); // hermetic
+	delete process.env.TYPELLM_API_KEY;
+	process.env.MAJORDOME_TRAIL_FILE = join(tmp, "decomp-trails.jsonl");
+	const jd = await import("./judges.ts");
+	const rd = await import("./router.ts");
+	jd.resetClassifyFn();
+
+	// offline fail-open: no key, no classifier → null (callers keep today's
+	// single-pipeline behavior — never a guessed split)
+	let dThrew = false;
+	let dOffline: unknown = "sentinel";
+	try {
+		dOffline = await jd.decomposeQuery("how does recall work and what did we decide about sqlite?");
+	} catch {
+		dThrew = true;
+	}
+	check("decompose: offline fail-open null (never throws)", !dThrew && dOffline === null);
+
+	// fixture via the injected classifier seam — array-of-{q,tag} shape; the
+	// cap 3 enforces the cohesion bound even when the judge over-splits
+	jd.setClassifyFn(async () => ({
+		model: "canned",
+		answers: {
+			subquestions: [
+				{ q: "how does the recall injection work?", tag: "recall" },
+				{ q: "what did we decide about sqlite storage?", tag: "sqlite" },
+				{ q: "x1", tag: "a" },
+				{ q: "x2", tag: "b" },
+			],
+			confidence: 0.95,
+			vague: "no",
+		},
+	}));
+	const dec = await jd.decomposeQuery("how does recall work, and sqlite?");
+	check("decompose: array fixture settles, cap 3 enforced", dec?.subquestions.length === 3 && dec.subquestions[0].tag === "recall");
+	check("decompose: confidence 0.95 proceeds (no grill)", dec ? rd.confidenceGrill(dec) === false : false);
+
+	// guard branches: <0.9 grills with numbered options + soft-proceed; vague
+	// forces the ask even at high confidence
+	jd.setClassifyFn(async () => ({ model: "canned", answers: { subquestions: [{ q: "a?", tag: "t" }, { q: "b?", tag: "u" }], confidence: 0.4, vague: "no" } }));
+	const decLow = await jd.decomposeQuery("hmm things?");
+	const grill = decLow ? rd.grillOptionsLine(decLow.subquestions, decLow.confidence) : "";
+	check("decompose: confidence <0.9 grills (options + soft-proceed)", decLow ? rd.confidenceGrill(decLow) === true && grill.includes("1)") && grill.includes("(reply with a number or rephrase; soft-proceed on best guess)") : false);
+	jd.setClassifyFn(async () => ({ model: "canned", answers: { subquestions: [{ q: "a?", tag: "t" }, { q: "b?", tag: "u" }], confidence: 0.99, vague: "yes" } }));
+	const decVague = await jd.decomposeQuery("the thing?");
+	check("decompose: vague forces the grill branch", decVague ? rd.confidenceGrill(decVague) === true : false);
+
+	// string-line shape (typellm line format) settles; malformed → null
+	const fromLines = jd.settleDecompose({ subquestions: "recall :: how does injection work?\n1) sqlite :: what did we decide?", confidence: 0.93, vague: "no" }, "typellm");
+	check("decompose: `tag :: question` line shape settles (numbering tolerated)", fromLines?.subquestions.length === 2 && fromLines.subquestions[1].tag === "sqlite");
+	check("decompose: malformed (no subs / junk confidence) → null fail-open", jd.settleDecompose({ subquestions: [], confidence: 0.9 }, "typellm") === null && jd.settleDecompose({ subquestions: [{ q: "a", tag: "t" }] }, "typellm") === null && jd.settleDecompose({ subquestions: [{ q: "a", tag: "t" }], confidence: "junk", vague: "no" }, "typellm") === null);
+
+	// ≤1 sub-question is the no-regression path: the settle keeps it, and the
+	// orchestration (index.ts) only fires on >1 — single pipeline unchanged
+	jd.setClassifyFn(async () => ({ model: "canned", answers: { subquestions: [{ q: "one thing?", tag: "solo" }], confidence: 0.99, vague: "no" } }));
+	const decSingle = await jd.decomposeQuery("one thing");
+	jd.resetClassifyFn();
+	check("decompose: single sub-question kept as the no-decomposition path", decSingle?.subquestions.length === 1);
+
+	// merge: dedupe by id keeping the best score, tags accumulate as provenance
+	const bA = mkBlock("DA", 1, 3, ["registry"]);
+	const bB = mkBlock("DB", 1, 3, ["registry"]);
+	const mkSub = (tag: string, hits: { block: Block; score: number }[]): any => ({ tag, q: `${tag}?`, result: { ranked: hits } });
+	const mergedRd = rd.mergeDecomposed([mkSub("recall", [{ block: bA, score: 1.0 }, { block: bB, score: 0.5 }]), mkSub("sqlite", [{ block: bA, score: 2.0 }])]);
+	check("merge: dedupe by id keeps best score + provenance tags", mergedRd.length === 2 && mergedRd[0].block.id === bA.id && mergedRd[0].score === 2 && JSON.stringify(mergedRd[0].tags) === JSON.stringify(["recall", "sqlite"]));
+	check("merge: single sub-question list = plain ranked order (no-regression shape)", rd.mergeDecomposed([mkSub("only", [{ block: bB, score: 0.5 }, { block: bA, score: 2 }])])[0].block.id === bA.id);
+
+	// injection: sections labeled by sub-question tag
+	const dinj = rd.decomposedInjection([mkSub("recall", [{ block: bA, score: 2 }]), mkSub("sqlite", [{ block: bB, score: 1 }])]);
+	check("injection: decomposed sections labeled by tag", dinj.includes("· recall:") && dinj.includes("· sqlite:") && dinj.startsWith("[majordome recall · decomposed"));
+
+	// round cap: max 2 decompose calls per turn, deterministic
+	check("guard: decompose budget is 2 per turn", rd.DECOMPOSE_MAX_PER_TURN === 2 && rd.decomposeAllowed(0) && rd.decomposeAllowed(1) && !rd.decomposeAllowed(2));
+
+	// the shipped wiring is really in index.ts (route → runSubQueries → merge →
+	// grill; entities at the turn-end posthook seam)
+	const idxText = (await import("node:fs")).readFileSync(new URL("../index.ts", import.meta.url), "utf8");
+	check("wiring: decompose orchestration + budget + entity seams live in index.ts", idxText.includes("runSubQueries") && idxText.includes("useDecomposeBudget") && idxText.includes("appendEntities") && idxText.includes("knownEntitiesIn"));
+
+	delete process.env.MAJORDOME_TRAIL_FILE;
+}
+
+// ── entity registry (deterministic extraction + exact-match recall boost) ──
+{
+	process.env.MAJORDOME_KEY_FILE = join(tmp, "no-key-on-purpose");
+	process.env.MAJORDOME_ENTITIES_FILE = join(tmp, "entities.jsonl");
+	process.env.MAJORDOME_TRAIL_FILE = join(tmp, "entities-trails.jsonl");
+	const ent = await import("./entities.ts");
+	ent.resetEntityMemo();
+
+	const hits = ent.extractEntities("see https://github.com/o/r and /home/aurel/notes/x.md, plus ~/cfg/y.json and https://example.com/a?b=1. bare github.com/aa/bb ref, (https://wrapped.io/x)");
+	check("entities: url / repopath / filepath classes extracted", hits.some((h: any) => h.entity === "github.com/o/r" && h.kind === "repopath") && hits.some((h: any) => h.entity === "/home/aurel/notes/x.md" && h.kind === "filepath") && hits.some((h: any) => h.entity === "~/cfg/y.json" && h.kind === "filepath") && hits.some((h: any) => h.entity === "https://example.com/a?b=1" && h.kind === "url"));
+	check("entities: github inside a URL records once as repopath", hits.filter((h: any) => h.entity.includes("github.com")).length === 2);
+	check("entities: trailing punctuation stripped", hits.every((h: any) => !/[.,;:)"]$/.test(h.entity)) && hits.some((h: any) => h.entity === "https://wrapped.io/x"));
+	check("entities: no matches → empty (plain text)", ent.extractEntities("plain words only").length === 0);
+
+	// registry: append fresh, dedupe exact in-run repeats, read with filters
+	ent.resetEntityMemo();
+	const n1 = ent.appendEntities([{ entity: "github.com/o/r", kind: "repopath" }, { entity: "/home/aurel/notes/x.md", kind: "filepath" }], "projA", 3);
+	const n2 = ent.appendEntities([{ entity: "github.com/o/r", kind: "repopath" }], "projA", 4); // exact repeat, same run
+	check("registry: appends fresh, dedupes exact in-run repeats", n1 === 2 && n2 === 0 && ent.readEntities().length === 2);
+	check("registry: kind filter reads", ent.readEntities({ kind: "filepath" }).length === 1 && ent.readEntities({ kind: "url" }).length === 0);
+	check("registry: query-side gate (known boosted, unknown not)", JSON.stringify(ent.knownEntitiesIn("compare with github.com/o/r")) === JSON.stringify(["github.com/o/r"]) && ent.knownEntitiesIn("github.com/never/seen").length === 0);
+	check("registry: advisory line counts distinct + kinds", ent.entitiesAdvisoryLine().includes("entity registry: 2 entities (url 0 · repopath 1 · filepath 1)"));
+
+	// recall precision hook: the +2 exact-match boost reorders through route()
+	// (plain: the lexically stronger short block wins; boost: the block whose
+	// gist contains the entity verbatim overtakes it)
+	const rb = await import("./router.ts");
+	const pBlock = mkBlock("EP", 1, 3, ["registry", "noise", "filler", "stuff"]); // longer → lower plain score
+	pBlock.gist = "shipped the entity registry at github.com/o/r";
+	const qBlock = mkBlock("EQ", 1, 3, ["registry"]); // short, lexically strong
+	const mkRoute = (knownEntities?: string[]) => rb.route({
+		userMessage: "what about the registry github.com/o/r?",
+		blocks: [pBlock, qBlock],
+		currentSession: "EP",
+		currentTurn: 9,
+		currentSessionFile: "/x/EP/s.jsonl",
+		routingIntent: async () => ({ intent: "definition_recall", searchTerms: "registry github.com/o/r", needClarification: false, clarifyWhy: "" }),
+		queryDims: async () => null,
+		tokens,
+		...(knownEntities ? { knownEntities } : {}),
+	});
+	const rPlain = await mkRoute();
+	const rBoost = await mkRoute(["github.com/o/r"]);
+	const pPlain = rPlain?.ranked.find((s) => s.block.id === pBlock.id)?.score ?? -1;
+	const pBoost = rBoost?.ranked.find((s) => s.block.id === pBlock.id)?.score ?? -1;
+	check("recall: registry entity boost +2 lifts the exact-match block", rPlain?.winner?.id === qBlock.id && rBoost?.winner?.id === pBlock.id && Math.abs(pBoost - (pPlain + rb.ENTITY_BOOST)) < 1e-9);
+	const qPlain = rPlain?.ranked.find((s) => s.block.id === qBlock.id)?.score ?? -1;
+	const qBoost = rBoost?.ranked.find((s) => s.block.id === qBlock.id)?.score ?? -1;
+	check("recall: blocks without the entity keep their exact score (boost is surgical)", Math.abs(qPlain - qBoost) < 1e-9);
+
+	delete process.env.MAJORDOME_ENTITIES_FILE;
+	delete process.env.MAJORDOME_TRAIL_FILE;
+}
+
 if (failures) {
 	console.error(`\n${failures} failure(s)`);
 	process.exit(1);
