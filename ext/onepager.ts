@@ -15,7 +15,7 @@
  * section is a PROJECTION of the index, so re-composing after new lessons
  * rewrites it; nothing accumulates as hand-mainted text. */
 import { shortTag } from "./core.ts";
-import type { Block } from "./store.ts";
+import { isDecisionBlock, type Block } from "./store.ts";
 
 const DECISION = /\b(decid|cho[os]e|shipped|dropped|removed|replaced|default|renamed|fixed|flipped|instead|not adopt)/i;
 
@@ -32,9 +32,11 @@ const line = (b: Block) => {
 };
 
 export function composeOnePager(blocks: Block[], tag?: string): OnePager {
-	const scope = tag
-		? blocks.filter((b) => shortTag(b.session).toLowerCase().includes(tag.toLowerCase()))
-		: blocks;
+	// decision-ledger records feed the status fold, not this projection (the
+	// "Decisions & commitments" section is session-derived prose, not rows)
+	const scope = blocks
+		.filter((b) => !isDecisionBlock(b))
+		.filter((b) => (tag ? shortTag(b.session).toLowerCase().includes(tag.toLowerCase()) : true));
 	const sorted = [...scope].sort((a, b) => (a.closedAt < b.closedAt ? 1 : -1));
 	const decisions = scope.filter((b) => b.gist && DECISION.test(b.gist)).sort((a, b) => (a.closedAt < b.closedAt ? 1 : -1));
 	// lessons: the index class, derived at compose time — recency first, capped

@@ -292,7 +292,7 @@ console.log("\n── gate (e): docs profile resolution + filtered nudges ──
 	writeFileSync(join(repoCoding, "package.json"), "{}\n");
 	mkdirSync(join(repoGeneric, "docs"), { recursive: true });
 	const probes: [string, boolean][] = [
-		["code manifest → coding profile (README+CHANGELOG+status.json+docs/)", JSON.stringify(detectDocsProfile(repoCoding)) === JSON.stringify({ watch: ["README", "CHANGELOG", "status.json", "docs/"], source: "detected-coding" })],
+		["code manifest → coding profile (README+CHANGELOG+STATUS+docs/)", JSON.stringify(detectDocsProfile(repoCoding)) === JSON.stringify({ watch: ["README", "CHANGELOG", "STATUS", "docs/"], source: "detected-coding" })],
 		["no manifest → generic profile (docs/ only)", detectDocsProfile(repoGeneric).source === "detected-generic" && JSON.stringify(detectDocsProfile(repoGeneric).watch) === JSON.stringify(["docs/"])],
 		["absent override reads null", readDocsOverride(repoCoding) === null],
 		["stored profile wins over detection (no override)", resolveDocsProfile(repoGeneric, { watch: ["NOTES"], source: "detected-generic" }).watch.join(",") === "NOTES"],

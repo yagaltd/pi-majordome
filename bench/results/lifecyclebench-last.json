@@ -1,14 +1,14 @@
 {
- "date": "2026-10-07T20:19:34.641Z",
+ "date": "2026-10-07T20:41:48.044Z",
  "version": "v2.6-slug-scope-ir-longmemeval-scale",
  "verdict": "pass",
- "isolatedDir": "/tmp/lifecyclebench-kUfa5g/home/majordome",
+ "isolatedDir": "/tmp/lifecyclebench-l0Ji0c/home/majordome",
  "tiers": [
   {
    "name": "small (mechanism corpus, untouched)",
    "scale": 0,
    "blocks": 33,
-   "wallMs": 39,
+   "wallMs": 34,
    "consolidation": {
     "status": "ran",
     "file": "consolidate.ts",
@@ -982,7 +982,7 @@
    "name": "scale (distractor corpus)",
    "scale": 60,
    "blocks": 870,
-   "wallMs": 2187,
+   "wallMs": 1871,
    "consolidation": {
     "status": "ran",
     "file": "consolidate.ts",

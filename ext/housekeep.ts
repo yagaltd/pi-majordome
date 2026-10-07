@@ -1,17 +1,22 @@
 /**
- * /majordome housekeeping — the doctor's advisory checks plus status.json
+ * /majordome housekeeping — the doctor's advisory checks plus decision-ledger
  * staleness, then a two-class fix policy:
  *
- *   SAFE      — writes ONLY to README.md / docs/*.md / status.json, and only
- *               (a) rewording a known drift signature (DRIFT_RULES) to
- *               roadmap tense so the doctor's doc-drift gate goes quiet, or
- *               (b) normalizing ledger rows (status case). Applied
- *               automatically by the command.
+ *   SAFE      — writes ONLY to README.md / docs/*.md, and only rewording a
+ *               known drift signature (DRIFT_RULES) to roadmap tense so the
+ *               doctor's doc-drift gate goes quiet. Applied automatically by
+ *               the command.
  *   DANGEROUS — rm, any git state change, any code-file edit. Reported for
  *               explicit user yes, NEVER executed: the executor refuses any
  *               dangerous kind outright and any path outside the hard
  *               allowlist (isSafeDocPath) — defense in depth, so a bug in a
  *               rule can never turn into a destructive action.
+ *
+ * The ledger is the DECISION FOLD since v2.11 (blocks.jsonl is the only
+ * store): rows come from foldDecisions, never from a STATUS.md read — that
+ * file is a generated export, not a source. Ledger content (adding rows,
+ * fixing evidence) is decision work: append decision blocks, or flip rows in
+ * a session — housekeeping counts and reports, it never writes the ledger.
  *
  * Advisory proposals findings (ext/proposals.ts): pending proposals in
  * .majordome/proposals/ (with a stale >7d count) and legacy
@@ -28,8 +33,8 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { doctor } from "./doctor.ts";
 import { DRIFT_RULES, ROADMAP_RE } from "./docdrift.ts";
-import { majordomeDir } from "./store.ts";
-import { loadStatusRows, normalizeStatusRows, statusFile, type StatusRow } from "./status.ts";
+import { majordomeDir, type Block } from "./store.ts";
+import { loadDecisions, foldDecisions, type StatusRow } from "./status.ts";
 import { scanProposals, type ProposalsScan } from "./proposals.ts";
 
 // ── the two fix classes ──────────────────────────────────────────────────────
@@ -39,14 +44,14 @@ export const DANGEROUS_KINDS: readonly DangerKind[] = ["rm", "git", "edit-code"]
 
 export type Proposal =
 	| { safe: true; kind: "reword"; path: string; from: string; to: string; why: string }
-	| { safe: true; kind: "normalize-status"; why: string }
 	| { safe: false; kind: DangerKind; describe: string };
 
 /** Hard path allowlist for the safe class: repo-root-relative doc paths only.
- * No absolute paths, no traversal, nothing outside README/status.json/docs/*.md.
+ * No absolute paths, no traversal, nothing outside README/docs/*.md (the
+ * ledger is not writable by housekeeping — it is generated + decision-owned).
  * The executor checks this IN ADDITION to the kind check — a safe kind aimed
  * at a code file is refused exactly like a dangerous one. */
-const SAFE_PATH_RE = /^(README\.md|STATUS\.md|status\.json|docs\/[^/]+\.md)$/;
+const SAFE_PATH_RE = /^(README\.md|docs\/[^/]+\.md)$/;
 
 export function isSafeDocPath(p: string): boolean {
 	const norm = p.replace(/\\/g, "/");
@@ -58,9 +63,7 @@ export function isSafeDocPath(p: string): boolean {
  * dangerous by default. */
 export function canExecute(p: Proposal): boolean {
 	if (!p.safe) return false;
-	if (p.kind === "reword") return isSafeDocPath(p.path);
-	if (p.kind === "normalize-status") return isSafeDocPath("status.json");
-	return false;
+	return p.kind === "reword" ? isSafeDocPath(p.path) : false;
 }
 
 /** The guard in throwing form, for callers that want a hard failure (tests,
@@ -68,10 +71,7 @@ export function canExecute(p: Proposal): boolean {
  * proposal is reported, never a crash. */
 export function assertExecutable(p: Proposal): void {
 	if (!p.safe) throw new Error(`refused: ${p.kind} is in the dangerous class — listed for your yes, never executed`);
-	if (!canExecute(p)) {
-		const at = p.kind === "reword" ? p.path : "status.json";
-		throw new Error(`refused: "${at}" is outside the safe path allowlist (README.md, status.json, docs/*.md)`);
-	}
+	if (!canExecute(p)) throw new Error(`refused: "${p.kind === "reword" ? p.path : p.kind}" is outside the safe path allowlist (README.md, docs/*.md)`);
 }
 
 // ── safe-fix derivation (known drift signatures → roadmap tense) ────────────
@@ -85,7 +85,7 @@ export function rewordLine(line: string, pattern: RegExp): string | null {
 	const m = re.exec(line);
 	if (!m) return null;
 	if (ROADMAP_RE.test(line)) return null; // already roadmap-marked — nothing to fix
-	const reworded = line.replace(m[0], `planned ${m[0]} (not yet built — see status.json)`);
+	const reworded = line.replace(m[0], `planned ${m[0]} (not yet built — see STATUS.md)`);
 	return reworded === line ? null : reworded;
 }
 
@@ -117,7 +117,7 @@ const SHA_RE = /\b[0-9a-f]{7,40}\b/g;
 
 /** Built rows must cite commits that exist in this repo's history. A cited sha
  * with no prefix match in `git log` is stale — reported, never rewritten
- * (editing evidence is not in the safe class). */
+ * (editing evidence is not housekeeping's job — append a correcting decision). */
 export function staleCommitFindings(rows: StatusRow[], gitShas: string[]): string[] {
 	const out: string[] = [];
 	for (const r of rows) {
@@ -125,16 +125,16 @@ export function staleCommitFindings(rows: StatusRow[], gitShas: string[]): strin
 		const shas = (r.evidence.match(SHA_RE) ?? []).filter((s) => s.length === 7 || s.length === 40);
 		for (const sha of shas) {
 			if (!gitShas.some((h) => h.startsWith(sha))) {
-				out.push(`[gap] STATUS row "${r.item}" cites commit ${sha} — not in git log (update or correct the row)`);
+				out.push(`[gap] ledger row "${r.item}" cites commit ${sha} — not in git log (update or correct the row)`);
 			}
 		}
 	}
 	return out;
 }
 
-/** A mechanism README/CHANGELOG still talks about with no STATUS row covering
+/** A mechanism README/CHANGELOG still talks about with no ledger row covering
  * it — the ledger's own rule is "every discussed deliverable gets exactly one
- * row". Reported for a yes (adding a row is ledger content, not normalization). */
+ * row". Reported for a yes (adding a decision is ledger content, not a fix). */
 export function mechanismGapFindings(readme: string, changelog: string, rows: StatusRow[]): string[] {
 	const out: string[] = [];
 	const haystack = rows.map((r) => `${r.item} ${r.evidence} ${r.substrate}`).join(" ").toLowerCase();
@@ -144,7 +144,7 @@ export function mechanismGapFindings(readme: string, changelog: string, rows: St
 		if (!inReadme && !inChangelog) continue;
 		if (haystack.includes(rule.noun.toLowerCase())) continue;
 		const where = [inReadme ? "README" : null, inChangelog ? "CHANGELOG" : null].filter(Boolean).join(" + ");
-		out.push(`[gap] ${where} mentions "${rule.noun}" with no status.json row — add a row or roadmap-mark the mention`);
+		out.push(`[gap] ${where} mentions "${rule.noun}" with no ledger row — append a decision block or roadmap-mark the mention`);
 	}
 	return out;
 }
@@ -155,9 +155,9 @@ export interface HousekeepInput {
 	cwd: string;
 	/** doctor audit text (live default: doctor()); tests inject */
 	doctorText?: string;
-	/** ledger rows (live default: status.json / MAJORDOME_STATUS_FILE, with a
-	 * legacy STATUS.md fallback for unmigrated repos) */
-	statusRows?: StatusRow[];
+	/** decision blocks for the ledger fold (live default: loadDecisions(cwd)
+	 * — the store read; tests inject to stay hermetic) */
+	decisions?: Block[];
 	readmeText?: string;
 	changelogText?: string;
 	/** full-hex shas from `git log --format=%H` (live default: git) */
@@ -188,7 +188,10 @@ export function collectHousekeep(input: HousekeepInput): HousekeepResult {
 			return undefined as unknown as string;
 		}
 	};
-	const rows = input.statusRows ?? loadStatusRows(cwd);
+	// the ledger is the decision fold — never a STATUS.md read (that file is
+	// the generated export; the store is the only source)
+	const decisions = input.decisions ?? loadDecisions(cwd);
+	const rows = foldDecisions(decisions);
 	const readmeText = input.readmeText ?? read("README.md") ?? "";
 	const changelogText = input.changelogText ?? read("CHANGELOG.md") ?? "";
 
@@ -199,7 +202,7 @@ export function collectHousekeep(input: HousekeepInput): HousekeepResult {
 	// doctor audit (advisory checks incl. doc-drift) — embedded as-is
 	const dt = input.doctorText ?? "";
 	if (dt) for (const l of dt.split("\n")) checkLines.push(l);
-	checkLines.push(`status ledger: ${rows.length} row(s) parsed`);
+	checkLines.push(`status ledger: ${decisions.length} decisions folded, ${rows.length} item(s)`);
 
 	// evidence allowlist per rule, against this repo's ext/ tools/ tree
 	const evidenceFor = (noun: string): boolean => {
@@ -220,9 +223,6 @@ export function collectHousekeep(input: HousekeepInput): HousekeepResult {
 	// (CHANGELOG is deliberately not safe-writable) → reported only
 	proposals.push(...rewordProposalsFor(readmeText, "README.md", evidenceFor));
 	for (const d of input.extraDocs ?? []) proposals.push(...rewordProposalsFor(d.text, d.path, evidenceFor));
-
-	const st = normalizeStatusRows(rows);
-	if (st.changed) proposals.push({ safe: true, kind: "normalize-status", why: `normalized ${st.rows.length} ledger row(s) (status case)` });
 
 	// staleness: built rows citing commits git doesn't know + mechanisms with
 	// no row — both are ledger-content decisions → needs your yes
@@ -268,17 +268,6 @@ export function applySafeFixes(cwd: string, proposals: Proposal[]): string[] {
 			if (!text.includes(p.from)) continue; // already fixed (or changed under us)
 			writeFileSync(full, text.replace(p.from, p.to));
 			fixed.push(`${p.path}: ${p.why}`);
-		} else if (p.kind === "normalize-status") {
-			const full = statusFile(cwd);
-			if (!existsSync(full)) continue;
-			const { rows, changed } = normalizeStatusRows(loadStatusRows(cwd));
-			if (!changed) continue;
-			try {
-				const ledger = JSON.parse(readFileSync(full, "utf8"));
-				ledger.rows = rows;
-				writeFileSync(full, JSON.stringify(ledger, null, 1) + "\n");
-				fixed.push(`status.json: ${p.why}`);
-			} catch { /* unreadable ledger → skip */ }
 		}
 	}
 	return fixed;
@@ -333,7 +322,7 @@ function docsIn(cwd: string): { path: string; text: string }[] {
 	}
 }
 
-/** The /majordome housekeeping command: doctor checks + ledger staleness,
+/** The /majordome housekeeping command: doctor checks + STATUS staleness,
  * safe fixes applied, dangerous class listed for explicit yes. */
 export async function housekeeping(cwd: string = process.cwd(), opts: { apply?: boolean } = {}): Promise<string> {
 	const apply = opts.apply !== false;
@@ -357,7 +346,7 @@ export async function housekeeping(cwd: string = process.cwd(), opts: { apply?: 
 	const needsYes = [...res.needsYes, ...dangerous];
 	const L: string[] = ["╭─ /majordome housekeeping"];
 	for (const l of res.checkLines) L.push(`│ ${l}`);
-	L.push("├─ fixed (safe class — README/status.json/docs only)");
+	L.push("├─ fixed (safe class — README/docs only)");
 	L.push(...(fixed.length ? fixed.map((f) => `│ · ${f}`) : ["│ · nothing to fix"]));
 	L.push("├─ needs your yes (listed, never executed)");
 	L.push(...(needsYes.length ? needsYes.map((f) => `│ · ${f}`) : ["│ · nothing"]));

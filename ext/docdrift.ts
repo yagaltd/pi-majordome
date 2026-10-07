@@ -10,7 +10,7 @@
  * A present-tense claim with no implementation = WARN naming the drift.
  * Roadmap-marked wording (planned / not yet / prototype / …) is exempt from
  * WARN — it gets a note at most, never a failure. The doctor reports; you
- * choose the fix (build it, or mark it planned and give it a status.json row).
+ * choose the fix (build it, or mark it planned and give it a STATUS.md row).
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -108,11 +108,11 @@ export function scanDocDrift(readme: string, hasEvidence: (rule: DriftRule) => b
 		if (present.length) {
 			const at = [...new Set(present.map((h) => `line ${h.n}`))].join(", ");
 			warns.push(
-				`doc drift: README claims "${rule.noun}" in the present tense (${at}) but no implementation exists in ext/ or tools/ — mark it planned (see status.json) or build it`,
+				`doc drift: README claims "${rule.noun}" in the present tense (${at}) but no implementation exists in ext/ or tools/ — mark it planned (see STATUS.md) or build it`,
 			);
 		} else {
 			notes.push(
-				`doc note: "${rule.noun}" appears in README only as roadmap/prototype wording and has no ext/ tools/ implementation — its status.json row should say so`,
+				`doc note: "${rule.noun}" appears in README only as roadmap/prototype wording and has no ext/ tools/ implementation — its STATUS.md row should say so`,
 			);
 		}
 	}

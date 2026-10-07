@@ -16,6 +16,30 @@ import { isValidDocsProfile, type DocsProfile } from "./docsprofile.ts";
 export type BlockStatus = "valid" | "superseded" | "failed" | "speculative";
 export const BLOCK_STATUSES: readonly BlockStatus[] = ["valid", "superseded", "failed", "speculative"];
 
+/** Decision-block ledger statuses (v2.11) — the deliverable-ledger vocabulary,
+ * distinct from the lifecycle vocabulary above. A block is EITHER a memory
+ * block (BlockStatus) OR a decision record (DecisionStatus); the two fields
+ * never mix: decision blocks carry `decision.status`, never `status`. */
+export type DecisionStatus = "built" | "parked" | "dropped" | "pending";
+export const DECISION_STATUSES: readonly DecisionStatus[] = ["built", "parked", "dropped", "pending"];
+
+/** The deliverable-ledger payload of a decision block: one status agreement
+ * about one item, appended — never updated. The FOLD (ext/status.ts) reads
+ * the latest appended block per item as the live row. Evidence/substrate are
+ * stored verbatim from the agreement (a 7-hex commit for built rows). */
+export interface DecisionPayload {
+	item: string;
+	status: DecisionStatus;
+	evidence: string;
+	substrate: string;
+}
+
+/** Session tag all decision blocks share (the ledger channel — not a real
+ * session; list/dash show them under this tag). The per-repo ledger key rides
+ * `sessionFile` (= the repo root the decision belongs to), so @slug house
+ * views fold only that repo's decisions and cold repos stay honest. */
+export const DECISION_SESSION = "decision-ledger";
+
 export interface Block {
 	id: string; // <slug>:<firstTurn>
 	session: string; // cwd slug
@@ -44,6 +68,25 @@ export interface Block {
 	 * a Lessons section from them, consolidation pairs them (same-mistake-twice
 	 * rule). Lenient parse below. */
 	lesson?: boolean;
+	/** Decision-record discriminant (v2.11): "decision" marks a deliverable-
+	 * ledger block (the DECISION_SESSION channel) whose payload lives in
+	 * `decision`. Absent = a memory block. Lenient parse below. */
+	kind?: "decision";
+	/** The ledger payload (item · status · evidence · substrate) — present iff
+	 * kind === "decision". Never the lifecycle `status` field above. */
+	decision?: DecisionPayload;
+	/** Free-form tags (v2.11, decision blocks first): ["decision", "status",
+	 * <slug-of-item>] — grep/display metadata, never recall keys. */
+	tags?: string[];
+}
+
+/** Narrow a block to a well-formed decision record. Lenient: kind/decision
+ * junk reads as a plain memory block (same class as the corrupt-status
+ * parse — the append-only file is never fatal). */
+export function isDecisionBlock(b: Block): b is Block & { kind: "decision"; decision: DecisionPayload } {
+	return b.kind === "decision" && !!b.decision && typeof b.decision.item === "string"
+		&& DECISION_STATUSES.includes(b.decision.status)
+		&& typeof b.decision.evidence === "string" && typeof b.decision.substrate === "string";
 }
 
 export function statusOf(b: { status?: BlockStatus }): BlockStatus {
@@ -123,6 +166,9 @@ export function loadBlocks(): Block[] {
 			// lenient provenance/classification parse: non-boolean junk reads as absent
 			if (b.fromUntrusted !== undefined && typeof b.fromUntrusted !== "boolean") delete b.fromUntrusted;
 			if (b.lesson !== undefined && typeof b.lesson !== "boolean") delete b.lesson;
+			// lenient decision parse: malformed kind/payload reads as a plain block
+			if (b.kind !== undefined && b.kind !== "decision") delete b.kind;
+			if (b.decision !== undefined && !isDecisionBlock(b)) { delete b.decision; delete b.kind; }
 			out.push(b);
 		} catch {
 			// skip corrupt line (append-only file: never fatal)
