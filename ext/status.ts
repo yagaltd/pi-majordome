@@ -287,6 +287,48 @@ export function formatStatus(rows: StatusRow[]): string {
 
 export interface HouseWorkerStatus { name: string; cwd: string; rows: StatusRow[] }
 
+/** The boxed ledger table — the /majordome ledger view. Same fold as status,
+ * presented as a status×items table: one row per status, items wrapped in the
+ * cell. Pure formatting over rows (no I/O) like every renderer here. */
+export function formatLedgerTable(rows: StatusRow[]): string {
+	const order = ["pending", "parked", "built", "dropped"];
+	const groups = new Map<string, string[]>();
+	for (const r of rows) {
+		const g = groups.get(r.status) ?? [];
+		g.push(r.item);
+		groups.set(r.status, g);
+	}
+	if (!groups.size) return "(no ledger — /majordome init to seed one)";
+	const cellW = 96;
+	const wrap = (items: string[]): string[] => {
+		const lines: string[] = [];
+		let cur = "";
+		for (const it of items) {
+			const piece = cur ? `${cur} · ${it}` : it;
+			if (piece.length > cellW && cur) { lines.push(cur); cur = it; }
+			else cur = piece;
+		}
+		if (cur) lines.push(cur);
+		return lines;
+	};
+	const body = order
+		.filter((st) => groups.has(st))
+		.map((st) => ({ label: `${st} (${groups.get(st)!.length})`, lines: wrap(groups.get(st)!) }));
+	const labelW = Math.max(...body.map((b) => b.label.length)) + 2;
+	const top = `┌${"─".repeat(labelW)}┬${"─".repeat(cellW)}┐`;
+	const mid = `├${"─".repeat(labelW)}┼${"─".repeat(cellW)}┤`;
+	const bot = `└${"─".repeat(labelW)}┴${"─".repeat(cellW)}┘`;
+	const out = ["╭─ /majordome ledger", top, `│${"status".padEnd(labelW)}│${"items".padEnd(cellW)}│`, mid];
+	body.forEach((b, i) => {
+		if (i) out.push(mid);
+		b.lines.forEach((line, j) => {
+			out.push(`│${(j === 0 ? b.label : "").padEnd(labelW)}│${line.padEnd(cellW)}│`);
+		});
+	});
+	out.push(bot, "╰─");
+	return out.join("\n");
+}
+
 /** House view: this repo's ledger summary + every registered worker's line
  * (rows count by status, or an honest "no ledger" for repos with no decision
  * blocks of their own). */

@@ -35,7 +35,7 @@ import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
 import { appendEntities, extractEntities, knownEntitiesIn } from "./ext/entities.ts";
-import { statusJoinLines, loadStatusRows, formatStatus, formatHouseStatus, exportStatusMd } from "./ext/status.ts";
+import { statusJoinLines, loadStatusRows, formatStatus, formatLedgerTable, formatHouseStatus, exportStatusMd } from "./ext/status.ts";
 import { loadUserPrefs, renderUserPrefs, setUserPref, resetUserPrefs as resetUserPrefsFile, userFile } from "./ext/userprefs.ts";
 import { housekeeping } from "./ext/housekeep.ts";
 import { appendBlock, appendDecision, blockDims, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
@@ -602,7 +602,7 @@ export default function majordome(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("majordome", {
-		description: "Topic memory dashboard (bare) · list · show · forget · run-the-house (bare) · help · doctor · housekeeping · dash · status · user · orch · map · ingest-docs · docs · export · reindex · stats · log · on/off",
+		description: "Topic memory dashboard (bare) · list · show · forget · run-the-house (bare) · help · doctor · housekeeping · dash · status · ledger · user · orch · map · ingest-docs · docs · export · reindex · stats · log · on/off",
 		handler: async (args, ctx) => {
 			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
 			const cmd = parts[0];
@@ -646,6 +646,10 @@ export default function majordome(pi: ExtensionAPI): void {
 				];
 				notify(lines.join("\n"));
 				return;
+			}
+			if (cmd === "ledger") {
+				// the boxed ledger table — same fold as status, table presentation
+				return notify(formatLedgerTable(loadStatusRows()));
 			}
 			if (cmd === "status") {
 				// --export md: regenerate STATUS.md from the decision fold (the one
