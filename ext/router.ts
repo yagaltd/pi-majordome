@@ -336,7 +336,8 @@ export function confidenceGrill(d: { confidence: number; vague: boolean }): bool
  * The posthook never loops on the answer (round cap lives with the caller). */
 export function grillOptionsLine(subquestions: { q: string }[], confidence: number): string {
 	const opts = subquestions.slice(0, 3).map((s, i) => `${i + 1}) ${s.q}`).join("  ");
-	return `[majordome judge] Multi-topic ask — confidence ${Math.round(confidence * 100)}%. Possible readings: ${opts} (reply with a number or rephrase; soft-proceed on best guess)`;
+	const dflt = subquestions[0]?.q.slice(0, 60) ?? "";
+	return `[majordome judge] Multi-topic ask — confidence ${Math.round(confidence * 100)}%. Possible readings: ${opts} (reply with a number or rephrase; if silent, default = 1: ${dflt})`;
 }
 
 /** One decomposed sub-question's recall output. `result` is null when the

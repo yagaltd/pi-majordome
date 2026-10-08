@@ -75,6 +75,13 @@ the design.
   outputs and react; a synthesis agent composes the artifact. Bounded chain,
   recorded, one artifact out. No new substrate.
 
+## Router rule (grill discipline)
+
+Ambiguous asks route to the matching skill before anyone improvises. Grill only
+material decisions — ≤1-2 questions, each carrying its default (silence =
+the default, stated in the ask). Never ask what's readable (docs, store,
+recent turns).
+
 ## Judge note
 
 Judges are engines, not workers — independence is the point. "Reviewer" is a

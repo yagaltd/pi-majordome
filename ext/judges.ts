@@ -235,6 +235,7 @@ export interface Decomposition {
 
 const DECOMPOSE_INSTRUCTIONS =
 	"Split this user input into at most 3 self-contained sub-questions. For each: q = the self-contained question, tag = 1-2 word topic. " +
+	"Order by likelihood \u2014 the FIRST reading is the default (silence proceeds there). " +
 	"If consecutive questions continue the SAME topic, keep them together (cohesion). " +
 	"Output one sub-question per line as `tag :: question` (3 lines max, no numbering, no commentary).";
 

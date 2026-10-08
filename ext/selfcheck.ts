@@ -1190,6 +1190,10 @@ if (process.argv.includes("--parity")) {
 			const mk = (dec: boolean, repo?: string) => ({ id: "t", session: "s", sessionFile: "/nonexistent/a/b", firstTurn: 1, lastTurn: 2, gist: null, intent: null, dims: {}, tokensHybrid: [], head: "", closedAt: "x", repo, kind: dec ? "decision" : undefined, ...(dec ? { decision: { item: "i", status: "built", evidence: "", substrate: "" } } : {}) }) as any;
 			const sw = sweepRepoStamps([mk(true), mk(false, "junk"), mk(false)]);
 			check("cross-repo: sweep stamps decisions, strips non-decision stamps, passes clean non-decisions (idempotent)", sw.stamped === 1 && sw.stripped === 1 && sw.blocks[0].repo === "/nonexistent/a/b" && sw.blocks[1].repo === undefined && sw.blocks[2].repo === undefined);
+			const { grillOptionsLine } = await import("./router.ts");
+			const line = grillOptionsLine([{ q: "pricing question" }, { q: "design question" }], 0.5);
+			const rolesTxt = await import("node:fs").then((fs) => fs.readFileSync(new URL("../docs/ROLES.md", import.meta.url), "utf8"));
+			check("grill discipline: ask names its silence-default; charter carries the router rule", line.includes("default = 1: pricing question") && rolesTxt.includes("## Router rule (grill discipline)") && rolesTxt.includes("Never ask what's readable"));
 		}
 		}
 	}
@@ -1657,7 +1661,7 @@ if (process.argv.includes("--parity")) {
 	jd.setClassifyFn(async () => ({ model: "canned", answers: { subquestions: [{ q: "a?", tag: "t" }, { q: "b?", tag: "u" }], confidence: 0.4, vague: "no" } }));
 	const decLow = await jd.decomposeQuery("hmm things?");
 	const grill = decLow ? rd.grillOptionsLine(decLow.subquestions, decLow.confidence) : "";
-	check("decompose: confidence <0.9 grills (options + soft-proceed)", decLow ? rd.confidenceGrill(decLow) === true && grill.includes("1)") && grill.includes("(reply with a number or rephrase; soft-proceed on best guess)") : false);
+	check("decompose: confidence <0.9 grills (options + soft-proceed)", decLow ? rd.confidenceGrill(decLow) === true && grill.includes("1)") && grill.includes("if silent, default = 1:") : false);
 	jd.setClassifyFn(async () => ({ model: "canned", answers: { subquestions: [{ q: "a?", tag: "t" }, { q: "b?", tag: "u" }], confidence: 0.99, vague: "yes" } }));
 	const decVague = await jd.decomposeQuery("the thing?");
 	check("decompose: vague forces the grill branch", decVague ? rd.confidenceGrill(decVague) === true : false);
