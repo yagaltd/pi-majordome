@@ -1219,6 +1219,24 @@ if (process.argv.includes("--parity")) {
 				process.env.MAJORDOME_TRAIL_FILE = tmp;
 				const tail = readTrailTail(10);
 				check("judge credit: readTrailTail parses hermetic trail, drops junk lines, fail-open empty", tail.length === 2 && tail[0].ok === false);
+			const { verbatimSurface } = await import("./trail.ts");
+			{
+				const os = await import("node:os");
+				const fs = await import("node:fs");
+				const tmp = join2(os.tmpdir(), `mj-vs-${Date.now()}.jsonl`);
+				const rows = [
+					JSON.stringify({ j: "docsNudge", why: "consolidation decision substring needle appears here at length" }),
+					"not json",
+					JSON.stringify({ j: "consolidate", judge: "typellm", why: "the substring needle lives in this consolidate verdict line" }),
+					JSON.stringify({ j: "dimVector", dims: { a: 1 } }),
+					JSON.stringify({ j: "blockMeta", gist: "another substring needle occurrence for ranking", why: "blockMeta gist needle line with enough text to quote" }),
+				];
+				fs.writeFileSync(tmp, rows.join("\n"));
+				process.env.MAJORDOME_TRAIL_FILE = tmp;
+				const vs = verbatimSurface("substring needle", 3);
+				check("verbatim surface: deterministic match with absolute trail:N, docsNudge flood excluded, junk skipped, cap respected", vs.length === 2 && vs.every((v) => v.n === 3 || v.n === 5) && vs[0].text.includes("needle") && verbatimSurface("zzzunmatchable", 3).length === 0);
+				fs.unlinkSync(tmp);
+			}
 				fs.unlinkSync(tmp);
 			}
 		}

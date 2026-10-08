@@ -32,7 +32,7 @@ import { agentsOffer } from "./ext/agentsmd.ts";
 import { writeOfferProposal, stampDecision } from "./ext/proposals.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
-import { trail, aggregate, judgeStatsLines, setTrailTurn, judgeHealth, readTrailTail } from "./ext/trail.ts";
+import { trail, aggregate, judgeStatsLines, setTrailTurn, judgeHealth, readTrailTail, verbatimSurface } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
 import { appendEntities, extractEntities, knownEntitiesIn } from "./ext/entities.ts";
 import { statusJoinLines, loadStatusRows, loadHouseRows, formatStatus, formatLedgerTable, formatHouseStatus, exportStatusMd } from "./ext/status.ts";
@@ -521,9 +521,14 @@ export default function majordome(pi: ExtensionAPI): void {
 							})).filter((s) => !suppressedResult(s.result, minScore));
 							const mergedTop = subs.length ? mergeDecomposed(subs)[0] ?? null : null;
 							if (mergedTop) {
+								let verbatim = "";
+								try {
+									const vs = verbatimSurface(query, 3);
+									if (vs.length) verbatim = "\n" + vs.map((v) => `verbatim: trail:${v.n} ${v.j} — ${v.text}`).join("\n");
+								} catch { /* verbatim is additive — never breaks routing */ }
 								decomp = {
 									grill: confidenceGrill(dec) ? grillOptionsLine(dec.subquestions, dec.confidence) : null,
-									line: decomposedInjection(subs),
+									line: decomposedInjection(subs) + verbatim,
 									top: mergedTop.block,
 									topScore: mergedTop.score,
 								};

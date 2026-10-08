@@ -46,6 +46,37 @@ export function readTrailTail(n = 40): Record<string, unknown>[] {
 	}
 }
 
+const TRAIL_TEXT_FIELDS = ["gist", "why", "verdict", "reason", "note", "summary", "kind", "intent"] as const;
+
+/** Verbatim recall surface: deterministic token-substring match over the
+ * trail — originals only, cited as trail:N (absolute line number, stable:
+ * the trail is append-only). No judge, no summary. docsNudge excluded
+ * (flood kind); lines without ≥20 chars of quotable text ignored. */
+export function verbatimSurface(query: string, limit = 3): { n: number; j: string; text: string; engine?: string }[] {
+	try {
+		const lines = readFileSync(trailFile(), "utf8").split("\n");
+		const stop = new Set(["the", "and", "was", "for", "with", "that", "this", "what", "are", "still", "they", "them", "does", "how"]);
+		const qtoks = query.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3 && !stop.has(t));
+		if (!qtoks.length) return [];
+		const scored: { n: number; j: string; text: string; engine?: string; score: number }[] = [];
+		lines.forEach((line, i) => {
+			let d: any;
+			try { d = JSON.parse(line); } catch { return; }
+			if (d?.j === "docsNudge") return;
+			const text = TRAIL_TEXT_FIELDS.filter((f) => typeof d?.[f] === "string").map((f) => d[f]).join(" · ");
+			if (text.length < 20) return;
+			const low = text.toLowerCase();
+			let hits = 0;
+			for (const t of qtoks) if (low.includes(t)) hits++;
+			if (!hits) return;
+			scored.push({ n: i + 1, j: d.j, text: text.slice(0, 140), engine: typeof d.judge === "string" ? d.judge : undefined, score: hits * 10 + i / 1e6 });
+		});
+		return scored.sort((a, b) => b.score - a.score).slice(0, limit).map(({ n, j, text, engine }) => ({ n, j, text, engine }));
+	} catch {
+		return [];
+	}
+}
+
 export interface EngineHealth {
 	engine: "typellm" | "jev";
 	calls: number;
