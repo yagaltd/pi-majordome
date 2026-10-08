@@ -32,7 +32,7 @@ import { agentsOffer } from "./ext/agentsmd.ts";
 import { writeOfferProposal, stampDecision } from "./ext/proposals.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
-import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
+import { trail, aggregate, judgeStatsLines, setTrailTurn, judgeHealth, readTrailTail } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
 import { appendEntities, extractEntities, knownEntitiesIn } from "./ext/entities.ts";
 import { statusJoinLines, loadStatusRows, loadHouseRows, formatStatus, formatLedgerTable, formatHouseStatus, exportStatusMd } from "./ext/status.ts";
@@ -57,6 +57,7 @@ interface St {
 	docsWatch: string[]; // resolved per-repo docs profile watch (session-scoped)
 	lastNudgeCount: number;
 	simplifyAsked: boolean; // simplifyVerdict once-per-worker-run guard (MJDX_WORKER sessions)
+	judgeWarned: boolean; // judge-credit: degraded warning currently surfaced (clear on recovery)
 }
 
 /** A decomposed turn's injection payload (query decomposition v1): the
@@ -87,6 +88,7 @@ const st: St = {
 	docsWatch: [...BUILTIN_DOC_WATCH],
 	lastNudgeCount: 0,
 	simplifyAsked: false,
+	judgeWarned: false,
 };
 
 
@@ -394,6 +396,19 @@ export default function majordome(pi: ExtensionAPI): void {
 					if (lastTurn) appendEntities(extractEntities(`${lastTurn.user}\n${lastTurn.text}`), sessionSlug(st.sessionFile), loadMeta().turns ?? 0);
 				}
 			} catch { /* registry never breaks a turn */ }
+			// judge-credit warning (degraded judges surface in UI): trail tail →
+			// per-engine health; degraded engines surface once, clear on recovery.
+			// Absent engines are a state, not a warning. Fail-open.
+			try {
+				const bad = judgeHealth(readTrailTail(40)).filter((h) => h.degraded);
+				if (bad.length && !st.judgeWarned) {
+					st.judgeWarned = true;
+					st.uiCtx.ui.setStatus("majordome", `⚠ judges degraded: ${bad.map((h) => `${h.engine} ${h.calls - h.ok}/${h.calls} fail-open`).join(" · ")} — /majordome stats`);
+				} else if (!bad.length && st.judgeWarned) {
+					st.judgeWarned = false;
+					st.uiCtx.ui.setStatus("majordome", "judges healthy again");
+				}
+			} catch { /* health never breaks a turn */ }
 				if (process.env.MJDX_WORKER) {
 					// push half: one line to the deck inbox — the orchestrator learns we finished
 					const mine = loadBlocks().filter((x) => x.sessionFile === st.sessionFile);
@@ -964,7 +979,9 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 				const all = lastDecisions(100000).reverse(); // oldest → newest
 				const ag = aggregate(); // trail is the single source of truth — no parallel counters
 				const judge = judgeStatsLines(ag);
-				if (!all.length && !judge.length) return notify("no routing decisions logged yet");
+				const health = judgeHealth(readTrailTail(40));
+				const healthLines = health.map((h) => `${h.engine}: ${h.calls} call(s) · ${h.ok} ok · fail ${(h.failRate * 100).toFixed(0)}%${h.degraded ? " ⚠ DEGRADED — judgments failing open" : ""}`);
+				if (!all.length && !judge.length && !healthLines.length) return notify("no routing decisions logged yet");
 				const inj = all.filter((d) => d.injected);
 				const sup = all.filter((d) => !d.injected && d.winner);
 				const none = all.filter((d) => !d.injected && !d.winner);
@@ -985,6 +1002,7 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 					`│ suppressed      ${sup.length}  (avg score ${avg(sup)} — gate rejects below it)`,
 					`│ arms (injected) ${[...arms].map(([a2, n]) => `${a2} ${n}`).join(" · ") || "-"}`,
 					...(judge.length ? ["├─ judge cost (trail aggregate)", ...judge.map((l) => `│ ${l}`)] : []),
+					...(healthLines.length ? ["├─ judge credit (live window)", ...healthLines.map((l) => `│ ${l}`)] : []),
 					...(recallLine ? ["├─ recall feedback (the self-improving loop)", `│ ${recallLine}`] : []),
 					"├─ reading the gate",
 					`│ gate gap: injected avg (${avg(inj)}) vs suppressed avg (${avg(sup)})`,

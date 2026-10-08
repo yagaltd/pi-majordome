@@ -34,6 +34,49 @@ export function setTrailTurn(n: number): void {
 	turnCursor = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
 
+/** Parsed tail of the trail (newest last). Fail-open empty — health is
+ * advisory and must never break a turn. */
+export function readTrailTail(n = 40): Record<string, unknown>[] {
+	try {
+		const txt = readFileSync(trailFile(), "utf8").trimEnd();
+		if (!txt) return [];
+		return txt.split("\n").slice(-n).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean) as Record<string, unknown>[];
+	} catch {
+		return [];
+	}
+}
+
+export interface EngineHealth {
+	engine: "typellm" | "jev";
+	calls: number;
+	ok: number;
+	failRate: number;
+	degraded: boolean;
+}
+
+/** Judge-credit health from the trail tail, per engine. Degraded = failRate
+ * ≥ 0.3 over ≥3 calls, or any calls with zero ok (auth exhaustion). Engines
+ * with no lines in the window are absent (a state, not a warning). Pure. */
+export function judgeHealth(lines: Record<string, unknown>[], window = 10): EngineHealth[] {
+	const by = new Map<string, Record<string, unknown>[]>();
+	for (const l of lines) {
+		const eng = l.judge;
+		if ((eng !== "typellm" && eng !== "jev") || typeof l.ok !== "boolean") continue;
+		if (!by.has(eng)) by.set(eng, []);
+		by.get(eng)!.push(l);
+	}
+	const out: EngineHealth[] = [];
+	for (const [engine, ls] of by) {
+		const tail = ls.slice(-window);
+		const calls = tail.length;
+		const ok = tail.filter((l) => l.ok === true).length;
+		const failRate = calls ? (calls - ok) / calls : 0;
+		const degraded = calls >= 3 ? failRate >= 0.3 : calls > 0 && ok === 0;
+		out.push({ engine: engine as EngineHealth["engine"], calls, ok, failRate, degraded });
+	}
+	return out;
+}
+
 export function trail(judge: string, fields: Record<string, unknown>): void {
 	try {
 		mkdirSync(dirname(trailFile()), { recursive: true });

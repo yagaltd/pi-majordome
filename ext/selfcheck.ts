@@ -1202,6 +1202,25 @@ if (process.argv.includes("--parity")) {
 			const { votesOf } = await import("./panel.ts");
 			const vres = { fact_1: "yes", fact_2: { value: "no" }, fact_3: { value: "yes", confidence: 0.8 } };
 			check("v0.6.6 panel: votesOf reads plain strings and probability objects identically", JSON.stringify(votesOf(vres, 3)) === JSON.stringify([true, false, true]) && votesOf({ fact_1: 42 }, 1) === null);
+			const { judgeHealth, readTrailTail } = await import("./trail.ts");
+			const { join: join2 } = await import("node:path");
+			const L = (engine: string, ok: boolean) => ({ judge: engine, ok });
+			const h1 = judgeHealth([L("typellm", true), L("typellm", true), L("typellm", true), L("typellm", true), L("typellm", true)]);
+			const h2 = judgeHealth([L("typellm", false), L("typellm", false), L("typellm", true)]);
+			const h3 = judgeHealth([L("jev", false), L("jev", true)]);
+			const h4 = judgeHealth([L("jev", false), L("jev", false)]);
+			const h5 = judgeHealth([L("routingIntent", false)]);
+			check("judge credit: healthy stays quiet, ≥3-call failRate ≥0.3 degrades, small-sample needs zero-ok, absent engines are no rows, non-engine lines ignored", h1[0].degraded === false && h1[0].failRate === 0 && h2[0].degraded === true && h3[0].degraded === false && h4[0].degraded === true && h5.length === 0);
+			{
+				const os = await import("node:os");
+				const fs = await import("node:fs");
+				const tmp = join2(os.tmpdir(), `mj-trail-${Date.now()}.jsonl`);
+				fs.writeFileSync(tmp, [JSON.stringify({ j: "shapeVerdict", judge: "typellm", ok: false }), "not json", JSON.stringify({ j: "x" })].join("\n"));
+				process.env.MAJORDOME_TRAIL_FILE = tmp;
+				const tail = readTrailTail(10);
+				check("judge credit: readTrailTail parses hermetic trail, drops junk lines, fail-open empty", tail.length === 2 && tail[0].ok === false);
+				fs.unlinkSync(tmp);
+			}
 		}
 		}
 	}

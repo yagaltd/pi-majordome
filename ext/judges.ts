@@ -1001,6 +1001,11 @@ export function hasStreamFn(): boolean {
 	return streamFn !== null;
 }
 /** Called by the extension factory once a context exposes modelRegistry. */
+/** Wired-state for the judge-credit surface: absent ≠ degraded. */
+export function classifyWired(): boolean {
+	return classifyFn !== null;
+}
+
 export function setClassifyFn(fn: ClassifyFn): void {
 	classifyFn = fn;
 }
