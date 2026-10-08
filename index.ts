@@ -16,7 +16,7 @@
  * is plain JSONL under ~/.pi/majordome/ — inspectable, purgeable, exportable.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync , existsSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync , existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
@@ -883,43 +883,68 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 					return;
 				}
 				if (!da) {
-					// bulk door: survey the watched file docs, compose ONE combined
-					// digest of everything stale/missing, send ONE agent instruction.
-					// STATUS is excluded (it is our own generated export).
+					// bulk door v2 — attribution-aware, ask-first:
+					// group this session's blocks by their attributed repo, then per
+					// repo × watched doc: cursor = the doc FILE's own mtime (docs
+					// changed after it → pending; missing doc → full history). The
+					// send is ASK-FIRST (confirm) — a bulk doc write never ships
+					// without the captain's yes.
 					const metaB = loadMeta();
-					const slugB = st.sessionFile ? sessionSlug(st.sessionFile) : "";
-					const candidates = [...new Set([...st.docsWatch, "README", "CHANGELOG"])].filter((d) => d !== "STATUS" && !d.endsWith("/") && (existsSync(join(process.cwd(), d)) || ["README", "CHANGELOG"].includes(d)));
+					const sessionRepo = repoOf(st.sessionFile ?? process.cwd());
+					const byRepo = new Map<string, typeof st.blocks>();
+					for (const blk of st.blocks) {
+						if (blk.sessionFile !== st.sessionFile) continue;
+						const r = blk.repo ?? sessionRepo;
+						if (!byRepo.has(r)) byRepo.set(r, []);
+						byRepo.get(r)!.push(blk);
+					}
+					const fileDocs = [...new Set([...st.docsWatch, "README", "CHANGELOG"])].filter((d) => !d.endsWith("/") && d !== "STATUS");
 					const survey: string[] = [];
 					const sections: string[] = [];
-					const staleKinds: string[] = [];
-					for (const doc of candidates) {
-						const cursor = cursorForDoc(metaB.docsCursor, slugB, doc) ?? "";
-						const scoped = filterBlocks(st.blocks, { slug: slugB, since: cursor });
-						const label = cursor ? `cursor ${cursor.slice(0, 10)}` : "never (full history)";
-						survey.push(`${doc}: ${scoped.length} block(s) pending · ${label}`);
-						if (scoped.length) {
-							const composed = composeKind(doc.toLowerCase(), scoped);
-							if (composed) {
-								sections.push(`## ${doc} (digest of ${scoped.length} blocks since ${cursor.slice(0, 10) || "the beginning"}\n\n${composed.digest}`);
-								staleKinds.push(doc);
+					const plan: { repo: string; doc: string; kind: string; scoped: Block[] }[] = [];
+					for (const [repo, blocks] of byRepo) {
+						const label = repo === sessionRepo ? `${repo} (this session)` : repo;
+						for (const doc of fileDocs) {
+							const docPath = join(repo, doc);
+							const exists = existsSync(docPath);
+							let cursor = metaB.docsCursor[cursorKey(repo, doc)] ?? "";
+							if (!cursor && exists) {
+								try { cursor = new Date(statSync(docPath).mtimeMs).toISOString(); } catch { cursor = ""; }
+							}
+							const pending = blocks.filter((b) => !cursor || b.closedAt > cursor);
+							if (exists) survey.push(`${label} · ${doc}: ${pending.length} block(s) since ${cursor ? cursor.slice(0, 10) : "never"}${pending.length ? "  ← stale" : "  ✓ current"}`);
+							if (pending.length) {
+								const composed = composeKind(doc.toLowerCase(), pending);
+								if (composed) {
+									sections.push(`## ${repo} · ${doc} — digest of ${pending.length} blocks\n\n${composed.digest}`);
+									plan.push({ repo, doc, kind: doc.toLowerCase(), scoped: pending });
+								}
+							} else if (!exists) {
+								survey.push(`${label} · ${doc}: MISSING — ${blocks.length} block(s) available for a first write`);
 							}
 						}
 					}
-					const surveyText = `docs survey — ${candidates.length} watched:\n${survey.map((s) => `  ${s}`).join("\n") || "  (none)"}`;
-					if (!staleKinds.length) return notify(`${surveyText}\n\nall watched docs are current — nothing to build`);
-					const combined = sections.join("\n\n");
+					const surveyText = survey.length ? `docs survey (by attributed repo):\n${survey.map((s) => `  ${s}`).join("\n")}` : "no blocks in this session yet — nothing to survey";
+					if (!plan.length) return notify(`${surveyText}\n\nall attributed repos are docs-current — nothing to build`);
+					const combined = plan.map((pl) => sections.find((s) => s.startsWith(`## ${pl.repo} · ${pl.doc}`)) ?? "").filter(Boolean).join("\n\n");
 					const dir = join(majordomeDir(), "exports");
 					mkdirSync(dir, { recursive: true });
 					const outFile = join(dir, `docs-bulk-${new Date().toISOString().slice(0, 10)}.md`);
-					writeFileSync(outFile, `# majordome docs bulk digest \u2014 ${staleKinds.join(" + ")}\n\n${combined}\n`);
-					const msg = `Docs are stale/missing for: ${staleKinds.join(", ")}. Using the grounded digest below (also saved: ${outFile}), write/update EACH doc in place, following its existing structure and tone. Do not add sections the project doesn't use.\n\n${combined}`;
+					writeFileSync(outFile, `# majordome docs bulk digest \u2014 ${plan.map((p) => `${p.repo}/${p.doc}`).join(", ")}\n\n${combined}\n`);
+					const askLine = plan.map((p) => `${p.repo}/${p.doc}`).join(", ");
+					if (ctx.hasUI && !(await ctx.ui.confirm("majordome docs — bulk build", `Build/update: ${askLine}?\n(one grounded digest, agent writes each doc in place, following its existing structure)`))) {
+						return notify(`${surveyText}\n\ndeclined — digest saved → ${outFile} (re-run when ready)`);
+					}
+					if (!ctx.hasUI) return notify(`${surveyText}\n\nplan: ${askLine}\ndigest saved → ${outFile}\nheadless: re-run with "go" to send`);
+					const combined2 = combined;
+					const msg = `Docs are stale/missing for: ${askLine}. Using the grounded digest below (also saved: ${outFile}), write/update EACH doc in place, following its existing structure and tone. Do not add sections the project doesn't use.\n\n${combined2}`;
 					const send = (pi as any).sendUserMessage ?? (pi as any).sendMessage;
 					if (typeof send !== "function") return notify(`${surveyText}\ndigest saved → ${outFile}\n(could not send to agent — hand it over manually)`);
 					try {
 						await send(msg);
-						notify(`${surveyText}\nsent to the agent — it will write ${staleKinds.join(" + ")} in one pass.`);
+						notify(`confirmed — sent to the agent: ${askLine}. It writes each doc in place.`);
 					} catch (e) {
-						notify(`${surveyText}\n(send failed: ${String((e as Error).message ?? e).slice(0, 60)})\ndigest saved → ${outFile}`);
+						notify(`digest saved → ${outFile}\n(send failed: ${String((e as Error).message ?? e).slice(0, 60)})`);
 					}
 					return;
 				}
