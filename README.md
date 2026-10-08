@@ -198,6 +198,16 @@ The consolidation-era build, one line each (full context in
 - **Karpathy rung ladder (shape route)** — prose is rung 1; diagrams reserved
   for genuinely structural content; v0.6.6 probabilities add a mechanical
   confidence <0.6 → default downgrade.
+- **docs naming + bulk door** — bare `docs gen` surveys the watched docs
+  (cursor age, pending blocks) and builds all stale ones in one pass
+  (single digest, single agent instruction); `docs gen <kind>` per-doc;
+  `docs pull` ingests; legacy bare forms are unlisted aliases.
+- **cross-repo docs attribution** — `dominantRepo` stamps implementation
+  blocks with the WORK's repo (path votes, git-root canonicalized) and the
+  docsVerdict judges against that repo: majordome features built from any
+  session are majordome-docs-worthy by construction — the nudge fires for
+  the repo the work belongs to, not the session's.
+
 - **docs naming** — `docs gen <kind>` composes, `docs pull` ingests; the
   legacy bare forms are unlisted aliases.
 
