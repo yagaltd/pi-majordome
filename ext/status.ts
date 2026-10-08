@@ -301,12 +301,19 @@ export function formatLedgerTable(rows: StatusRow[]): string {
 	if (!groups.size) return "(no ledger — /majordome init to seed one)";
 	const cellW = 96;
 	const wrap = (items: string[]): string[] => {
+		// hard-wrap: items longer than the cell split across lines (a border that
+		// never breaks beats pretty joining — padEnd cannot truncate)
 		const lines: string[] = [];
 		let cur = "";
-		for (const it of items) {
-			const piece = cur ? `${cur} · ${it}` : it;
-			if (piece.length > cellW && cur) { lines.push(cur); cur = it; }
-			else cur = piece;
+		for (const raw of items) {
+			const chunks: string[] = [];
+			for (let i = 0; i < raw.length; i += cellW) chunks.push(raw.slice(i, i + cellW));
+			chunks.forEach((chunk, c) => {
+				const sep = cur && c === 0 ? " · " : "";
+				const piece = cur + sep + chunk;
+				if (piece.length > cellW && cur) { lines.push(cur); cur = chunk; }
+				else cur = piece;
+			});
 		}
 		if (cur) lines.push(cur);
 		return lines;
