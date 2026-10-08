@@ -1096,23 +1096,6 @@ if (process.argv.includes("--parity")) {
 			const tri = pr.parseTriage({ row_1: { worthy: { value: true, confidence: 0.9 }, path: "grill", why: "multi-system scope" } }, [{ item: "x" }]);
 			const tr2 = pr.parseTriage({ row_1: { worthy: false, path: "research", why: "small" } }, [{ item: "x" }]);
 			check("triage: parseTriage reads probability + plain shapes; unworthy coerces path to none; null fail-open", tri?.[0]?.worthy === true && tri?.[0]?.path === "grill" && tri?.[0]?.confidence === 0.9 && tr2?.[0]?.path === "none" && pr.parseTriage(null, []) === null);
-			const { triagePlan } = pr;
-			const fam = (item: string) => (item.includes("workflow") ? 3 : 1);
-			const rows = [
-				{ item: "workflow library", status: "pending" },
-				{ item: "workflow engine", status: "pending" },
-				{ item: "sqlite engine", status: "pending" },
-				{ item: "docs naming", status: "parked" },
-			];
-			// rule 1: untagged rows judge (all four on a fresh store)
-			const fresh = triagePlan(rows, {}, fam);
-			// rule 2: worthy rows INHERIT even when their family grows (3 → 4)
-			const grown = triagePlan(rows, { "workflow library": { worthy: true, path: "research", why: "x", famSize: 3, at: "t" } }, (it) => (it.includes("workflow") ? 4 : 1));
-			// rule 3: none-tagged rows re-judge ONLY when their family grew (1 → 2)
-			const grew = triagePlan(rows, { "sqlite engine": { worthy: false, path: "none", why: "small", famSize: 1, at: "t" } }, (it) => (it.includes("sqlite") ? 2 : 1));
-			// rule 4: none-tagged with an UNCHANGED family stays inherited (steady state)
-			const steady = triagePlan(rows, { "sqlite engine": { worthy: false, path: "none", why: "small", famSize: 1, at: "t" } }, fam);
-			check("triage plan: untagged judge · worthy inherit through family growth · none re-judges only on group formation · steady state inherits", fresh.toJudge.length === 4 && grown.toJudge.length === 3 && grown.inherited === 1 && grew.toJudge.some((r) => r.item === "sqlite engine") && steady.toJudge.length === 3 && steady.inherited === 1);
 		} finally {
 			if (prevDir === undefined) delete process.env.MAJORDOME_DIR;
 			else process.env.MAJORDOME_DIR = prevDir;

@@ -29,13 +29,13 @@ import { ingestDocs } from "./ext/ingest_docs.ts";
 import { filterBlocks, listKinds, composeKind } from "./ext/docs.ts";
 import { initRepo } from "./ext/init.ts";
 import { agentsOffer } from "./ext/agentsmd.ts";
-import { writeOfferProposal, stampDecision, writeProposal, listProposals, triagePending, triageAuto, triageMarkerLines, type TriageRow } from "./ext/proposals.ts";
+import { writeOfferProposal, stampDecision, writeProposal, listProposals, triagePending, triageAuto, } from "./ext/proposals.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn, judgeHealth, readTrailTail, verbatimSurface } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
 import { appendEntities, extractEntities, knownEntitiesIn } from "./ext/entities.ts";
-import { statusJoinLines, loadStatusRows, loadHouseRows, formatStatus, formatLedgerTable, formatHouseStatus, exportStatusMd } from "./ext/status.ts";
+import { statusJoinLines, loadStatusRows, loadHouseRows, formatStatus, formatLedgerTable, formatHouseStatus, exportStatusMd, topicOf } from "./ext/status.ts";
 import { loadUserPrefs, renderUserPrefs, setUserPref, resetUserPrefs as resetUserPrefsFile, userFile } from "./ext/userprefs.ts";
 import { housekeeping } from "./ext/housekeep.ts";
 import { appendBlock, appendDecision, blockDims, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
@@ -58,7 +58,6 @@ interface St {
 	lastNudgeCount: number;
 	simplifyAsked: boolean; // simplifyVerdict once-per-worker-run guard (MJDX_WORKER sessions)
 	judgeWarned: boolean; // judge-credit: degraded warning currently surfaced (clear on recovery)
-	triage: TriageRow[] | null; // proposal-worthiness tags (session cache — /majordome triage refreshes)
 }
 
 /** A decomposed turn's injection payload (query decomposition v1): the
@@ -90,7 +89,6 @@ const st: St = {
 	lastNudgeCount: 0,
 	simplifyAsked: false,
 	judgeWarned: false,
-	triage: null,
 };
 
 
@@ -694,15 +692,8 @@ export default function majordome(pi: ExtensionAPI): void {
 			if (cmd === "ledger") {
 				// the boxed ledger table — same fold as status, table presentation.
 				// `house` = every repo's blocks unfiltered; `@slug` = one worker's repo.
-				let markers: string[] = [];
-				try {
-					const scope = a === "house"
-						? loadHouseRows().filter((r) => r.status === "pending" || r.status === "parked")
-						: loadStatusRows().filter((r) => r.status === "pending" || r.status === "parked");
-					const t = await triageAuto({ rows: scope });
-					if (t) markers = triageMarkerLines(t.tags);
-				} catch { /* triage is advisory — the table renders regardless */ }
-				if (a === "house") return notify(formatLedgerTable(loadHouseRows()) + (markers.length ? `\n${markers.join("\n")}` : ""));
+
+				if (a === "house") return notify(formatLedgerTable(loadHouseRows()));
 				if (a) {
 					const slug = a.replace(/^@/, "");
 					const w = resolveWorkerRef(slug, listWorkers());
@@ -710,8 +701,7 @@ export default function majordome(pi: ExtensionAPI): void {
 					return notify(`@${w.name} (${w.cwd})
 ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 				}
-				const table = formatLedgerTable(loadStatusRows());
-				return notify(table + (markers.length ? `\n${markers.join("\n")}` : ""));
+				return notify(formatLedgerTable(loadStatusRows()));
 			}
 			if (cmd === "proposal") {
 				// store-backed proposals: list · show <id> · decide <id> approve|reject · add
@@ -738,13 +728,26 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 				return notify("proposal: list · show <id> · decide <id> approve|reject [reason] · add <kind> <title>");
 			}
 			if (cmd === "triage") {
-				// batched proposal-worthiness over the pending+parked ledger — ONE
-				// judge call for the un-judged rows only (incremental, meta-persisted)
-				notify("triage: judging new/changed rows…");
-				triageAuto().then((r) => {
-					st.triage = null; // markers render from the persisted meta tags
-					const lines = triageMarkerLines(r.tags);
-					notify(`${r.judged} judged · ${r.inherited} inherited\n${lines.length ? lines.join("\n") : "no pending or parked row needs a proposal"}`);
+				// per-item, on-demand: judge ONE idea (or its small family) in a
+				// focused call — the batched 26-row surface was reverted (cross-
+				// contaminated whys + latency + detached list). No auto-trigger.
+				if (!a) return notify("triage <idea-substring> — judge one idea (and its family) for proposal-worthiness + establishment path");
+				const rows = loadHouseRows().filter((r) => (r.status === "pending" || r.status === "parked") && r.item.toLowerCase().includes(a.toLowerCase()));
+				if (!rows.length) return notify(`no pending/parked row matches "${a}"`);
+				const fam = topicOf(rows[0].item);
+				const scope = rows.slice(0, 4);
+				notify(`triage: judging ${scope.length} row(s) [${fam} family]…`);
+				triagePending(scope.map((r) => ({ item: r.item }))).then((parsed) => {
+					if (!parsed) return notify("triage unavailable (no typellm key or transport failure)");
+					const out = parsed.map((t, j) => {
+						if (!t.worthy) return `· none: ${t.item.slice(0, 60)} — ${t.why} (ledger row + go stays the whole process)`;
+						const plan = t.path === "research" ? "I research first, then draft the proposal"
+							: t.path === "inspect" ? "I inspect the codebase first, then draft the proposal"
+							: t.path === "grill" ? "we grill the known-unknowns together first, then I draft the proposal"
+							: "proceeds as a plain ledger row + go";
+						return `ⓟ ${t.path.toUpperCase()}: ${t.item.slice(0, 60)} — ${t.why}\n  → ${plan}`;
+					});
+					notify(out.join("\n"));
 				}).catch(() => notify("triage failed — advisory only"));
 				return;
 			}
