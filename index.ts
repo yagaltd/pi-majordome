@@ -32,6 +32,7 @@ import { agentsOffer } from "./ext/agentsmd.ts";
 import { writeOfferProposal, stampDecision, writeProposal, listProposals, triagePending, } from "./ext/proposals.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
+import { execFileSync } from "node:child_process";
 import { trail, aggregate, judgeStatsLines, setTrailTurn, judgeHealth, readTrailTail, verbatimSurface, pushbackHit, frustrationEscalated } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
 import { appendEntities, extractEntities, knownEntitiesIn } from "./ext/entities.ts";
@@ -901,9 +902,12 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 					const fileDocs = [...new Set([...st.docsWatch, "README", "CHANGELOG"])].filter((d) => !d.endsWith("/") && d !== "STATUS");
 					const survey: string[] = [];
 					const sections: string[] = [];
-					const plan: { repo: string; doc: string; kind: string; scoped: Block[] }[] = [];
+					const plan: { repo: string; doc: string; kind: string; scoped: Block[]; grounding: string }[] = [];
+					const repoInstructions: string[] = [];
 					for (const [repo, blocks] of byRepo) {
 						const label = repo === sessionRepo ? `${repo} (this session)` : repo;
+						const hasAGENTS = existsSync(join(repo, "AGENTS.md"));
+						if (hasAGENTS) repoInstructions.push(repo);
 						for (const doc of fileDocs) {
 							const docPath = join(repo, doc);
 							const exists = existsSync(docPath);
@@ -913,17 +917,40 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 							}
 							const pending = blocks.filter((b) => !cursor || b.closedAt > cursor);
 							if (exists) survey.push(`${label} · ${doc}: ${pending.length} block(s) since ${cursor ? cursor.slice(0, 10) : "never"}${pending.length ? "  ← stale" : "  ✓ current"}`);
+							// grounding chain: memory digest → git log (the repo's own
+							// history IS a changelog) → structure scan. All inputs
+							// deterministic; the agent composes.
 							if (pending.length) {
 								const composed = composeKind(doc.toLowerCase(), pending);
 								if (composed) {
-									sections.push(`## ${repo} · ${doc} — digest of ${pending.length} blocks\n\n${composed.digest}`);
-									plan.push({ repo, doc, kind: doc.toLowerCase(), scoped: pending });
+									sections.push(`## ${repo} · ${doc} — [grounding: memory · ${pending.length} blocks]\n\n${composed.digest}`);
+									plan.push({ repo, doc, kind: doc.toLowerCase(), scoped: pending, grounding: "memory" });
 								}
 							} else if (!exists) {
-								survey.push(`${label} · ${doc}: MISSING — ${blocks.length} block(s) available for a first write`);
+								let gitDigest = "";
+								let grounding = "codebase scan";
+								try {
+									const since = cursor || "1970-01-01";
+									gitDigest = execFileSync("git", ["-C", repo, "log", `--since=${since}`, "--oneline", "--no-decorate"], { encoding: "utf8" }).trim();
+								} catch { /* not a git repo → scan-only */ }
+								if (doc === "CHANGELOG" && gitDigest) grounding = `git log · ${gitDigest.split("\n").length} commits`;
+								sections.push(`## ${repo} · ${doc} — [grounding: ${grounding}${gitDigest ? `\n\ncommit history:\n${gitDigest.slice(0, 2500)}` : ""}]\n\n(structure inventory follows in the full survey)`);
+								plan.push({ repo, doc, kind: doc.toLowerCase(), scoped: [], grounding });
+								survey.push(`${label} · ${doc}: MISSING — will be drafted from ${grounding}`);
+							} else if (doc === "CHANGELOG") {
+								let recent = "";
+								try { recent = execFileSync("git", ["-C", repo, "log", `--since=${cursor}`, "--oneline", "--no-decorate"], { encoding: "utf8" }).trim(); } catch { /* not git */ }
+								if (recent) {
+									sections.push(`## ${repo} · ${doc} — [grounding: git log since last doc touch]\n\ncommits since ${cursor.slice(0, 10)}:\n${recent.slice(0, 2500)}`);
+									plan.push({ repo, doc, kind: doc.toLowerCase(), scoped: [], grounding: "git log" });
+									survey.push(`${label} · ${doc}: 0 memory blocks but ${recent.split("\n").length} commit(s) since the doc's last touch  ← stale vs git`);
+								}
 							}
 						}
 					}
+					const instructionsNote = repoInstructions.length
+						? `Following AGENTS.md conventions in: ${repoInstructions.join(", ")}.`
+						: `No AGENTS.md doc conventions found in the repos — suggest standard structure; the captain can validate/edit, and repo conventions register in AGENTS.md (global style stays in user.md).`;
 					const surveyText = survey.length ? `docs survey (by attributed repo):\n${survey.map((s) => `  ${s}`).join("\n")}` : "no blocks in this session yet — nothing to survey";
 					if (!plan.length) return notify(`${surveyText}\n\nall attributed repos are docs-current — nothing to build`);
 					const combined = plan.map((pl) => sections.find((s) => s.startsWith(`## ${pl.repo} · ${pl.doc}`)) ?? "").filter(Boolean).join("\n\n");
@@ -931,8 +958,8 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 					mkdirSync(dir, { recursive: true });
 					const outFile = join(dir, `docs-bulk-${new Date().toISOString().slice(0, 10)}.md`);
 					writeFileSync(outFile, `# majordome docs bulk digest \u2014 ${plan.map((p) => `${p.repo}/${p.doc}`).join(", ")}\n\n${combined}\n`);
-					const askLine = plan.map((p) => `${p.repo}/${p.doc}`).join(", ");
-					if (ctx.hasUI && !(await ctx.ui.confirm("majordome docs — bulk build", `Build/update: ${askLine}?\n(one grounded digest, agent writes each doc in place, following its existing structure)`))) {
+					const askLine = plan.map((p) => `${p.repo}/${p.doc} [${p.grounding}]`).join(", ");
+					if (ctx.hasUI && !(await ctx.ui.confirm("majordome docs — bulk build", `Build/update: ${askLine}?\n${instructionsNote}\n(each doc written in place, following its existing structure)`))) {
 						return notify(`${surveyText}\n\ndeclined — digest saved → ${outFile} (re-run when ready)`);
 					}
 					if (!ctx.hasUI) return notify(`${surveyText}\n\nplan: ${askLine}\ndigest saved → ${outFile}\nheadless: re-run with "go" to send`);
