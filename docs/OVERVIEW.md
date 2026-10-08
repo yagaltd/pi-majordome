@@ -223,8 +223,7 @@ surface layer either way (panes can watch Durable threads).
   makes mid-context edits cheap -> revisit deferred mid-slot promotion
   when SCR-style serving spreads; (d) eval: Harbor tasks (BCP, EdgeBench,
   24h agent-swarm) + ContextBench (coming soon) for end-to-end
-  majordome vs pi-clm (`npm:@lolipopshock/pi-clm`) vs both-together —
-  the swarm task is the v2 orchestrator scenario.
+majordome as the v2 orchestrator (pi-clm evaluated and removed — its mirror-edit role judged redundant; removal documented in the changelog).
   - **One-pager decision**: composed first, vcc-style (~/Documents/vibe/pi-vcc
     proves algorithmic extraction: deterministic, zero-cost, 5 semantic
     sections) — but over GIST atoms (already semantic from block close), so
