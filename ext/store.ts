@@ -27,6 +27,18 @@ export const DECISION_STATUSES: readonly DecisionStatus[] = ["built", "parked", 
  * about one item, appended — never updated. The FOLD (ext/status.ts) reads
  * the latest appended block per item as the live row. Evidence/substrate are
  * stored verbatim from the agreement (a 7-hex commit for built rows). */
+export type ProposalStatus = "pending" | "approved" | "rejected" | "superseded";
+export interface ProposalPayload {
+	id: string; // stable slug — the fold key (latest per id wins)
+	title: string;
+	body: string;
+	status: ProposalStatus;
+	path?: ProposalPath; // establishment path from triage: research/inspect/grill
+	created: string;
+	decided?: string; // ISO when approved/rejected/superseded
+}
+export type ProposalPath = "research" | "inspect" | "grill";
+
 export interface DecisionPayload {
 	item: string;
 	status: DecisionStatus;
@@ -77,7 +89,7 @@ export interface Block {
 	/** Decision-record discriminant (v2.11): "decision" marks a deliverable-
 	 * ledger block (the DECISION_SESSION channel) whose payload lives in
 	 * `decision`. Absent = a memory block. Lenient parse below. */
-	kind?: "decision";
+	kind?: "decision" | "proposal";
 	/** The ledger payload (item · status · evidence · substrate) — present iff
 	 * kind === "decision". Never the lifecycle `status` field above. */
 	decision?: DecisionPayload;
@@ -89,6 +101,12 @@ export interface Block {
 /** Narrow a block to a well-formed decision record. Lenient: kind/decision
  * junk reads as a plain memory block (same class as the corrupt-status
  * parse — the append-only file is never fatal). */
+export function isProposalBlock(b: Block): b is Block & { kind: "proposal"; proposal: ProposalPayload } {
+	return b.kind === "proposal" && !!b.proposal && typeof b.proposal.id === "string"
+		&& typeof b.proposal.title === "string" && typeof b.proposal.body === "string"
+		&& ["pending", "approved", "rejected", "superseded"].includes(b.proposal.status);
+}
+
 export function isDecisionBlock(b: Block): b is Block & { kind: "decision"; decision: DecisionPayload } {
 	return b.kind === "decision" && !!b.decision && typeof b.decision.item === "string"
 		&& DECISION_STATUSES.includes(b.decision.status)
@@ -173,8 +191,9 @@ export function loadBlocks(): Block[] {
 			if (b.fromUntrusted !== undefined && typeof b.fromUntrusted !== "boolean") delete b.fromUntrusted;
 			if (b.lesson !== undefined && typeof b.lesson !== "boolean") delete b.lesson;
 			// lenient decision parse: malformed kind/payload reads as a plain block
-			if (b.kind !== undefined && b.kind !== "decision") delete b.kind;
+			if (b.kind !== undefined && b.kind !== "decision" && b.kind !== "proposal") delete b.kind;
 			if (b.decision !== undefined && !isDecisionBlock(b)) { delete b.decision; delete b.kind; }
+			if (b.proposal !== undefined && !isProposalBlock(b)) { delete b.proposal; delete b.kind; }
 			out.push(b);
 		} catch {
 			// skip corrupt line (append-only file: never fatal)

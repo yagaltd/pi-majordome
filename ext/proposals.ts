@@ -1,68 +1,38 @@
-/**
- * PROPOSALS — .majordome/proposals/ lifecycle. This header IS the format
- * spec (one home; the selfcheck pins it by roundtrip).
- *
- * A proposal is a plain-markdown file: a small key:value metadata header (no
- * YAML dep), a blank line, then the body —
- *
- *   kind: agents-scaffold        what is proposed (e.g. agents-scaffold |
- *                                agents-augment; a lowercase slug)
- *   status: pending              pending | approved | rejected
- *   added: 2025-10-06            YYYY-MM-DD — the decision clock starts here
- *   source: init                 which surface composed it
- *
- *   # Title
- *
- *   body...
- *
- * After a decision, stampDecision adds three keys (reason optional):
- *   decided: 2025-10-08          YYYY-MM-DD of the stamp
- *   by: butler                   who decided
- *   reason: why
- *
- * STATE IS METADATA, NOT FOLDERS: the directory stays flat — no approved/,
- * no rejected/ — the status lives in the header key and the filename never
- * changes, so history is one `ls` away.
- *
- * DECISIONS ARE BUTLER-STAMPED, NEVER AUTO: housekeeping counts pending and
- * stale proposals as advisory findings; it cannot stamp a decision —
- * deciding is the captain's. stampDecision updates ONLY the metadata keys:
- * the body is byte-identical after a stamp. Future body edits are APPEND-
- * ONLY REVISIONS — append a `revised:` metadata key plus a revision section;
- * never overwrite what was proposed.
- *
- * Path: .majordome/proposals/YYYY-MM-DD-<kind>.md; a same-day same-kind
- * collision takes a -2, -3, ... suffix.
- *
- * Leaf module: fs/path only — the init write boundary (index.ts,
- * tools/init-cli.ts) and ext/housekeep.ts (advisory scan) import it without
- * cycles; ext/agentsmd.ts composes offers and stays write-free (type-only
- * import here). Fail-open: an unreadable proposals dir reads as empty —
- * scanning never throws into the caller.
- */
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+/** Proposals: formal change requests awaiting the captain. STORE-BACKED
+ * (kind=proposal blocks — the same append-only discipline as decisions; the
+ * files-as-artifacts compromise is replaced, see the ledger row). The
+ * historical file API surface is preserved signature-for-signature — callers
+ * (housekeep, index, init-cli) keep compiling; `path`-style handles are now
+ * virtual (`proposal:<id>`). Also hosts the batched triage judgment that
+ * tags pending ledger rows as proposal-worthy. One owning module for the
+ * whole proposals domain. */
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentsOffer } from "./agentsmd.ts";
+import { appendBlock, isProposalBlock, loadBlocks, type Block, type ProposalPayload, type ProposalStatus } from "./store.ts";
+import { loadKey } from "./judges.ts";
+import { loadStatusRows, topicOf } from "./status.ts";
+import { generate } from "./judges.ts";
 
-export type ProposalStatus = "pending" | "approved" | "rejected";
+export type ProposalStatus = "pending" | "approved" | "rejected" | "superseded";
 export type DecisionStatus = "approved" | "rejected"; // a decision is never "pending"
-export const PROPOSAL_STATUSES: readonly ProposalStatus[] = ["pending", "approved", "rejected"];
+export const PROPOSAL_STATUSES: readonly ProposalStatus[] = ["pending", "approved", "rejected", "superseded"];
 
 export interface ProposalMeta {
-	kind: string;
+	kind: string; // the proposal slug (stable id)
 	status: ProposalStatus;
 	added: string; // YYYY-MM-DD
 	source: string;
-	decided?: string; // after stampDecision
+	decided?: string;
 	by?: string;
 	reason?: string;
 }
 
 export interface ProposalEntry {
-	path: string; // absolute
-	file: string; // YYYY-MM-DD-<kind>[-N].md (never renamed)
+	path: string; // virtual handle: proposal:<id>
+	file: string; // display identity: <created-date>-<id>.md
 	meta: ProposalMeta;
-	title: string; // the body's first "# ..." line
+	title: string;
 	body: string;
 }
 
@@ -73,16 +43,15 @@ export interface Decision {
 }
 
 export function todayISO(now = new Date()): string {
-	return now.toISOString().slice(0, 10); // UTC calendar date — boring and stable
+	return now.toISOString().slice(0, 10);
 }
 
 export function proposalsDir(cwd: string): string {
 	return join(cwd, ".majordome", "proposals");
 }
 
-/** Header parse: key:value lines up to the first blank line, body after.
- * Returns the raw string map (validation is the caller's job — listProposals
- * enforces the schema; parseProposalText itself stays total). */
+/** Header parse (key:value lines up to the first blank line, body after) —
+ * total; kept for the legacy-file migration and any future md door. */
 export function parseProposalText(text: string): { meta: Record<string, string>; title: string; body: string } {
 	const sep = text.indexOf("\n\n");
 	const head = sep === -1 ? text : text.slice(0, sep);
@@ -96,91 +65,115 @@ export function parseProposalText(text: string): { meta: Record<string, string>;
 	return { meta, title: t ? t[1].trim() : "", body };
 }
 
-function toMeta(raw: Record<string, string>): ProposalMeta | null {
-	const { kind, status, added, source } = raw;
-	if (!kind || !source) return null;
-	if (status !== "pending" && status !== "approved" && status !== "rejected") return null;
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(added)) return null;
-	const meta: ProposalMeta = { kind, status, added, source };
-	if (raw.decided) meta.decided = raw.decided;
-	if (raw.by) meta.by = raw.by;
-	if (raw.reason) meta.reason = raw.reason;
-	return meta;
+// ── the store backing ────────────────────────────────────────────────────────
+
+/** The fold: latest block per proposal id wins (same rule as decisions). */
+export function foldProposals(blocks: Block[]): ProposalPayload[] {
+	const byId = new Map<string, ProposalPayload>();
+	for (const b of blocks) {
+		if (!isProposalBlock(b)) continue;
+		byId.set(b.proposal.id, b.proposal);
+	}
+	return [...byId.values()].sort((a, b) => a.created.localeCompare(b.created));
 }
 
-function readEntry(path: string, file: string): ProposalEntry | null {
-	let text: string;
-	try {
-		text = readFileSync(path, "utf8");
-	} catch {
-		return null; // unreadable → not a listing entry (fail-open)
-	}
-	const { meta: raw, title, body } = parseProposalText(text);
-	const meta = toMeta(raw);
-	return meta ? { path, file, meta, title, body } : null;
+export function loadProposals(): ProposalPayload[] {
+	return foldProposals(loadBlocks().filter(isProposalBlock));
 }
 
-function scanEntries(cwd: string): ProposalEntry[] {
-	const dir = proposalsDir(cwd);
-	try {
-		if (!existsSync(dir)) return [];
-		return readdirSync(dir)
-			.filter((f) => f.endsWith(".md"))
-			.sort() // YYYY-MM-DD names → chronological
-			.map((f) => readEntry(join(dir, f), f))
-			.filter((e): e is ProposalEntry => !!e);
-	} catch {
-		return [];
-	}
+function appendProposalState(p: { id: string; title: string; body: string; status: ProposalStatus; created: string; decided?: string; by?: string; reason?: string }): void {
+	appendBlock({
+		id: `proposal:${p.id}:${Date.now().toString(36)}`,
+		session: "proposals",
+		sessionFile: "proposals",
+		firstTurn: 0,
+		lastTurn: 0,
+		gist: null,
+		intent: null,
+		dims: {},
+		tokensHybrid: [],
+		head: p.title,
+		closedAt: new Date().toISOString(),
+		kind: "proposal",
+		proposal: {
+			id: p.id,
+			title: p.title,
+			body: p.body,
+			status: p.status,
+			created: p.created,
+			...(p.decided ? { decided: p.decided } : {}),
+		},
+	});
 }
+
+function entryOf(p: ProposalPayload): ProposalEntry {
+	return {
+		path: `proposal:${p.id}`,
+		file: `${p.created.slice(0, 10)}-${p.id}.md`,
+		meta: {
+			kind: p.id,
+			status: p.status,
+			added: p.created.slice(0, 10),
+			source: "store",
+			...(p.decided ? { decided: p.decided.slice(0, 10) } : {}),
+		},
+		title: p.title,
+		body: p.body,
+	};
+}
+
+// ── the historical API surface, re-backed ───────────────────────────────────
 
 export interface WriteProposal {
-	kind: string; // slug; sanitized to [a-z0-9-] for the filename
+	kind: string; // slug; sanitized to [a-z0-9-] for the id
 	title: string;
 	body: string;
-	source?: string; // default "init"
+	source?: string; // recorded in the proposal origin (default "init")
 	added?: string; // default today (tests / regeneration)
 }
 
-/** Write a new pending proposal; returns the path written. status always
- * starts pending — a proposal is a question until the captain answers it. */
+/** Write a new pending proposal; returns the virtual handle
+ * (`proposal:<id>`). status always starts pending — a proposal is a question
+ * until the captain answers it. */
 export function writeProposal(p: WriteProposal, cwd: string = process.cwd()): string {
 	const kind = p.kind.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
 	if (!kind) throw new Error("writeProposal: kind must be a non-empty slug (e.g. agents-scaffold)");
-	const dir = proposalsDir(cwd);
-	mkdirSync(dir, { recursive: true });
 	const added = p.added ?? todayISO();
-	const base = `${added}-${kind}`;
-	let file = `${base}.md`;
-	for (let n = 2; existsSync(join(dir, file)); n++) file = `${base}-${n}.md`; // same-day same-kind → -2, -3...
-	const path = join(dir, file);
-	writeFileSync(path, `kind: ${kind}\nstatus: pending\nadded: ${added}\nsource: ${p.source ?? "init"}\n\n# ${p.title}\n\n${p.body}\n`);
-	return path;
+	const known = new Set(loadProposals().map((x) => x.id));
+	let id = `${added}-${kind}`;
+	for (let n = 2; known.has(id); n++) id = `${added}-${kind}-${n}`;
+	appendProposalState({ id, title: p.title, body: p.body, status: "pending", created: `${added}T00:00:00.000Z` });
+	return `proposal:${id}`;
 }
 
-/** Stamp a decision: updates ONLY the metadata keys (status in place;
- * decided/by/reason appended). The body — everything from the blank line on —
- * is carried over byte-identical. Throws on a non-decision status: "pending"
- * is undecided, not a decision. */
-export function stampDecision(path: string, d: Decision, opts: { now?: string } = {}): void {
+/** Stamp a decision: appends a new block with the decided status (the fold
+ * moves — nothing in place is ever edited). Throws on a non-decision status:
+ * "pending" is undecided, not a decision. Accepts the virtual handle OR a
+ * legacy file path (legacy files are read, then re-stamped into the store). */
+export function stampDecision(handle: string, d: Decision, opts: { now?: string } = {}): void {
 	if (d.status !== "approved" && d.status !== "rejected") {
 		throw new Error(`stampDecision: status must be approved or rejected — "${d.status}" is not a decision (pending = undecided)`);
 	}
-	const text = readFileSync(path, "utf8");
-	const sep = text.indexOf("\n\n");
-	const head = sep === -1 ? text : text.slice(0, sep);
-	const rest = sep === -1 ? "" : text.slice(sep); // "\n\nbody..." — untouched by construction
-	const lines = head.split("\n");
-	const set = (k: string, v: string) => {
-		const i = lines.findIndex((l) => l.startsWith(`${k}:`));
-		if (i >= 0) lines[i] = `${k}: ${v}`;
-		else lines.push(`${k}: ${v}`);
-	};
-	set("status", d.status);
-	set("decided", opts.now ?? todayISO());
-	set("by", d.by);
-	if (d.reason) set("reason", d.reason);
-	writeFileSync(path, lines.join("\n") + rest);
+	let payload: ProposalPayload | undefined;
+	if (handle.startsWith("proposal:")) {
+		const id = handle.slice("proposal:".length);
+		payload = loadProposals().find((p) => p.id === id);
+	} else if (existsSync(handle)) {
+		const parsed = parseProposalText(readFileSync(handle, "utf8"));
+		const id = handle.split("/").pop()!.replace(/\.md$/, "").replace(/^\d{4}-\d{2}-\d{2}-/, "");
+		payload = { id, title: parsed.title || id, body: parsed.body, status: "pending", created: new Date().toISOString() };
+	}
+	if (!payload) throw new Error(`stampDecision: unknown proposal "${handle.slice(0, 60)}"`);
+	appendProposalState({
+		id: payload.id,
+		title: payload.title,
+		body: payload.body,
+		status: d.status,
+		created: payload.created,
+		decided: `${opts.now ?? todayISO()}T00:00:00.000Z`,
+		by: d.by,
+		reason: d.reason,
+	});
 }
 
 function dayDiff(from: string, to: string): number {
@@ -193,21 +186,25 @@ function staleOf(entries: ProposalEntry[], days: number, now: string): ProposalE
 	return entries.filter((e) => e.meta.status === "pending" && dayDiff(e.meta.added, now) > days);
 }
 
-/** All proposals under cwd/.majordome/proposals/, chronological; optional
- * status filter. */
+/** All proposals in the store fold, chronological; optional status filter.
+ * Legacy .md files under cwd/.majordome/proposals/ are migrated into the
+ * store on first sight (once, idempotent by id) before the fold is read. */
 export function listProposals(cwd: string = process.cwd(), opts: { status?: ProposalStatus } = {}): ProposalEntry[] {
-	return scanEntries(cwd).filter((e) => !opts.status || e.meta.status === opts.status);
+	migrateLegacyProposals(cwd);
+	const entries = loadProposals().map(entryOf);
+	return entries.filter((e) => !opts.status || e.meta.status === opts.status);
 }
 
 /** Pending proposals older than `days` (default 7) — advisory only: the
  * caller reports them, it never decides. */
 export function stalePending(days = 7, opts: { cwd?: string; now?: string } = {}): ProposalEntry[] {
 	const now = opts.now ?? todayISO();
-	return staleOf(scanEntries(opts.cwd ?? process.cwd()), days, now);
+	migrateLegacyProposals(opts.cwd ?? process.cwd());
+	return staleOf(loadProposals().map(entryOf), days, now);
 }
 
 export interface ProposalsScan {
-	entries: ProposalEntry[]; // every parsed proposal, any status
+	entries: ProposalEntry[]; // every proposal in the fold, any status
 	pending: number; // count of status:pending
 	stale: number; // pending older than `days` (default 7)
 	legacy: boolean; // pre-proposals/ layout: .majordome/AGENTS.proposal.md exists
@@ -217,7 +214,8 @@ export interface ProposalsScan {
  * the advisory line, entries for callers that want detail, and the legacy
  * file flag from before proposals/ existed. */
 export function scanProposals(cwd: string, opts: { now?: string; days?: number } = {}): ProposalsScan {
-	const entries = scanEntries(cwd);
+	migrateLegacyProposals(cwd);
+	const entries = loadProposals().map(entryOf);
 	const now = opts.now ?? todayISO();
 	const days = opts.days ?? 7;
 	return {
@@ -230,18 +228,113 @@ export function scanProposals(cwd: string, opts: { now?: string; days?: number }
 
 /** The init boundary's one-liner, shared by BOTH init surfaces (index.ts
  * hasUI path and tools/init-cli.ts): an agentsOffer — a PURE composition
- * from ext/agentsmd.ts — becomes a pending proposal file (kind
+ * from ext/agentsmd.ts — becomes a pending proposal in the store (kind
  * agents-scaffold | agents-augment, source "init"). AGENTS.md itself is
  * written only on an explicit user yes, still at the boundary. Returns the
- * written path. */
+ * virtual handle. */
 export function writeOfferProposal(offer: AgentsOffer, cwd: string = process.cwd()): string {
 	return writeProposal(
 		{
-			kind: `agents-${offer.kind}`, // scaffold → agents-scaffold, augment → agents-augment
+			kind: `agents-${offer.kind}`,
 			title: offer.kind === "scaffold" ? "Scaffold AGENTS.md from the bundled template" : "Proposed AGENTS.md additions",
 			body: offer.doc,
 			source: "init",
 		},
 		cwd,
 	);
+}
+
+// ── the one-time legacy migration ────────────────────────────────────────────
+
+let migratedDirs = new Set<string>();
+
+/** Migrate legacy .majordome/proposals/*.md files into the store — once per
+ * dir per process, idempotent by proposal id across processes (known ids are
+ * skipped). Returns what moved. Silent when the dir doesn't exist. */
+export function migrateLegacyProposals(cwd: string): { migrated: string[]; skipped: string[] } {
+	const dir = proposalsDir(cwd);
+	const out = { migrated: [] as string[], skipped: [] as string[] };
+	if (!existsSync(dir) || migratedDirs.has(dir)) return out;
+	migratedDirs.add(dir);
+	const known = new Set(loadProposals().map((p) => p.id));
+	try {
+		for (const f of readdirSync(dir).filter((f) => f.endsWith(".md")).sort()) {
+			const id = f.replace(/\.md$/, "").replace(/^\d{4}-\d{2}-\d{2}-/, "");
+			if (known.has(id)) { out.skipped.push(f); continue; }
+			const parsed = parseProposalText(readFileSync(join(dir, f), "utf8"));
+			const rawStatus = parsed.meta.status;
+			const status: ProposalStatus = ["pending", "approved", "rejected", "superseded"].includes(rawStatus) ? rawStatus as ProposalStatus : "pending";
+			const added = /^\d{4}-\d{2}-\d{2}$/.test(parsed.meta.added ?? "") ? parsed.meta.added : f.slice(0, 10);
+			appendProposalState({
+				id,
+				title: parsed.title || id.replace(/-/g, " "),
+				body: parsed.body,
+				status,
+				created: `${added}T00:00:00.000Z`,
+			});
+			out.migrated.push(f);
+		}
+	} catch {
+		/* migration is best-effort — the file API surface keeps working */
+	}
+	return out;
+}
+
+// ── triage: the batched judgment over pending ledger rows ───────────────────
+
+export type TriagePath = "research" | "inspect" | "grill" | "none";
+export interface TriageRow { item: string; worthy: boolean; path: TriagePath; why: string; confidence?: number }
+
+/** Pure: parse a generate() result into TriageRows against the asked rows.
+ * Handles both plain and v0.6.6 probability ({value, confidence}) answers. */
+export function parseTriage(res: Record<string, unknown> | null | undefined, rows: { item: string }[]): TriageRow[] | null {
+	if (!res) return null;
+	const out: TriageRow[] = [];
+	for (let i = 0; i < rows.length; i++) {
+		const a: any = res[`row_${i + 1}`];
+		if (!a) return null;
+		const worthy = typeof a.worthy === "boolean" ? a.worthy : a.worthy?.value;
+		const path = typeof a.path === "string" ? a.path : a.path?.value;
+		if (typeof worthy !== "boolean" || !["research", "inspect", "grill", "none"].includes(path)) return null;
+		const conf = typeof a.worthy?.confidence === "number" ? a.worthy.confidence : undefined;
+		out.push({
+			item: rows[i].item,
+			worthy,
+			path: (worthy ? path : "none") as TriagePath,
+			why: String(a.why ?? "").slice(0, 80),
+			...(conf !== undefined ? { confidence: conf } : {}),
+		});
+	}
+	return out;
+}
+
+/** Batched triage: ONE generate call over every pending row. Deterministic
+ * family sizes (topicOf) pre-seed the group-of-ideas signal. Null on no key
+ * or transport failure — triage is advisory and never blocks the ledger. */
+export async function triagePending(cwd = process.cwd()): Promise<TriageRow[] | null> {
+	const rows = loadStatusRows(cwd).filter((r) => r.status === "pending");
+	if (!rows.length) return [];
+	if (!loadKey()) return null;
+	const fams = new Map<string, number>();
+	rows.forEach((r) => { const f = topicOf(r.item); fams.set(f, (fams.get(f) ?? 0) + 1); });
+	const context = rows.map((r, i) => `${i + 1}. [topic=${topicOf(r.item)} family=${fams.get(topicOf(r.item))}] ${r.item}`).join("\n").slice(0, 3500);
+	const questions: Record<string, unknown> = {};
+	for (let i = 0; i < rows.length; i++) {
+		questions[`row_${i + 1}`] = {
+			type: "object",
+			properties: {
+				worthy: { type: "boolean", return_probabilities: true, instructions: "Does this idea deserve a formal proposal (scoped, reviewable) BEFORE any build work — because it is complex/large, a group of related ideas, touches multiple systems, or needs captain approval beyond a one-liner? Small mechanical tasks are NOT worthy." },
+				path: { type: "string", enum: ["research", "inspect", "grill", "none"], instructions: "How to establish the proposal: research = deeper research first; inspect = codebase inspection first; grill = known-unknowns session with the user; none = no proposal needed." },
+				why: { type: "string", instructions: "One line, max 12 words." },
+			},
+		};
+	}
+	const r = await generate(`[pending ledger rows]\n${context}\n\nDecide per row whether it deserves a formal proposal before build work, and how to establish it.`, questions);
+	return parseTriage(r?.result, rows);
+}
+
+/** Render triage rows as the marker section under the ledger table. */
+export function triageMarkerLines(triage: TriageRow[]): string[] {
+	return triage.filter((t) => t.worthy && t.path !== "none")
+		.map((t) => `ⓟ ${t.path}: ${t.item.slice(0, 70)} — ${t.why}`);
 }

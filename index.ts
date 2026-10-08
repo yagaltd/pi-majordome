@@ -29,7 +29,7 @@ import { ingestDocs } from "./ext/ingest_docs.ts";
 import { filterBlocks, listKinds, composeKind } from "./ext/docs.ts";
 import { initRepo } from "./ext/init.ts";
 import { agentsOffer } from "./ext/agentsmd.ts";
-import { writeOfferProposal, stampDecision } from "./ext/proposals.ts";
+import { writeOfferProposal, stampDecision, writeProposal, listProposals, triagePending, triageMarkerLines, type TriageRow } from "./ext/proposals.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn, judgeHealth, readTrailTail, verbatimSurface } from "./ext/trail.ts";
@@ -58,6 +58,7 @@ interface St {
 	lastNudgeCount: number;
 	simplifyAsked: boolean; // simplifyVerdict once-per-worker-run guard (MJDX_WORKER sessions)
 	judgeWarned: boolean; // judge-credit: degraded warning currently surfaced (clear on recovery)
+	triage: TriageRow[] | null; // proposal-worthiness tags (session cache — /majordome triage refreshes)
 }
 
 /** A decomposed turn's injection payload (query decomposition v1): the
@@ -89,6 +90,7 @@ const st: St = {
 	lastNudgeCount: 0,
 	simplifyAsked: false,
 	judgeWarned: false,
+	triage: null,
 };
 
 
@@ -692,7 +694,8 @@ export default function majordome(pi: ExtensionAPI): void {
 			if (cmd === "ledger") {
 				// the boxed ledger table — same fold as status, table presentation.
 				// `house` = every repo's blocks unfiltered; `@slug` = one worker's repo.
-				if (a === "house") return notify(formatLedgerTable(loadHouseRows()));
+				const markers = st.triage ? triageMarkerLines(st.triage) : [];
+				if (a === "house") return notify(formatLedgerTable(loadHouseRows()) + (markers.length ? `\n${markers.join("\n")}` : ""));
 				if (a) {
 					const slug = a.replace(/^@/, "");
 					const w = resolveWorkerRef(slug, listWorkers());
@@ -700,7 +703,8 @@ export default function majordome(pi: ExtensionAPI): void {
 					return notify(`@${w.name} (${w.cwd})
 ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 				}
-				return notify(formatLedgerTable(loadStatusRows()));
+				const table = formatLedgerTable(loadStatusRows());
+				return notify(table + (markers.length ? `\n${markers.join("\n")}` : ""));
 			}
 			if (cmd === "status") {
 				// --export md: regenerate STATUS.md from the decision fold (the one

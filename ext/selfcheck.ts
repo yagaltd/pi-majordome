@@ -1060,55 +1060,47 @@ if (process.argv.includes("--parity")) {
 	check("agents: augment doc proposes an addition per gap (incl. the parked-dependencies bullet)", !!offAugment && ["## Lessons", "## Testing", "Parked dependencies invalidate dependents"].every((s) => offAugment!.doc.includes(s)) && offAugment!.doc.includes("<!-- pi-majordome init"));
 	check("agents: ask-first — composing the augment offer leaves AGENTS.md byte-identical", rfsAg(join(bf, "AGENTS.md"), "utf8") === bfBefore);
 
-	// ── proposals lifecycle (.majordome/proposals/ — OKF metadata state) ──
+	// ── proposals lifecycle (store-backed: kind=proposal blocks, fold = latest per id) ──
 	const pr = await import("./proposals.ts");
 	const pRepo = join(tmp, "props-repo");
 	mkd(join(pRepo, ".majordome"), { recursive: true });
-
-	// write + parse roundtrip: the metadata header, title and body survive —
-	// the format spec lives in ext/proposals.ts's header; this pins it
-	const p1 = pr.writeProposal({ kind: "agents-scaffold", title: "Scaffold AGENTS.md from the bundled template", body: "principles · invariants · gates", source: "init", added: "2025-01-01" }, pRepo);
-	const raw1 = rfsAg(p1, "utf8");
-	const rt = pr.parseProposalText(raw1);
-	check("proposals: header parse roundtrip — kind/status/added/source + title + body", rt.meta.kind === "agents-scaffold" && rt.meta.status === "pending" && rt.meta.added === "2025-01-01" && rt.meta.source === "init" && rt.title === "Scaffold AGENTS.md from the bundled template" && rt.body.includes("principles · invariants · gates"));
-	check("proposals: flat folder, state is metadata — .majordome/proposals/YYYY-MM-DD-<kind>.md, no status subfolders", p1 === join(pRepo, ".majordome", "proposals", "2025-01-01-agents-scaffold.md"));
-
-	// same-day same-kind collision → -2 suffix (filename never changes after)
-	const p2 = pr.writeProposal({ kind: "agents-scaffold", title: "second", body: "again", added: "2025-01-01" }, pRepo);
-	check("proposals: same-day same-kind collision → -2 suffix", p2.endsWith(join("2025-01-01-agents-scaffold-2.md")) && exAg(p2));
-
-	// stampDecision: ONLY metadata keys move — the body is byte-identical
-	pr.stampDecision(p1, { status: "approved", by: "butler", reason: "captain said yes" });
-	const after = rfsAg(p1, "utf8");
-	check("proposals: stampDecision updates keys only — body byte-identical", after.slice(after.indexOf("\n\n")) === raw1.slice(raw1.indexOf("\n\n")));
-	const st = pr.parseProposalText(after).meta;
-	check("proposals: stamp writes decided/by/reason, keeps added + pending others untouched", st.status === "approved" && st.decided === pr.todayISO() && st.by === "butler" && st.reason === "captain said yes" && st.added === "2025-01-01");
-
-	// status values constrained: a non-decision stamp throws; a bogus-status
-	// file is not a proposal (excluded from the listing)
-	let noDecision = false;
-	try { pr.stampDecision(p2, { status: "pending" as "approved", by: "x" }); } catch { noDecision = true; }
-	wfAg(join(pRepo, ".majordome", "proposals", "2025-01-01-bogus.md"), "kind: x\nstatus: maybe\nadded: 2025-01-01\nsource: init\n\n# t\n\nb\n");
-	check("proposals: status values constrained — stamp rejects non-decisions, parse rejects bogus status", noDecision && pr.listProposals(pRepo).length === 2 && !pr.listProposals(pRepo).some((e) => e.file.includes("bogus")));
-
-	// listProposals: flat chronological listing with a status filter
-	check("proposals: listProposals filters by status (1 pending, 1 approved, bogus excluded)", pr.listProposals(pRepo, { status: "pending" }).length === 1 && pr.listProposals(pRepo, { status: "approved" }).length === 1);
-
-	// staleness: strictly > days — exactly 7d is not stale, 8d is; decided
-	// proposals never count
-	const pOld = pr.writeProposal({ kind: "docs-gap", title: "old", body: "b", added: "2025-01-01" }, pRepo);
-	check("proposals: stalePending is strictly >7d (7d boundary quiet, 8d flagged, approved never stale)", pr.stalePending(7, { cwd: pRepo, now: "2025-01-08" }).length === 0 && pr.stalePending(7, { cwd: pRepo, now: "2025-01-09" }).map((e) => e.path).sort().join("|") === [p2, pOld].sort().join("|"));
-
-	// housekeeping consumes the scan as an advisory needs-your-yes finding —
-	// counts pending + stale, notes the legacy file, never stamps a decision
-	const hk = await import("./housekeep.ts");
-	const scan = pr.scanProposals(pRepo, { now: "2025-01-09" });
-	wfAg(join(pRepo, ".majordome", "AGENTS.proposal.md"), "# legacy review copy\n");
-	const legacyScan = pr.scanProposals(pRepo, { now: "2025-01-09" });
-	const hkRes = hk.collectHousekeep({ cwd: pRepo, decisions: [], readmeText: "", changelogText: "", extraDocs: [], proposals: legacyScan });
-	check("proposals: scanProposals — flat-dir counts (3 parsed · 2 pending · 2 stale) + legacy flag", scan.entries.length === 3 && scan.pending === 2 && scan.stale === 2 && scan.legacy === false && legacyScan.legacy === true);
-	check("housekeep: pending proposals listed as needs-your-yes, never decided (file stays pending)", hkRes.needsYes.some((l) => l.includes("[proposals] 2 pending proposal(s)") && l.includes("2 stale >7d") && l.includes("deciding is the captain's") && l.includes("never auto-decides")) && hkRes.needsYes.some((l) => l.includes("legacy proposal file") && l.includes("re-run init to regenerate under proposals/ or move manually")) && rfsAg(p2, "utf8").includes("status: pending"));
-	check("housekeep: safe class unchanged — proposal paths stay outside the README/docs allowlist (the ledger export is decision-owned)", !hk.isSafeDocPath(".majordome/proposals/2025-01-01-agents-scaffold.md") && hk.isSafeDocPath("docs/x.md") && hk.isSafeDocPath("README.md") && !hk.isSafeDocPath("STATUS.md"));
+	{
+		const osAg = await import("node:os");
+		const fsAg = await import("node:fs");
+		const prevDir = process.env.MAJORDOME_DIR;
+		process.env.MAJORDOME_DIR = join(osAg.tmpdir(), `mj-props-${Date.now()}`);
+		try {
+			const p1 = pr.writeProposal({ kind: "agents-scaffold", title: "Scaffold AGENTS.md from the bundled template", body: "principles · invariants · gates", source: "init", added: "2025-01-01" }, pRepo);
+			check("proposals: writeProposal returns the virtual handle (proposal:<added>-<kind>)", p1 === "proposal:2025-01-01-agents-scaffold");
+			const p2 = pr.writeProposal({ kind: "agents-scaffold", title: "second", body: "again", added: "2025-01-01" }, pRepo);
+			check("proposals: same-day same-kind collision → -2 id suffix", p2 === "proposal:2025-01-01-agents-scaffold-2");
+			pr.stampDecision(p1, { status: "approved", by: "butler", reason: "captain said yes" });
+			const f1 = pr.loadProposals().find((x) => x.id === "2025-01-01-agents-scaffold");
+			check("proposals: stampDecision appends a decided block — fold approved with by/reason, body carried", f1?.status === "approved" && f1?.decided?.slice(0, 10) === pr.todayISO() && f1?.body.includes("principles · invariants · gates"));
+			let noDecision = false;
+			try { pr.stampDecision(p2, { status: "pending" as "approved", by: "x" }); } catch { noDecision = true; }
+			check("proposals: status values constrained — stamp rejects non-decisions", noDecision);
+			const pOld = pr.writeProposal({ kind: "docs-gap", title: "old", body: "b", added: "2025-01-01" }, pRepo);
+			check("proposals: listProposals filters by status (2 pending, 1 approved)", pr.listProposals(pRepo, { status: "pending" }).length === 2 && pr.listProposals(pRepo, { status: "approved" }).length === 1);
+			check("proposals: stalePending strictly >7d (7d quiet, 8d flagged, approved never)", pr.stalePending(7, { cwd: pRepo, now: "2025-01-08" }).length === 0 && pr.stalePending(7, { cwd: pRepo, now: "2025-01-09" }).map((e) => e.path).sort().join("|") === [p2, pOld].sort().join("|"));
+			const rt = pr.parseProposalText("kind: x\nstatus: pending\nadded: 2025-01-01\nsource: init\n\n# T\n\nbody");
+			check("proposals: parseProposalText kept for the legacy migration door", rt.meta.kind === "x" && rt.title === "T" && rt.body.startsWith("# T") && rt.body.includes("body"));
+			const hk = await import("./housekeep.ts");
+			const scan = pr.scanProposals(pRepo, { now: "2025-01-09" });
+			fsAg.writeFileSync(join(pRepo, ".majordome", "AGENTS.proposal.md"), "# legacy\n");
+			const legacyScan = pr.scanProposals(pRepo, { now: "2025-01-09" });
+			const hkRes = hk.collectHousekeep({ cwd: pRepo, decisions: [], readmeText: "", changelogText: "", extraDocs: [], proposals: legacyScan });
+			check("proposals: scanProposals over the store fold (3 entries · 2 pending · 2 stale) + legacy flag", scan.entries.length === 3 && scan.pending === 2 && scan.stale === 2 && scan.legacy === false && legacyScan.legacy === true);
+			check("housekeep: pending proposals stay the needs-your-yes advisory (deciding is the captain's, never auto-decides)", hkRes.needsYes.some((l) => l.includes("[proposals] 2 pending proposal(s)") && l.includes("2 stale >7d")));
+			check("housekeep: proposal handles stay outside the README/docs allowlist (the ledger export is decision-owned)", !hk.isSafeDocPath("proposal:2025-01-01-agents-scaffold") && hk.isSafeDocPath("docs/x.md") && !hk.isSafeDocPath("STATUS.md"));
+			const tri = pr.parseTriage({ row_1: { worthy: { value: true, confidence: 0.9 }, path: "grill", why: "multi-system scope" } }, [{ item: "x" }]);
+			const tr2 = pr.parseTriage({ row_1: { worthy: false, path: "research", why: "small" } }, [{ item: "x" }]);
+			check("triage: parseTriage reads probability + plain shapes; unworthy coerces path to none; null fail-open", tri?.[0]?.worthy === true && tri?.[0]?.path === "grill" && tri?.[0]?.confidence === 0.9 && tr2?.[0]?.path === "none" && pr.parseTriage(null, []) === null);
+		} finally {
+			if (prevDir === undefined) delete process.env.MAJORDOME_DIR;
+			else process.env.MAJORDOME_DIR = prevDir;
+		}
+	}
 
 	// agentsmd stays provably write-free: no write call AND no proposals import
 	// that would smuggle a write path in transitively
