@@ -16,7 +16,7 @@
  * is plain JSONL under ~/.pi/majordome/ — inspectable, purgeable, exportable.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync , existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
