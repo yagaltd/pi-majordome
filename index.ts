@@ -871,15 +871,56 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 				}
 				let da: string | undefined = a;
 				if (da === "gen" || da?.startsWith("gen ")) da = da === "gen" ? "" : da.slice(4);
-				const kinds = listKinds();
-				if (!da || da === "kinds") {
+				if (da === "kinds") {
 					notify([
-						"/majordome docs gen <kind> [tag|all] [show] \u00b7 docs pull",
+						"/majordome docs gen                bulk: survey + build all stale docs in one pass",
+						"/majordome docs gen <kind> [tag|all] [show] · docs pull",
 						`kinds: ${kinds.join(" · ")}`,
 						"  readme/changelog: grounded digest since that doc's cursor, sent to the agent to write it",
 						"  custom: drop a template in ~/.pi/majordome/templates/<name>.md — instruction text with a {{digest}} placeholder (HTML explanation, release email, …)",
 						"  add 'show' to preview without triggering the agent",
 					].join("\n"));
+					return;
+				}
+				if (!da) {
+					// bulk door: survey the watched file docs, compose ONE combined
+					// digest of everything stale/missing, send ONE agent instruction.
+					// STATUS is excluded (it is our own generated export).
+					const metaB = loadMeta();
+					const slugB = st.sessionFile ? sessionSlug(st.sessionFile) : "";
+					const candidates = [...new Set([...st.docsWatch, "README", "CHANGELOG"])].filter((d) => d !== "STATUS" && !d.endsWith("/") && (existsSync(join(process.cwd(), d)) || ["README", "CHANGELOG"].includes(d)));
+					const survey: string[] = [];
+					const sections: string[] = [];
+					const staleKinds: string[] = [];
+					for (const doc of candidates) {
+						const cursor = cursorForDoc(metaB.docsCursor, slugB, doc) ?? "";
+						const scoped = filterBlocks(st.blocks, { slug: slugB, since: cursor });
+						const label = cursor ? `cursor ${cursor.slice(0, 10)}` : "never (full history)";
+						survey.push(`${doc}: ${scoped.length} block(s) pending · ${label}`);
+						if (scoped.length) {
+							const composed = composeKind(doc.toLowerCase(), scoped);
+							if (composed) {
+								sections.push(`## ${doc} (digest of ${scoped.length} blocks since ${cursor.slice(0, 10) || "the beginning})\n\n${composed.digest}`);
+								staleKinds.push(doc);
+							}
+						}
+					}
+					const surveyText = `docs survey — ${candidates.length} watched:\n${survey.map((s) => `  ${s}`).join("\n") || "  (none)"}`;
+					if (!staleKinds.length) return notify(`${surveyText}\n\nall watched docs are current — nothing to build`);
+					const combined = sections.join("\n\n");
+					const dir = join(majordomeDir(), "exports");
+					mkdirSync(dir, { recursive: true });
+					const outFile = join(dir, `docs-bulk-${new Date().toISOString().slice(0, 10)}.md`);
+					writeFileSync(outFile, `# majordome docs bulk digest \u2014 ${staleKinds.join(" + ")}\n\n${combined}\n`);
+					const msg = `Docs are stale/missing for: ${staleKinds.join(", ")}. Using the grounded digest below (also saved: ${outFile}), write/update EACH doc in place, following its existing structure and tone. Do not add sections the project doesn't use.\n\n${combined}`;
+					const send = (pi as any).sendUserMessage ?? (pi as any).sendMessage;
+					if (typeof send !== "function") return notify(`${surveyText}\ndigest saved → ${outFile}\n(could not send to agent — hand it over manually)`);
+					try {
+						await send(msg);
+						notify(`${surveyText}\nsent to the agent — it will write ${staleKinds.join(" + ")} in one pass.`);
+					} catch (e) {
+						notify(`${surveyText}\n(send failed: ${String((e as Error).message ?? e).slice(0, 60)})\ndigest saved → ${outFile}`);
+					}
 					return;
 				}
 				if (da === "adr") {
