@@ -77,6 +77,24 @@ export function verbatimSurface(query: string, limit = 3): { n: number; j: strin
 	}
 }
 
+const PUSHBACK_TOKENS = ["not working", "doesn't work", "does not work", "still fails", "still failing", "you broke", "nothing works", "not what i asked", "incorrect", "broken"];
+
+/** Deterministic pushback detection (zero judge calls): user-phrase tokens
+ * that signal a correction. High-precision list — false positives here would
+ * ping-pong the wall. Returns the matched tokens. */
+export function pushbackHit(query: string): string[] {
+	const q = query.toLowerCase();
+	return PUSHBACK_TOKENS.filter((tok) => q.includes(tok));
+}
+
+/** Pure: escalated = ≥2 correction turns within the last 3 turns (including
+ * the current). This is the soft-wall trigger — the canary for the recall
+ * loop, never an auto-housekeeping. */
+export function frustrationEscalated(entries: { turn: number; hits: number }[], turn: number, window = 3, threshold = 2): boolean {
+	const recent = entries.filter((e) => e.turn > turn - window && e.turn <= turn && e.hits > 0);
+	return recent.length >= threshold;
+}
+
 export interface EngineHealth {
 	engine: "typellm" | "jev";
 	calls: number;

@@ -29,10 +29,10 @@ import { ingestDocs } from "./ext/ingest_docs.ts";
 import { filterBlocks, listKinds, composeKind } from "./ext/docs.ts";
 import { initRepo } from "./ext/init.ts";
 import { agentsOffer } from "./ext/agentsmd.ts";
-import { writeOfferProposal, stampDecision, writeProposal, listProposals, triagePending, triageAuto, } from "./ext/proposals.ts";
+import { writeOfferProposal, stampDecision, writeProposal, listProposals, triagePending, } from "./ext/proposals.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
-import { trail, aggregate, judgeStatsLines, setTrailTurn, judgeHealth, readTrailTail, verbatimSurface } from "./ext/trail.ts";
+import { trail, aggregate, judgeStatsLines, setTrailTurn, judgeHealth, readTrailTail, verbatimSurface, pushbackHit, frustrationEscalated } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
 import { appendEntities, extractEntities, knownEntitiesIn } from "./ext/entities.ts";
 import { statusJoinLines, loadStatusRows, loadHouseRows, formatStatus, formatLedgerTable, formatHouseStatus, exportStatusMd, topicOf } from "./ext/status.ts";
@@ -467,6 +467,23 @@ export default function majordome(pi: ExtensionAPI): void {
 			const lastUser = lastUserIdx >= 0 ? msgs[lastUserIdx] : undefined;
 			const query = lastUser ? textof(lastUser.content).trim() : "";
 			if (!query || query.startsWith("/") || query.startsWith("<")) return;
+			// correction counter + soft wall (the recall loop's canary): deterministic
+			// pushback tokens per turn; ≥2 correction turns in a 3-turn window → the
+			// next response OPENS with a check-in (forced clarification — never an
+			// auto-housekeeping, once per episode). Deterministic: zero judge calls.
+			try {
+				const turn = inFlightTurn();
+				const hits = pushbackHit(query);
+				if (hits.length) {
+					st.pushback = [...st.pushback.filter((e) => e.turn !== turn), { turn, hits: hits.length }];
+					trail("frustration", { turn, tokens: hits.length });
+				}
+				if (frustrationEscalated(st.pushback, turn) && st.wallShownTurn < turn - 1) {
+					st.wallShownTurn = turn;
+					const n = st.pushback.filter((e) => e.turn > turn - 3 && e.turn <= turn).length;
+					appendTail(lastUser, `ⓟ {n} correction(s) in the last 3 turns — what am I getting wrong? (/majordome housekeeping, or tell me directly)`);
+				}
+			} catch { /* canary never breaks a request */ }
 
 			// outputShape routing (third axis): one judge call per fresh user message.
 			// Non-default shape → ONE suggest-only tail line (advice to the agent —
