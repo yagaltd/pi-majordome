@@ -28,6 +28,7 @@
  */
 import { join, resolve } from "node:path";
 import { writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { tokens } from "./core.ts";
 import {
 	DECISION_SESSION,
@@ -123,9 +124,40 @@ function itemSlug(item: string): string {
 
 /** True when a decision block belongs to the repo at `repoRoot` — the ledger
  * key is the block's sessionFile (stored = the resolved repo root). */
-function decisionInRepo(b: Block, repoRoot: string): boolean {
+/** Canonical repo root: git toplevel when p is inside a repo, else p itself.
+ * Subdirectory cwds and repo-field stamps all canonicalize through here. */
+const repoRootCache = new Map<string, string>();
+export function repoOf(p: string): string {
+	const key = resolve(p);
+	const hit = repoRootCache.get(key);
+	if (hit) return hit;
+	let root = key;
 	try {
-		return resolve(b.sessionFile) === resolve(repoRoot);
+		root = execFileSync("git", ["-C", key, "rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim() || key;
+	} catch { /* not a git repo (or git missing) — the path itself is the root */ }
+	repoRootCache.set(key, root);
+	return root;
+}
+
+/** Cross-repo attribution for direct-mode work (deterministic, no classifier):
+ * scan the decision text for absolute paths; if they canonicalize to exactly
+ * ONE repo other than the writing cwd, attribute there. Zero or many → cwd. */
+export function inferRepo(hints: string, cwdRoot: string): { repo: string; attributed: "cwd" | "evidence-path" } {
+	const repos = new Set<string>();
+	for (const m of hints.matchAll(/\/home\/[^\s"'`),:;]+/g)) {
+		const r = repoOf(m[0].replace(/[.,)]+$/, ""));
+		if (r !== cwdRoot) repos.add(r);
+	}
+	return repos.size === 1
+		? { repo: [...repos][0], attributed: "evidence-path" }
+		: { repo: cwdRoot, attributed: "cwd" };
+}
+
+function decisionInRepo(b: Block, repoRoot: string): boolean {
+	const want = repoOf(repoRoot);
+	if (b.repo) return b.repo === want;
+	try {
+		return repoOf(resolve(b.sessionFile)) === want;
 	} catch {
 		return false;
 	}
@@ -140,10 +172,19 @@ export function appendDecisionStatus(
 	repoRoot: string = process.cwd(),
 ): Block {
 	const slug = itemSlug(d.item);
+	const cwdRoot = repoOf(repoRoot);
+	// cross-repo attribution: explicit repoRoot wins; else infer from the
+	// decision text (evidence paths naming exactly one other repo win)
+	const wantsRepo = repoRoot !== process.cwd();
+	const inf = wantsRepo
+		? { repo: repoOf(repoRoot), attributed: "cwd" as const }
+		: inferRepo(`${d.item}\n${d.evidence}`, cwdRoot);
 	const block: Block = {
 		id: `decision:${slug}:${Date.now().toString(36)}`,
 		session: DECISION_SESSION,
 		sessionFile: resolve(repoRoot),
+		repo: inf.repo,
+		...(inf.attributed === "evidence-path" ? { attributed: "evidence-path" as const } : {}),
 		firstTurn: 0,
 		lastTurn: 0,
 		gist: null,
@@ -192,6 +233,28 @@ export function foldDecisions(decisions: Block[]): StatusRow[] {
 		});
 	}
 	return [...byItem.values()].map((e) => e.row);
+}
+
+/** Legacy sweep: add the explicit repo stamp to every block missing one
+ * (derived from sessionFile's git root — deterministic, no history rewritten).
+ * Pure over the input; the tool owns backup + IO. Idempotent: stamped blocks
+ * pass through untouched. */
+export function sweepRepoStamps(blocks: Block[]): { blocks: Block[]; stamped: number; stripped: number } {
+	let stamped = 0;
+	let stripped = 0;
+	const out = blocks.map((b) => {
+		// DECISION blocks only: their sessionFile is the writing cwd (repoOf
+		// resolves it). Index blocks carry a session JSONL path, not a cwd —
+		// stamping those produced path-garbage (caught in the first live run).
+		if (!isDecisionBlock(b)) {
+			if (b.repo !== undefined) { stripped++; return { ...b, repo: undefined }; }
+			return b;
+		}
+		if (b.repo) return b;
+		stamped++;
+		return { ...b, repo: repoOf(resolve(b.sessionFile)) };
+	});
+	return { blocks: out, stamped, stripped };
 }
 
 /** The live ledger of one repo = the fold of its decision blocks. Same return

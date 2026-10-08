@@ -53,6 +53,12 @@ export interface Block {
 	head: string; // first user message snippet
 	closedAt: string;
 	status?: BlockStatus; // absent = valid (lenient parse below)
+	/** Canonical repo root this block belongs to (cross-repo attribution):
+	 * git toplevel of the writing cwd or evidence-inferred repo. Absent on
+	 * pre-sweep blocks — decisionInRepo falls back to sessionFile. */
+	repo?: string;
+	/** Set when attribution came from evidence paths, not the writing cwd. */
+	attributed?: "evidence-path";
 	/** Provenance (v2.9): TRUE only for blocks ingested from outside the
 	 * session channels — ingest-docs sources and .majordome-shared/ shared
 	 * sources. Session blocks stay UNSET (trusted-class by decision: the

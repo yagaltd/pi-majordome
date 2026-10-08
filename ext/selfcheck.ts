@@ -1182,6 +1182,14 @@ if (process.argv.includes("--parity")) {
 			check("docs naming: gen/pull verbs wired under docs, legacy aliases intact (ROLES charter \u00a7gaps #4)", idx2.includes('a?.startsWith("gen ")') && idx2.includes('a === "pull"') && idx2.includes('if (cmd === "ingest-docs")') && !idx2.includes("docs <kind> [tag|all]"));
 			const orchSrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("./orch.ts", import.meta.url), "utf8"));
 			check("orch add: eager init at link time — cold repos initRepo() on add, safety net stays at start", orchSrc.includes("cold \u2192 initialized now") && orchSrc.includes("await initRepo({ cwd })") && orchSrc.split("await initRepo").length >= 2);
+			const { repoOf, inferRepo, sweepRepoStamps } = await import("./status.ts");
+			const top = repoOf(new URL("..", import.meta.url).pathname);
+			const sub = repoOf(new URL("../ext", import.meta.url).pathname);
+			check("cross-repo: repoOf canonicalizes subdirectories to the git toplevel", top.startsWith("/") && sub === top);
+			check("cross-repo: inferRepo \u2014 evidence naming exactly one other repo wins, else cwd", inferRepo("see /home/x/other/repo notes here", top).attributed === "evidence-path" && inferRepo("plain evidence", top).attributed === "cwd");
+			const mk = (dec: boolean, repo?: string) => ({ id: "t", session: "s", sessionFile: "/nonexistent/a/b", firstTurn: 1, lastTurn: 2, gist: null, intent: null, dims: {}, tokensHybrid: [], head: "", closedAt: "x", repo, kind: dec ? "decision" : undefined, ...(dec ? { decision: { item: "i", status: "built", evidence: "", substrate: "" } } : {}) }) as any;
+			const sw = sweepRepoStamps([mk(true), mk(false, "junk"), mk(false)]);
+			check("cross-repo: sweep stamps decisions, strips non-decision stamps, passes clean non-decisions (idempotent)", sw.stamped === 1 && sw.stripped === 1 && sw.blocks[0].repo === "/nonexistent/a/b" && sw.blocks[1].repo === undefined && sw.blocks[2].repo === undefined);
 		}
 		}
 	}
