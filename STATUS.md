@@ -34,7 +34,7 @@ Regenerate with /majordome status --export md.
 | mailbox-parser add-failed mystery | dropped | CORRECTED: repo exists (/home/aurel/Documents/github/mailbox-parser) and is a registered worker; the add-failure was ~ path expansion, fixed 44a536c | 44a536c |
 | docs/ROLES.md roles + communication charter (revised: integration pass — room dropped, loops corrected) | built | 1227a67 | origin study: codync rooms/team-MCP + firstmate pyramid; R1-R10 |
 | guard upstream notes (origin study: jev-guard) | dropped | owner decision 2026-10-06: not for us, case closed | row retired |
-| docs command naming consolidation (docs gen/pull) | pending | gap surfaced by ROLES charter §gaps #4 | replaces docs <kind> vs ingest-docs |
+| docs command naming consolidation (docs gen/pull) | built | built in 44cbcb8 — /majordome docs gen <kind> [tag|all] [show] composes, docs pull ingests (was ingest-docs); legacy bare forms kept as unlisted working aliases; help/description updated; selfcheck pin: verbs wired + aliases intact + old help string gone. Scope per docs/ROLES.md charter queue. | docs naming slice |
 | AGENTS.md (this repo) + docs taxonomy (docs/dev/, bench/ eval plans) + code-parser parked-dependency bullet | built | 035231b | ROLES.md v2 five-rule charter same commit |
 | init AGENTS.md scaffold/augment flow (absent → propose template, present → gap-report ask-first) | built | 881bb8e | captain approved 2026-10-06 |
 | status.json docs-watch built-in (nudge trigger) | built | 881bb8e | captain approved 2026-10-06 · ext/docsprofile.ts micro-slice |
