@@ -544,7 +544,11 @@ function docsWorthyOf(v: unknown): boolean | null {
  * there would spam every sweep and couple two concerns. Fail-open null (no
  * judge, error, malformed) → the caller keeps its arithmetic 3-block rule.
  * The verdict lands on the trail either way, never in message text. */
-export async function docsVerdict(work: string): Promise<DocsVerdict | null> {
+export async function docsVerdict(work: string, workRepo?: string): Promise<DocsVerdict | null> {
+	// cross-repo docs attribution: the verdict judges against the WORK's repo,
+	// not the session's — "majordome features" ARE majordome-docs-worthy even
+	// when the session lives in another repo.
+	const repoNote = workRepo ? ` The implementation work happened in repo: ${workRepo}. Judge whether THAT repo's documentation (its README/CHANGELOG/docs) is affected.` : "";
 	const settle = (res: Record<string, unknown>, judge: string, usage?: unknown): DocsVerdict | null => {
 		const w = docsWorthyOf(res.docs_worthy);
 		if (w === null) {
@@ -559,7 +563,7 @@ export async function docsVerdict(work: string): Promise<DocsVerdict | null> {
 	};
 	if (loadKey()) {
 		const r = await generate(
-			`Implementation work completed in this turn of a coding-agent session:\n${work.slice(0, 2000)}`,
+			`Implementation work completed in this turn of a coding-agent session:\n${work.slice(0, 2000)}${repoNote}`,
 			{
 				docs_worthy: {
 					type: "string",

@@ -35,7 +35,7 @@ import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn, judgeHealth, readTrailTail, verbatimSurface, pushbackHit, frustrationEscalated } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
 import { appendEntities, extractEntities, knownEntitiesIn } from "./ext/entities.ts";
-import { statusJoinLines, loadStatusRows, loadHouseRows, formatStatus, formatLedgerTable, formatHouseStatus, exportStatusMd, topicOf } from "./ext/status.ts";
+import { statusJoinLines, loadStatusRows, loadHouseRows, formatStatus, formatLedgerTable, formatHouseStatus, exportStatusMd, topicOf, dominantRepo, repoOf } from "./ext/status.ts";
 import { loadUserPrefs, renderUserPrefs, setUserPref, resetUserPrefs as resetUserPrefsFile, userFile } from "./ext/userprefs.ts";
 import { housekeeping } from "./ext/housekeep.ts";
 import { appendBlock, appendDecision, blockDims, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
@@ -203,6 +203,7 @@ async function indexSession(): Promise<number> {
 	const cores = blockCores(turns, firsts);
 	const slug = sessionSlug(st.sessionFile);
 	const closedImpl: Block[] = [];
+	const foreignImpl: string[] = [];
 	let closed = 0;
 	for (const core of cores) {
 		if (core.lastTurn >= turns.length) continue; // open tail
@@ -230,6 +231,7 @@ async function indexSession(): Promise<number> {
 			} catch { /* ignore */ }
 			meta = undefined; vec = null;
 		}
+		const workRepo = meta?.intent === "implementation" ? dominantRepo(core.text, repoOf(st.sessionFile)) : undefined;
 		const block: Block = {
 			id,
 			session: slug,
@@ -243,6 +245,7 @@ async function indexSession(): Promise<number> {
 			head: turns[core.firstTurn - 1].user.slice(0, 200),
 			closedAt: new Date().toISOString(),
 			lesson: meta?.lesson === true, // block-close judge, fail-open false
+			...(workRepo && workRepo !== repoOf(st.sessionFile) ? { repo: workRepo } : {}),
 		};
 		try {
 			appendBlock(block);
@@ -255,6 +258,7 @@ async function indexSession(): Promise<number> {
 		st.blocks.push(block);
 		closed++;
 		if (block.intent === "implementation") closedImpl.push(block);
+			if (block.repo) foreignImpl.push(block.repo);
 	}
 	// docs cursor (magic-docs v2): advance per-slug on docs touches; the nudge
 	// is verdict-driven when the judge seam answers, falling back to the exact
@@ -272,7 +276,7 @@ async function indexSession(): Promise<number> {
 			// fallback ONLY when the judge is unavailable (offline) or the verdict
 			// call failed — the exact legacy rule, behavior preserved byte for byte.
 			let verdict: DocsVerdict | null = null;
-			if (closedImpl.length) verdict = await docsVerdict(closedImpl.map((b) => b.gist ?? b.head).join("\n"));
+			if (closedImpl.length) verdict = await docsVerdict(closedImpl.map((b) => b.gist ?? b.head).join("\n"), foreignImpl[0]);
 			let n: string | null;
 			let source: string;
 			if (verdict) {

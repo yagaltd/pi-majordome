@@ -357,6 +357,22 @@ export function formatStatus(rows: StatusRow[]): string {
 
 export interface HouseWorkerStatus { name: string; cwd: string; rows: StatusRow[] }
 
+/** Cross-repo work attribution: scan text for absolute paths, canonicalize
+ * each through repoOf, and return the majority repo when it differs from the
+ * fallback (the session's repo). Ties and no-signal fall back. Deterministic
+ * — the same rule the decision blocks use (inferRepo), applied to impl work. */
+export function dominantRepo(text: string, fallback: string): string {
+	const votes = new Map<string, number>();
+	for (const m of text.matchAll(/\/home\/[^\s"'`),:;]+/g)) {
+		const r = repoOf(m[0].replace(/[.,)]+$/, ""));
+		votes.set(r, (votes.get(r) ?? 0) + 1);
+	}
+	const fb = repoOf(fallback);
+	let best = ""; let bestN = 0;
+	for (const [r, n] of votes) if (r !== fb && n > bestN) { best = r; bestN = n; }
+	return bestN > 0 ? best : fb;
+}
+
 /** Deterministic topic families for the ledger view. Ordered rules; the
  * fallback is core. A VIEW lens only — the store stays flat. */
 const TOPIC_RULES: [RegExp, string][] = [
