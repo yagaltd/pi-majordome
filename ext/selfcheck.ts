@@ -1168,6 +1168,15 @@ if (process.argv.includes("--parity")) {
 			const w60 = formatLedgerTable(rows, 60);
 			const auto = formatLedgerTable(rows);
 			check("ledger table: full-width sizing — override respected, non-TTY fallback borders intact (NaN-proof OR-chain)", Math.max(...w60.split("\n").map((l) => l.length)) <= 60 && Math.max(...auto.split("\n").map((l) => l.length)) === 113 && auto.includes("┌"));
+		{
+			const multi = formatLedgerTable([
+				{ item: "alpha", status: "pending", evidence: "", substrate: "" },
+				{ item: "beta", status: "pending", evidence: "", substrate: "" },
+				{ item: "parked-thing", status: "parked", evidence: "", substrate: "" },
+			]);
+			const bl = multi.split("\n");
+			check("ledger table: pending renders one bullet per item (one line per row); other statuses stay packed", bl.filter((l) => l.includes("│· ")).length === 2 && bl.some((l) => l.includes("· alpha")) && bl.some((l) => l.includes("· beta")) && !bl.some((l) => l.includes("alpha · beta")));
+		}
 		}
 	}
 	{

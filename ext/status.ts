@@ -326,9 +326,17 @@ export function formatLedgerTable(rows: StatusRow[], width?: number): string {
 		if (cur) lines.push(cur);
 		return lines;
 	};
+	// pending: one bullet per item, one row each (readability — the queue is
+	// what you scan); every other status keeps the packed " · " flow
+	const bullets = (items: string[]): string[] =>
+		items.flatMap((it) => {
+			const segs: string[] = [];
+			for (let i = 0; i < it.length; i += cellW - 2) segs.push(it.slice(i, i + cellW - 2));
+			return segs.map((seg, i) => (i === 0 ? `· ${seg}` : `  ${seg}`));
+		});
 	const body0 = order
 		.filter((st) => groups.has(st))
-		.map((st) => ({ label: `${st} (${groups.get(st)!.length})`, items: groups.get(st)! }));
+		.map((st) => ({ st, label: `${st} (${groups.get(st)!.length})`, items: groups.get(st)! }));
 	const labelW = Math.max(...body0.map((b) => b.label.length)) + 2;
 	// full terminal width: detected TTY, COLUMNS env, or the 113-char legacy
 	// default; cell = width minus label column and the 3 border glyphs.
@@ -337,7 +345,7 @@ export function formatLedgerTable(rows: StatusRow[], width?: number): string {
 	const detected = width
 		|| Number(process.stdout?.columns) || Number.parseInt(process.env.COLUMNS ?? "", 10) || 113;
 	const cellW = Math.min(Math.max(detected - labelW - 3, 40), 240);
-	const body = body0.map((b) => ({ label: b.label, lines: wrap(b.items) }));
+	const body = body0.map((b) => ({ label: b.label, lines: b.st === "pending" ? bullets(b.items) : wrap(b.items) }));
 	const top = `┌${"─".repeat(labelW)}┬${"─".repeat(cellW)}┐`;
 	const mid = `├${"─".repeat(labelW)}┼${"─".repeat(cellW)}┤`;
 	const bot = `└${"─".repeat(labelW)}┴${"─".repeat(cellW)}┘`;
