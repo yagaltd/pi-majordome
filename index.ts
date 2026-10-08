@@ -20,7 +20,7 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync , existsSync, st
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { blockCores, detectBoundaries, isSubagentSession, parseSession, sessionSlug, shortTag, textof, tokens } from "./ext/core.ts";
-import { blockMeta, contradicts, decomposeQuery, dimVector, docsVerdict, hasJev, induceDims, loadKey, OUTPUT_SHAPES, resetClassifyFn, rewriteQuery, routingIntent, setClassifyFn, setStreamFn, shapeVerdict, simplifyVerdict, userPrefLines, type DocsVerdict } from "./ext/judges.ts";
+import { generate, blockMeta, contradicts, decomposeQuery, dimVector, docsVerdict, hasJev, induceDims, loadKey, OUTPUT_SHAPES, resetClassifyFn, rewriteQuery, routingIntent, setClassifyFn, setStreamFn, shapeVerdict, simplifyVerdict, userPrefLines, type DocsVerdict } from "./ext/judges.ts";
 import { pushInbox, shouldAskSimplify, simplifyHintText } from "./ext/inbox.ts";
 import { confidenceGrill, cursorForDoc, cursorKey, decomposeAllowed, decomposedInjection, docsNudge, grillOptionsLine, injectionText, judgeLine, mergeDecomposed, route, runSubQueries, scanDocsTouched, shapeHintLine, shouldJudgeLine, verdictToNudge } from "./ext/router.ts";
 import { BUILTIN_DOC_WATCH, resolveDocsProfile } from "./ext/docsprofile.ts";
@@ -663,6 +663,32 @@ export default function majordome(pi: ExtensionAPI): void {
 
 	pi.on("session_shutdown", () => {
 		resetClassifyFn();
+	});
+
+	// typellm_judge (the registry adapter): codemode and every agent get direct
+	// access to TypeLLM structured judgments — the same generate() client the
+	// internal judges use. Fail-open messaging; never throws into the model loop.
+	pi.registerTool({
+		name: "typellm_judge",
+		description: "Ask TypeLLM a structured multi-question judgment (JSON-schema answers: boolean/enum/score/object, optional probabilities). Grounded verdicts for agent-side decisions. Returns typed answers + usage.",
+		parameters: {
+			type: "object",
+			properties: {
+				context: { type: "string", description: "The state/facts to judge" },
+				questions: { type: "object", description: "Map of question name → JSON-schema question definition (type/enum/choices/levels/instructions/thinking/return_probabilities)" },
+			},
+			required: ["context", "questions"],
+		},
+		execute: async (args: any) => {
+			if (!st.on) return "majordome is off — typellm_judge unavailable";
+			if (!loadKey()) return "typellm_judge unavailable: no TypeLLM key (npx tsx ext/judges.ts setup)";
+			try {
+				const r = await generate(String(args?.context ?? ""), (args?.questions ?? {}) as Record<string, unknown>);
+				return JSON.stringify({ result: r?.result ?? null, usage: r?.usage ?? null }, null, 1);
+			} catch (e) {
+				return `typellm_judge failed: ${String((e as Error).message ?? e).slice(0, 120)}`;
+			}
+		},
 	});
 
 	pi.registerCommand("majordome", {
