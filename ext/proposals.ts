@@ -9,7 +9,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentsOffer } from "./agentsmd.ts";
-import { appendBlock, isProposalBlock, loadBlocks, type Block, type ProposalPayload, type ProposalStatus } from "./store.ts";
+import { appendBlock, isProposalBlock, loadBlocks, loadMeta, saveMeta, type Block, type Meta, type ProposalPayload } from "./store.ts";
 import { loadKey } from "./judges.ts";
 import { loadStatusRows, topicOf } from "./status.ts";
 import { generate } from "./judges.ts";
@@ -333,8 +333,72 @@ export async function triagePending(cwd = process.cwd()): Promise<TriageRow[] | 
 	return parseTriage(r?.result, rows);
 }
 
-/** Render triage rows as the marker section under the ledger table. */
-export function triageMarkerLines(triage: TriageRow[]): string[] {
-	return triage.filter((t) => t.worthy && t.path !== "none")
-		.map((t) => `ⓟ ${t.path}: ${t.item.slice(0, 70)} — ${t.why}`);
+export interface TriagePlan { toJudge: { item: string }[]; inherited: number }
+
+/** Pure dedup rules for incremental triage (the captain's design):
+ * worthy-tagged rows INHERIT (family growth is irrelevant — already worthy);
+ * none-tagged rows re-judge ONLY when their family grew since tagging (group
+ * formation is what changes worthiness); untagged rows judge. */
+export function triagePlan(rows: { item: string; status: string }[], stored: NonNullable<Meta["triage"]>, famSize: (item: string) => number): TriagePlan {
+	const toJudge: { item: string }[] = [];
+	let inherited = 0;
+	for (const r of rows) {
+		const tag = stored[r.item];
+		if (!tag) { toJudge.push(r); continue; }
+		if (tag.worthy) { inherited++; continue; }
+		if (famSize(r.item) > tag.famSize) { toJudge.push(r); continue; }
+		inherited++;
+	}
+	return { toJudge, inherited };
+}
+
+/** The ledger-triggered auto-triage: judge only what the plan requires,
+ * merge + persist tags in meta (survives restarts), return ALL rows' tags
+ * (pending + parked — both scan-lists). Null-tagged renders come straight
+ * from the store: steady-state renders add zero judge calls. */
+export async function triageAuto(cwd = process.cwd()): Promise<{ tags: NonNullable<Meta["triage"]>; judged: number; inherited: number }> {
+	const rows = loadStatusRows(cwd).filter((r) => r.status === "pending" || r.status === "parked");
+	const stored = loadMeta().triage ?? {};
+	const famSize = (item: string): number => {
+		const f = topicOf(item);
+		return rows.filter((r) => topicOf(r.item) === f).length;
+	};
+	const plan = triagePlan(rows, stored, famSize);
+	const tags: NonNullable<Meta["triage"]> = { ...stored };
+	if (plan.toJudge.length && loadKey()) {
+		const fams = new Map<string, number>();
+		plan.toJudge.forEach((r) => { const f = topicOf(r.item); fams.set(f, (fams.get(f) ?? 0) + 1); });
+		const context = plan.toJudge.map((r, i) => {
+			const st = rows.find((x) => x.item === r.item)?.status ?? "pending";
+			return `${i + 1}. [topic=${topicOf(r.item)} family=${fams.get(topicOf(r.item))} status=${st}] ${r.item}`;
+		}).join("\n").slice(0, 3500);
+		const questions: Record<string, unknown> = {};
+		for (let i = 0; i < plan.toJudge.length; i++) {
+			questions[`row_${i + 1}`] = {
+				type: "object",
+				properties: {
+					worthy: { type: "boolean", return_probabilities: true, instructions: "Does this idea deserve a formal proposal (scoped, reviewable) BEFORE any build work — because it is complex/large, a group of related ideas, touches multiple systems, or needs captain approval beyond a one-liner? Small mechanical tasks are NOT worthy. A row whose family (related ideas) recently grew may now be worth a proposal even if it looks small alone." },
+					path: { type: "string", enum: ["research", "inspect", "grill", "none"], instructions: "How to establish the proposal: research = deeper research first; inspect = codebase inspection first; grill = known-unknowns session with the user; none = no proposal needed." },
+					why: { type: "string", instructions: "One line, max 12 words." },
+				},
+			};
+		}
+		const r = await generate(`[pending + parked ledger rows]\n${context}\n\nDecide per row whether it deserves a formal proposal before build work, and how to establish it.`, questions);
+		const parsed = parseTriage(r?.result, plan.toJudge);
+		if (parsed) {
+			const now = new Date().toISOString();
+			for (const t of parsed) {
+				tags[t.item] = { worthy: t.worthy, path: t.path, why: t.why, ...(t.confidence !== undefined ? { confidence: t.confidence } : {}), famSize: famSize(t.item), at: now };
+			}
+			saveMeta({ ...loadMeta(), triage: tags });
+		}
+	}
+	return { tags, judged: plan.toJudge.length, inherited: plan.inherited };
+}
+
+/** Marker lines from the persisted tag map (item-keyed). */
+export function triageMarkerLines(tags: NonNullable<Meta["triage"]>): string[] {
+	const mark = String.fromCharCode(0x24df); // ⓟ
+	return Object.entries(tags).filter(([, t]) => t.worthy && t.path !== "none")
+		.map(([item, t]) => `${mark} ${t.path}: ${item.slice(0, 70)} — ${t.why}`);
 }

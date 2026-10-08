@@ -29,7 +29,7 @@ import { ingestDocs } from "./ext/ingest_docs.ts";
 import { filterBlocks, listKinds, composeKind } from "./ext/docs.ts";
 import { initRepo } from "./ext/init.ts";
 import { agentsOffer } from "./ext/agentsmd.ts";
-import { writeOfferProposal, stampDecision, writeProposal, listProposals, triagePending, triageMarkerLines, type TriageRow } from "./ext/proposals.ts";
+import { writeOfferProposal, stampDecision, writeProposal, listProposals, triagePending, triageAuto, triageMarkerLines, type TriageRow } from "./ext/proposals.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn, judgeHealth, readTrailTail, verbatimSurface } from "./ext/trail.ts";
@@ -694,7 +694,11 @@ export default function majordome(pi: ExtensionAPI): void {
 			if (cmd === "ledger") {
 				// the boxed ledger table — same fold as status, table presentation.
 				// `house` = every repo's blocks unfiltered; `@slug` = one worker's repo.
-				const markers = st.triage ? triageMarkerLines(st.triage) : [];
+				let markers: string[] = [];
+				try {
+					const t = await triageAuto();
+					if (t) markers = triageMarkerLines(t.tags);
+				} catch { /* triage is advisory — the table renders regardless */ }
 				if (a === "house") return notify(formatLedgerTable(loadHouseRows()) + (markers.length ? `\n${markers.join("\n")}` : ""));
 				if (a) {
 					const slug = a.replace(/^@/, "");
@@ -705,6 +709,41 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 				}
 				const table = formatLedgerTable(loadStatusRows());
 				return notify(table + (markers.length ? `\n${markers.join("\n")}` : ""));
+			}
+			if (cmd === "proposal") {
+				// store-backed proposals: list · show <id> · decide <id> approve|reject · add
+				const rest = parts.slice(2);
+				const sub = a;
+				if (!sub || sub === "list") {
+					const entries = listProposals();
+					return notify(entries.length ? entries.map((e) => `${e.meta.status.padEnd(9)} ${e.file.replace(/\.md$/, "")}  ${e.title}`).join("\n") : "no proposals (init/housekeeping/triage offer them when there is something to ask)");
+				}
+				if (sub === "show" && rest[0]) {
+					const e = listProposals().find((x) => x.meta.kind.includes(rest[0]) || x.path === rest[0]);
+					return e ? notify(`${e.meta.status.toUpperCase()} — ${e.title}\n${e.body.slice(0, 1500)}${e.meta.decided ? `\n\ndecided ${e.meta.decided}${e.meta.reason ? `: ${e.meta.reason}` : ""}` : ""}`) : notify(`unknown proposal "${rest[0]}"`);
+				}
+				if (sub === "decide" && rest.length >= 2) {
+					const [id, verdict] = rest;
+					const reason = rest.slice(2).join(" ");
+					if (verdict !== "approve" && verdict !== "reject") return notify("decide: verdict must be approve or reject");
+					stampDecision(id.startsWith("proposal:") ? id : `proposal:${id}`, { status: verdict, by: "captain", ...(reason ? { reason } : {}) });
+					return notify(`proposal ${id} → ${verdict}`);
+				}
+				if (sub === "add" && rest.length >= 2) {
+					return notify(`proposal filed: ${writeProposal({ kind: rest[0], title: rest.slice(1).join(" "), body: rest.slice(1).join(" "), source: "captain" })}`);
+				}
+				return notify("proposal: list · show <id> · decide <id> approve|reject [reason] · add <kind> <title>");
+			}
+			if (cmd === "triage") {
+				// batched proposal-worthiness over the pending+parked ledger — ONE
+				// judge call for the un-judged rows only (incremental, meta-persisted)
+				notify("triage: judging new/changed rows…");
+				triageAuto().then((r) => {
+					st.triage = null; // markers render from the persisted meta tags
+					const lines = triageMarkerLines(r.tags);
+					notify(`${r.judged} judged · ${r.inherited} inherited\n${lines.length ? lines.join("\n") : "no pending or parked row needs a proposal"}`);
+				}).catch(() => notify("triage failed — advisory only"));
+				return;
 			}
 			if (cmd === "status") {
 				// --export md: regenerate STATUS.md from the decision fold (the one
@@ -803,9 +842,10 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 					notify(`docs pull \u2014 ingested: ${r2.files} files \u2192 ${r2.blocks} blocks (configure ~/.config/pi-majordome/docs-sources.json)`);
 					return;
 				}
-				if (a === "gen" || a?.startsWith("gen ")) a = a === "gen" ? "" : a.slice(4);
+				let da: string | undefined = a;
+				if (da === "gen" || da?.startsWith("gen ")) da = da === "gen" ? "" : da.slice(4);
 				const kinds = listKinds();
-				if (!a || a === "kinds") {
+				if (!da || da === "kinds") {
 					notify([
 						"/majordome docs gen <kind> [tag|all] [show] \u00b7 docs pull",
 						`kinds: ${kinds.join(" · ")}`,
@@ -815,7 +855,7 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 					].join("\n"));
 					return;
 				}
-				if (a === "adr") {
+				if (da === "adr") {
 					const targets = !b || b === "all" ? st.blocks : st.blocks.filter((x) => x === resolveId(b) || shortTag(x.session).toLowerCase().includes(b.toLowerCase()));
 					if (!targets.length) return notify("nothing to export");
 					const dir = join(majordomeDir(), "exports");
@@ -828,7 +868,7 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 					notify(`exported ${targets.length} ADR(s) → ${dir}`);
 					return;
 				}
-				const kind = a;
+				const kind = da;
 				const scopeArg = b && !["show"].includes(b) ? b : undefined;
 				const showOnly = b === "show" || parts[3] === "show";
 				const meta = loadMeta();
@@ -898,6 +938,8 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 					"  /majordome housekeeping  doctor checks + ledger staleness; safe doc fixes applied, dangerous listed ('dry-run' previews)",
 					"  /majordome list | show | forget | export | reindex | stats | log",
 					"  /majordome docs gen <kind> [tag|all] [show] · docs pull  compose docs / ingest sources",
+					"  /majordome proposal list · show <id> · decide <id> approve|reject · add <kind> <title>",
+					"  /majordome triage  batched proposal-worthiness tags (incremental; ledger renders \u24df markers)",
 				].join("\n"));
 				return;
 			}

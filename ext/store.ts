@@ -230,6 +230,9 @@ export interface Meta {
 	docsCursor: Record<string, string>; // doc name -> ISO time last touched
 	turns?: number; // cumulative turn counter (judge-cost telemetry denominator; stamped at turn_end)
 	docsProfile?: DocsProfile; // per-repo docs watch — detected at init; .majordome/docs.json overrides at read time
+	/** Proposal-worthiness tags (triage): keyed by pending/parked item string.
+	 * Preserved on saveMeta calls that don't pass one (docsProfile pattern). */
+	triage?: Record<string, { worthy: boolean; path: string; why: string; confidence?: number; famSize: number; at: string }>;
 }
 
 export function loadMeta(): Meta {
@@ -239,6 +242,7 @@ export function loadMeta(): Meta {
 		const out: Meta = { dims: m.dims ?? [], docsCursor: m.docsCursor ?? {} };
 		if (typeof m.turns === "number") out.turns = m.turns;
 		if (isValidDocsProfile(m.docsProfile)) out.docsProfile = m.docsProfile; // lenient: junk profile reads as absent
+		if (m.triage && typeof m.triage === "object") out.triage = m.triage;
 		return out;
 	} catch {
 		return { dims: [], docsCursor: {} };
@@ -252,16 +256,18 @@ export function saveMeta(meta: Meta): void {
 	// saveMeta sites) must not clobber either
 	let docsProfile = meta.docsProfile;
 	let turns = typeof meta.turns === "number" ? meta.turns : undefined;
+	let triage = meta.triage;
 	if (!docsProfile || turns === undefined) {
 		try {
 			const prev = JSON.parse(readFileSync(p("index.json"), "utf8"));
 			if (!docsProfile && isValidDocsProfile(prev?.docsProfile)) docsProfile = prev.docsProfile;
 			if (turns === undefined && typeof prev?.turns === "number") turns = prev.turns;
+			if (!triage && prev?.triage && typeof prev.triage === "object") triage = prev.triage;
 		} catch {
 			/* fresh store */
 		}
 	}
-	writeFileSync(p("index.json"), JSON.stringify({ dims: meta.dims, docsCursor: meta.docsCursor, ...(turns ? { turns } : {}), ...(docsProfile ? { docsProfile } : {}) }, null, 1));
+	writeFileSync(p("index.json"), JSON.stringify({ dims: meta.dims, docsCursor: meta.docsCursor, ...(turns ? { turns } : {}), ...(docsProfile ? { docsProfile } : {}), ...(triage ? { triage } : {}) }, null, 1));
 }
 
 export function loadVocab(): string[] {
