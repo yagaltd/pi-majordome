@@ -6,8 +6,16 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 fail=0
 npx tsx ext/selfcheck.ts > /tmp/prepush-selfcheck.txt 2>&1 || fail=1
 npx tsx tools/docsbench.ts > /tmp/prepush-docsbench.txt 2>&1 || fail=1
+# typecheck gate on the unbound-identifier class only (TS2304 name not found /
+# TS2305 no exported member) — the failure class that shipped loadHouseRows
+# undefined to a live session. Narrowing/style noise (TS2339 etc.) is parked.
+npx tsc --noEmit > /tmp/prepush-tsc.txt 2>&1
+if grep -qE "error TS(2304|2305)" /tmp/prepush-tsc.txt; then
+  fail=1
+  echo "TYPECHECK: unbound identifier(s) found — see /tmp/prepush-tsc.txt" >&2
+fi
 if [ "$fail" -ne 0 ]; then
-  echo "PRE-PUSH GATE RED — push blocked. Evidence: /tmp/prepush-selfcheck.txt /tmp/prepush-docsbench.txt"
+  echo "PRE-PUSH GATE RED — push blocked. Evidence: /tmp/prepush-selfcheck.txt /tmp/prepush-docsbench.txt /tmp/prepush-tsc.txt"
   echo "Fix the gates; never chain a gate and a push in one command."
   exit 1
 fi

@@ -26,7 +26,7 @@ import { confidenceGrill, cursorForDoc, cursorKey, decomposeAllowed, decomposedI
 import { BUILTIN_DOC_WATCH, resolveDocsProfile } from "./ext/docsprofile.ts";
 import { compileMap } from "./ext/map.ts";
 import { ingestDocs } from "./ext/ingest_docs.ts";
-import { listKinds, composeKind } from "./ext/docs.ts";
+import { filterBlocks, listKinds, composeKind } from "./ext/docs.ts";
 import { initRepo } from "./ext/init.ts";
 import { agentsOffer } from "./ext/agentsmd.ts";
 import { writeOfferProposal, stampDecision } from "./ext/proposals.ts";
@@ -35,7 +35,7 @@ import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
 import { trail, aggregate, judgeStatsLines, setTrailTurn } from "./ext/trail.ts";
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
 import { appendEntities, extractEntities, knownEntitiesIn } from "./ext/entities.ts";
-import { statusJoinLines, loadStatusRows, formatStatus, formatLedgerTable, formatHouseStatus, exportStatusMd } from "./ext/status.ts";
+import { statusJoinLines, loadStatusRows, loadHouseRows, formatStatus, formatLedgerTable, formatHouseStatus, exportStatusMd } from "./ext/status.ts";
 import { loadUserPrefs, renderUserPrefs, setUserPref, resetUserPrefs as resetUserPrefsFile, userFile } from "./ext/userprefs.ts";
 import { housekeeping } from "./ext/housekeep.ts";
 import { appendBlock, appendDecision, blockDims, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";

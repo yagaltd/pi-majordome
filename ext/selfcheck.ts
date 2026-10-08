@@ -16,7 +16,7 @@ import { timeTravel, rankArm, route, injectionText, judgeLine, docsNudge, scanDo
 import { resolveWorkerRef } from "./orch.ts";
 import { ingestDocs } from "./ingest_docs.ts";
 import { composeKind, digest, filterBlocks } from "./docs.ts";
-import type { Block } from "./store.ts";
+import type { BlockStatus, Block } from "./store.ts";
 import type { PanelGrader } from "./panel.ts";
 
 let failures = 0;
