@@ -1175,7 +1175,7 @@ if (process.argv.includes("--parity")) {
 				{ item: "parked-thing", status: "parked", evidence: "", substrate: "" },
 			]);
 			const bl = multi.split("\n");
-			check("ledger table: pending renders one bullet per item (one line per row); other statuses stay packed", bl.filter((l) => l.includes("│· ")).length === 2 && bl.some((l) => l.includes("· alpha")) && bl.some((l) => l.includes("· beta")) && !bl.some((l) => l.includes("alpha · beta")));
+			check("ledger table: scan-list statuses group topic families (core(2) header + indented bullets), singletons stay flat, parked groups separately", bl.some((l) => l.includes("│core (2):")) && bl.filter((l) => l.includes("│  · ")).length === 2 && bl.some((l) => l.includes("│  · alpha")) && bl.some((l) => l.includes("│  · beta")) && bl.some((l) => l.includes("│· parked-thing")) && !bl.some((l) => l.includes("alpha · beta")));
 		}
 		{
 			const idx2 = await import("node:fs").then((fs) => fs.readFileSync(new URL("../index.ts", import.meta.url), "utf8"));

@@ -357,6 +357,21 @@ export function formatStatus(rows: StatusRow[]): string {
 
 export interface HouseWorkerStatus { name: string; cwd: string; rows: StatusRow[] }
 
+/** Deterministic topic families for the ledger view. Ordered rules; the
+ * fallback is core. A VIEW lens only — the store stays flat. */
+const TOPIC_RULES: [RegExp, string][] = [
+	[/workflow|funnel|grill|concierge/i, "workflow"],
+	[/judge|jev|typellm|\bshape\b|panel|clarif|decompose/i, "judgment"],
+	[/freshness|recall|substring|verbatim|leiden|attribution/i, "recall"],
+	[/orch|worker|fleet|deck|isolation|swarm/i, "orchestration"],
+	[/docs|naming|ledger/i, "docs"],
+	[/sqlite|storage/i, "storage"],
+];
+export function topicOf(item: string): string {
+	for (const [re, fam] of TOPIC_RULES) if (re.test(item)) return fam;
+	return "core";
+}
+
 /** The boxed ledger table — the /majordome ledger view. Same fold as status,
  * presented as a status×items table: one row per status, items wrapped in the
  * cell, sized to the full terminal width (detected, or the `width` override;
@@ -408,7 +423,34 @@ export function formatLedgerTable(rows: StatusRow[], width?: number): string {
 	const detected = width
 		|| Number(process.stdout?.columns) || Number.parseInt(process.env.COLUMNS ?? "", 10) || 113;
 	const cellW = Math.min(Math.max(detected - labelW - 3, 40), 240);
-	const body = body0.map((b) => ({ label: b.label, lines: b.st === "pending" ? bullets(b.items) : wrap(b.items) }));
+	// scan-list statuses (pending/parked) group into topic families (≥2 items
+	// collapse to one family bullet + sub-bullets; singletons stay flat).
+	// built/dropped stay packed (reference lists, not queues).
+	const bulletGroup = (items: string[]): string[] => {
+		const fams = items.map((it) => ({ it, fam: topicOf(it) }));
+		const counts = new Map<string, number>();
+		fams.forEach((f) => counts.set(f.fam, (counts.get(f.fam) ?? 0) + 1));
+		const out: string[] = [];
+		const emitted = new Set<string>();
+		for (const { it, fam } of fams) {
+			if ((counts.get(fam) ?? 0) < 2 || emitted.has(fam)) continue;
+			emitted.add(fam);
+			out.push(`${fam} (${counts.get(fam)}):`);
+			for (const x of fams.filter((f) => f.fam === fam)) {
+				const segs: string[] = [];
+				for (let i = 0; i < x.it.length; i += cellW - 5) segs.push(x.it.slice(i, i + cellW - 5));
+				out.push(...segs.map((seg, j) => (j === 0 ? `  · ${seg}` : `    ${seg}`)));
+			}
+		}
+		for (const { it, fam } of fams) {
+			if ((counts.get(fam) ?? 0) >= 2) continue;
+			const segs: string[] = [];
+			for (let i = 0; i < it.length; i += cellW - 2) segs.push(it.slice(i, i + cellW - 2));
+			out.push(...segs.map((seg, j) => (j === 0 ? `· ${seg}` : `  ${seg}`)));
+		}
+		return out;
+	};
+	const body = body0.map((b) => ({ label: b.label, lines: b.st === "pending" || b.st === "parked" ? bulletGroup(b.items) : wrap(b.items) }));
 	const top = `┌${"─".repeat(labelW)}┬${"─".repeat(cellW)}┐`;
 	const mid = `├${"─".repeat(labelW)}┼${"─".repeat(cellW)}┤`;
 	const bot = `└${"─".repeat(labelW)}┴${"─".repeat(cellW)}┘`;
