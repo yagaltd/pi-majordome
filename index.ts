@@ -900,7 +900,7 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 						if (scoped.length) {
 							const composed = composeKind(doc.toLowerCase(), scoped);
 							if (composed) {
-								sections.push(`## ${doc} (digest of ${scoped.length} blocks since ${cursor.slice(0, 10) || "the beginning})\n\n${composed.digest}`);
+								sections.push(`## ${doc} (digest of ${scoped.length} blocks since ${cursor.slice(0, 10) || "the beginning"}\n\n${composed.digest}`);
 								staleKinds.push(doc);
 							}
 						}
