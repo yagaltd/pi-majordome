@@ -696,7 +696,10 @@ export default function majordome(pi: ExtensionAPI): void {
 				// `house` = every repo's blocks unfiltered; `@slug` = one worker's repo.
 				let markers: string[] = [];
 				try {
-					const t = await triageAuto();
+					const scope = a === "house"
+						? loadHouseRows().filter((r) => r.status === "pending" || r.status === "parked")
+						: loadStatusRows().filter((r) => r.status === "pending" || r.status === "parked");
+					const t = await triageAuto({ rows: scope });
 					if (t) markers = triageMarkerLines(t.tags);
 				} catch { /* triage is advisory — the table renders regardless */ }
 				if (a === "house") return notify(formatLedgerTable(loadHouseRows()) + (markers.length ? `\n${markers.join("\n")}` : ""));

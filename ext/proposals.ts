@@ -13,6 +13,7 @@ import { appendBlock, isProposalBlock, loadBlocks, loadMeta, saveMeta, type Bloc
 import { loadKey } from "./judges.ts";
 import { loadStatusRows, topicOf } from "./status.ts";
 import { generate } from "./judges.ts";
+import { trail } from "./trail.ts";
 
 export type ProposalStatus = "pending" | "approved" | "rejected" | "superseded";
 export type DecisionStatus = "approved" | "rejected"; // a decision is never "pending"
@@ -308,11 +309,42 @@ export function parseTriage(res: Record<string, unknown> | null | undefined, row
 	return out;
 }
 
+const TRIAGE_CHUNK = 8; // 26 rows in one call blow the 30s transport timeout — 8 thinking questions fit comfortably
+
+/** Judge rows in chunks (<=TRIAGE_CHUNK rows per generate call). Context lines
+ * are per-chunk numbered to match parseTriage's row_N keys. Partial failure
+ * keeps earlier chunks (fail-open) and trails the miss for diagnosis. */
+async function judgeRowsInChunks(lines: string[], rows: { item: string }[]): Promise<TriageRow[] | null> {
+	const out: TriageRow[] = [];
+	let failed = 0;
+	for (let c = 0; c < rows.length; c += TRIAGE_CHUNK) {
+		const chunkRows = rows.slice(c, c + TRIAGE_CHUNK);
+		const chunkCtx = lines.slice(c, c + TRIAGE_CHUNK).join("\n").slice(0, 3500);
+		const questions: Record<string, unknown> = {};
+		for (let i = 0; i < chunkRows.length; i++) {
+			questions[`row_${i + 1}`] = {
+				type: "object",
+				properties: {
+					worthy: { type: "boolean", return_probabilities: true, instructions: "Does this idea deserve a formal proposal (scoped, reviewable) BEFORE any build work — because it is complex/large, a group of related ideas, touches multiple systems, or needs captain approval beyond a one-liner? Small mechanical tasks are NOT worthy. A row whose family (related ideas) recently grew may now be worth a proposal even if it looks small alone." },
+					path: { type: "string", enum: ["research", "inspect", "grill", "none"], instructions: "How to establish the proposal: research = deeper research first; inspect = codebase inspection first; grill = known-unknowns session with the user; none = no proposal needed." },
+					why: { type: "string", instructions: "One line, max 12 words." },
+				},
+			};
+		}
+		const r = await generate(`[pending + parked ledger rows]\n${chunkCtx}\n\nDecide per row whether it deserves a formal proposal before build work, and how to establish it.`, questions);
+		const parsed = parseTriage(r?.result, chunkRows);
+		if (parsed) out.push(...parsed);
+		else failed++;
+	}
+	if (failed) trail("triageChunk", { ok: false, failed, of: Math.ceil(rows.length / TRIAGE_CHUNK) });
+	return out.length ? out : null;
+}
+
 /** Batched triage: ONE generate call over every pending row. Deterministic
  * family sizes (topicOf) pre-seed the group-of-ideas signal. Null on no key
  * or transport failure — triage is advisory and never blocks the ledger. */
-export async function triagePending(cwd = process.cwd()): Promise<TriageRow[] | null> {
-	const rows = loadStatusRows(cwd).filter((r) => r.status === "pending");
+export async function triagePending(rowsOverride?: { item: string }[], cwd = process.cwd()): Promise<TriageRow[] | null> {
+	const rows = rowsOverride ?? loadStatusRows(cwd).filter((r) => r.status === "pending");
 	if (!rows.length) return [];
 	if (!loadKey()) return null;
 	const fams = new Map<string, number>();
@@ -356,8 +388,8 @@ export function triagePlan(rows: { item: string; status: string }[], stored: Non
  * merge + persist tags in meta (survives restarts), return ALL rows' tags
  * (pending + parked — both scan-lists). Null-tagged renders come straight
  * from the store: steady-state renders add zero judge calls. */
-export async function triageAuto(cwd = process.cwd()): Promise<{ tags: NonNullable<Meta["triage"]>; judged: number; inherited: number }> {
-	const rows = loadStatusRows(cwd).filter((r) => r.status === "pending" || r.status === "parked");
+export async function triageAuto(opts: { rows?: { item: string; status: string }[]; cwd?: string } = {}): Promise<{ tags: NonNullable<Meta["triage"]>; judged: number; inherited: number }> {
+	const rows = opts.rows ?? loadStatusRows(opts.cwd ?? process.cwd()).filter((r) => r.status === "pending" || r.status === "parked");
 	const stored = loadMeta().triage ?? {};
 	const famSize = (item: string): number => {
 		const f = topicOf(item);
@@ -368,23 +400,11 @@ export async function triageAuto(cwd = process.cwd()): Promise<{ tags: NonNullab
 	if (plan.toJudge.length && loadKey()) {
 		const fams = new Map<string, number>();
 		plan.toJudge.forEach((r) => { const f = topicOf(r.item); fams.set(f, (fams.get(f) ?? 0) + 1); });
-		const context = plan.toJudge.map((r, i) => {
+		const lines = plan.toJudge.map((r, i) => {
 			const st = rows.find((x) => x.item === r.item)?.status ?? "pending";
 			return `${i + 1}. [topic=${topicOf(r.item)} family=${fams.get(topicOf(r.item))} status=${st}] ${r.item}`;
-		}).join("\n").slice(0, 3500);
-		const questions: Record<string, unknown> = {};
-		for (let i = 0; i < plan.toJudge.length; i++) {
-			questions[`row_${i + 1}`] = {
-				type: "object",
-				properties: {
-					worthy: { type: "boolean", return_probabilities: true, instructions: "Does this idea deserve a formal proposal (scoped, reviewable) BEFORE any build work — because it is complex/large, a group of related ideas, touches multiple systems, or needs captain approval beyond a one-liner? Small mechanical tasks are NOT worthy. A row whose family (related ideas) recently grew may now be worth a proposal even if it looks small alone." },
-					path: { type: "string", enum: ["research", "inspect", "grill", "none"], instructions: "How to establish the proposal: research = deeper research first; inspect = codebase inspection first; grill = known-unknowns session with the user; none = no proposal needed." },
-					why: { type: "string", instructions: "One line, max 12 words." },
-				},
-			};
-		}
-		const r = await generate(`[pending + parked ledger rows]\n${context}\n\nDecide per row whether it deserves a formal proposal before build work, and how to establish it.`, questions);
-		const parsed = parseTriage(r?.result, plan.toJudge);
+		});
+		const parsed = await judgeRowsInChunks(lines, plan.toJudge);
 		if (parsed) {
 			const now = new Date().toISOString();
 			for (const t of parsed) {
