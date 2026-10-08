@@ -19,7 +19,9 @@ fi
 # load smoke: index.ts must IMPORT (parse + top-level evaluation) — the exact
 # failure mode of 2026-10-08: selfcheck never imports index.ts, so only a real
 # load catches a broken extension entry. Uses the repo working tree.
-npx tsx -e 'await import(process.cwd() + "/index.ts"); console.log("load-smoke ok")' > /tmp/prepush-load.txt 2>&1 || fail=1
+printf 'await import(process.cwd() + "/index.ts");\nconsole.log("load-smoke ok");\n' > /tmp/prepush-load.mts
+npx tsx /tmp/prepush-load.mts > /tmp/prepush-load.txt 2>&1 || fail=1
+grep -q "load-smoke ok" /tmp/prepush-load.txt 2>/dev/null || { echo "LOAD SMOKE: index.ts did not import cleanly" >&2; fail=1; }
 if [ "$fail" -ne 0 ]; then
   echo "PRE-PUSH GATE RED — push blocked. Evidence: /tmp/prepush-selfcheck.txt /tmp/prepush-docsbench.txt /tmp/prepush-tsc.txt /tmp/prepush-load.txt"
   echo "Fix the gates; never chain a gate and a push in one command."
