@@ -6,16 +6,22 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 fail=0
 npx tsx ext/selfcheck.ts > /tmp/prepush-selfcheck.txt 2>&1 || fail=1
 npx tsx tools/docsbench.ts > /tmp/prepush-docsbench.txt 2>&1 || fail=1
-# typecheck gate on the unbound-identifier class only (TS2304 name not found /
-# TS2305 no exported member) — the failure class that shipped loadHouseRows
-# undefined to a live session. Narrowing/style noise (TS2339 etc.) is parked.
+# typecheck gate — TWO classes:
+#   TS1xxx  = syntax/parse errors (ALWAYS fatal — the class that shipped an
+#             unterminated string and took the whole extension down 2026-10-08)
+#   TS2304/2305 = unbound identifiers / missing exports (the load-time class)
+# Narrowing/style noise (TS2339 etc.) stays parked.
 npx tsc --noEmit > /tmp/prepush-tsc.txt 2>&1
-if grep -qE "error TS(2304|2305)" /tmp/prepush-tsc.txt; then
+if grep -qE "error TS(1[0-9]{3}|2304|2305)" /tmp/prepush-tsc.txt; then
   fail=1
-  echo "TYPECHECK: unbound identifier(s) found — see /tmp/prepush-tsc.txt" >&2
+  echo "TYPECHECK: syntax/unbound error(s) found — see /tmp/prepush-tsc.txt" >&2
 fi
+# load smoke: index.ts must IMPORT (parse + top-level evaluation) — the exact
+# failure mode of 2026-10-08: selfcheck never imports index.ts, so only a real
+# load catches a broken extension entry. Uses the repo working tree.
+npx tsx -e 'await import(process.cwd() + "/index.ts"); console.log("load-smoke ok")' > /tmp/prepush-load.txt 2>&1 || fail=1
 if [ "$fail" -ne 0 ]; then
-  echo "PRE-PUSH GATE RED — push blocked. Evidence: /tmp/prepush-selfcheck.txt /tmp/prepush-docsbench.txt /tmp/prepush-tsc.txt"
+  echo "PRE-PUSH GATE RED — push blocked. Evidence: /tmp/prepush-selfcheck.txt /tmp/prepush-docsbench.txt /tmp/prepush-tsc.txt /tmp/prepush-load.txt"
   echo "Fix the gates; never chain a gate and a push in one command."
   exit 1
 fi
