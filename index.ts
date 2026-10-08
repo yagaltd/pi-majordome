@@ -37,7 +37,7 @@ import { trail, aggregate, judgeStatsLines, setTrailTurn, judgeHealth, readTrail
 import { precisionProxy, fpCounts, proxyStatsLine } from "./ext/recall.ts";
 import { appendEntities, extractEntities, knownEntitiesIn } from "./ext/entities.ts";
 import { statusJoinLines, loadStatusRows, loadHouseRows, formatStatus, formatLedgerTable, formatHouseStatus, exportStatusMd, topicOf, dominantRepo, repoOf } from "./ext/status.ts";
-import { loadUserPrefs, renderUserPrefs, setUserPref, resetUserPrefs as resetUserPrefsFile, userFile } from "./ext/userprefs.ts";
+import { loadUserPrefs, renderUserPrefs, setUserPref, resetUserPrefs as resetUserPrefsFile, userFile, computeQueryMetrics, updateQueryStyle, saveUserPrefs } from "./ext/userprefs.ts";
 import { housekeeping } from "./ext/housekeep.ts";
 import { appendBlock, appendDecision, blockDims, lastDecisions, loadBlocks, loadMeta, loadVocab, majordomeDir, rewriteBlocks, saveMeta, saveVocab, type Block } from "./ext/store.ts";
 
@@ -489,6 +489,16 @@ export default function majordome(pi: ExtensionAPI): void {
 					appendTail(lastUser, `ⓟ {n} correction(s) in the last 3 turns — what am I getting wrong? (/majordome housekeeping, or tell me directly)`);
 				}
 			} catch { /* canary never breaks a request */ }
+
+			// query-style profile (the "tokei" idea, deterministic): HOW the captain
+			// asks — topics/length/imperative ratio — rolling into user.json. The
+			// shape/clarify judges read it via prefLines (quiet until 5 samples).
+			// Fresh turns only; ≥8 chars to skip trivial pings. Fail-open.
+			try {
+				if (query.length >= 8 && st.sessionFile) {
+					saveUserPrefs(updateQueryStyle(loadUserPrefs(), computeQueryMetrics(query)));
+				}
+			} catch { /* style telemetry never breaks a request */ }
 
 			// outputShape routing (third axis): one judge call per fresh user message.
 			// Non-default shape → ONE suggest-only tail line (advice to the agent —

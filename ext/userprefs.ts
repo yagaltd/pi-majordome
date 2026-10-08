@@ -106,6 +106,36 @@ export function saveUserPrefs(p: UserPrefs): void {
 	writeFileSync(userFile(), JSON.stringify(p, null, 1) + "\n");
 }
 
+const IMPERATIVES = new Set(["build", "fix", "add", "run", "make", "write", "show", "list", "check", "update", "remove", "delete", "create", "ship", "refactor", "generate", "inspect", "test", "deploy", "extend", "migrate", "revert", "set", "reset", "load", "read", "open"]);
+const STOP = new Set(["the", "and", "was", "for", "with", "that", "this", "what", "why", "how", "are", "can", "should", "does", "not", "you", "our", "its"]);
+
+export interface QuerySample { topics: number; imperative: boolean }
+
+/** Deterministic query-style metrics (the "tokei" idea): distinctive-token
+ * count + imperative-shape detection. Zero judge calls — pure string work. */
+export function computeQueryMetrics(query: string): QuerySample {
+	const q = query.trim();
+	const toks = q.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3 && !STOP.has(t));
+	const first = toks[0] ?? "";
+	const imperative = !q.includes("?") && IMPERATIVES.has(first);
+	return { topics: toks.length, imperative };
+}
+
+/** Rolling-average update: the profile learns HOW the captain asks. */
+export function updateQueryStyle(p: UserPrefs, sample: QuerySample): UserPrefs {
+	const samples = p.query_style.samples + 1;
+	const avg = ((p.query_style.avg_topics_per_query * p.query_style.samples) + sample.topics) / samples;
+	const imp = ((p.query_style.imperative_ratio * p.query_style.samples) + (sample.imperative ? 1 : 0)) / samples;
+	return { ...p, updated: today(), query_style: { avg_topics_per_query: Math.round(avg * 100) / 100, samples, imperative_ratio: Math.round(imp * 100) / 100 } };
+}
+
+/** The judge-consumption line: quiet until 5 samples (cold-start honest). */
+export function styleLine(p: UserPrefs): string | null {
+	if (p.query_style.samples < 5) return null;
+	const pct = Math.round(p.query_style.imperative_ratio * 100);
+	return `user query style (${p.query_style.samples} samples): avg ${p.query_style.avg_topics_per_query} topics/query · ${pct}% imperative — prefer terse, direct answers with minimal preamble`;
+}
+
 /** Upsert one captain setting and stamp updated. `answer_shape` is the
  * structured field (the shape judge reads it as a standing preference, not a
  * pair); everything else lands in preferences. Re-set keeps the original
@@ -143,6 +173,8 @@ export function prefLines(p: UserPrefs): string[] {
 	const out: string[] = [];
 	if (p.answer_shape && p.answer_shape !== "auto") out.push(`user's standing output preference: answer_shape=${p.answer_shape}`);
 	for (const pr of p.preferences) out.push(`${pr.key}=${pr.value}`);
+	const style = styleLine(p);
+	if (style) out.push(style);
 	return out;
 }
 
