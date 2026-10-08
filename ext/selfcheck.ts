@@ -1177,6 +1177,10 @@ if (process.argv.includes("--parity")) {
 			const bl = multi.split("\n");
 			check("ledger table: pending renders one bullet per item (one line per row); other statuses stay packed", bl.filter((l) => l.includes("│· ")).length === 2 && bl.some((l) => l.includes("· alpha")) && bl.some((l) => l.includes("· beta")) && !bl.some((l) => l.includes("alpha · beta")));
 		}
+		{
+			const idx2 = await import("node:fs").then((fs) => fs.readFileSync(new URL("../index.ts", import.meta.url), "utf8"));
+			check("docs naming: gen/pull verbs wired under docs, legacy aliases intact (ROLES charter \u00a7gaps #4)", idx2.includes('a?.startsWith("gen ")') && idx2.includes('a === "pull"') && idx2.includes('if (cmd === "ingest-docs")') && !idx2.includes("docs <kind> [tag|all]"));
+		}
 		}
 	}
 	{

@@ -1,4 +1,5 @@
 ## 2026-10-05 — v2 branch: judge-cost telemetry (trail aggregate)
+- docs naming consolidation (ROLES charter §gaps #4) built: /majordome docs gen <kind> + docs pull; legacy bare docs <kind> and ingest-docs remain as unlisted aliases; help + description updated; pending row superseded to built.
 - ledger table pending rows: one bullet per item, one line per row (continuation segments 2-space aligned under the bullet); parked/built/dropped keep the packed flow.
 - ledger table full-width sizing: formatLedgerTable detects stdout.columns (OR-chain — Number(undefined) is NaN, not nullish; NaN poisoned repeat() into empty borders), COLUMNS env, or 113 legacy default; width override param; clamped 40–240; behavioral fixture pins override + fallback borders.
 - typecheck gate on the unbound-identifier class (TS2304/2305) added to pre-push — closes the hole that shipped loadHouseRows undefined to a live session; two more latent unbound names fixed (filterBlocks in index.ts list path, BlockStatus in selfcheck fixture); check-only tsconfig.json added.

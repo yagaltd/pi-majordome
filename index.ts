@@ -602,7 +602,7 @@ export default function majordome(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("majordome", {
-		description: "Topic memory dashboard (bare) · list · show · forget · run-the-house (bare) · help · doctor · housekeeping · dash · status · ledger · user · orch · map · ingest-docs · docs · export · reindex · stats · log · on/off",
+		description: "Topic memory dashboard (bare) · list · show · forget · run-the-house (bare) · help · doctor · housekeeping · dash · status · ledger · user · orch · map · docs (gen/pull) · export · reindex · stats · log · on/off",
 		handler: async (args, ctx) => {
 			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
 			const cmd = parts[0];
@@ -748,10 +748,20 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 				return;
 			}
 			if (cmd === "docs") {
+				// docs naming consolidation (ROLES charter \u00a7gaps #4): one family,
+				// two verbs \u2014 `docs gen <kind>` composes, `docs pull` ingests.
+				// Legacy bare forms (`docs <kind>`, `ingest-docs`) stay as working
+				// aliases \u2014 deprecated, no help listing.
+				if (a === "pull") {
+					const r2 = ingestDocs();
+					notify(`docs pull \u2014 ingested: ${r2.files} files \u2192 ${r2.blocks} blocks (configure ~/.config/pi-majordome/docs-sources.json)`);
+					return;
+				}
+				if (a === "gen" || a?.startsWith("gen ")) a = a === "gen" ? "" : a.slice(4);
 				const kinds = listKinds();
 				if (!a || a === "kinds") {
 					notify([
-						"/majordome docs <kind> [tag|all] [show]",
+						"/majordome docs gen <kind> [tag|all] [show] \u00b7 docs pull",
 						`kinds: ${kinds.join(" · ")}`,
 						"  readme/changelog: grounded digest since that doc's cursor, sent to the agent to write it",
 						"  custom: drop a template in ~/.pi/majordome/templates/<name>.md — instruction text with a {{digest}} placeholder (HTML explanation, release email, …)",
@@ -841,7 +851,7 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 					"  /majordome doctor     audit the installation (orphans, lag, coverage)",
 					"  /majordome housekeeping  doctor checks + ledger staleness; safe doc fixes applied, dangerous listed ('dry-run' previews)",
 					"  /majordome list | show | forget | export | reindex | stats | log",
-					"  /majordome docs <kind> | ingest-docs | on/off",
+					"  /majordome docs gen <kind> [tag|all] [show] · docs pull  compose docs / ingest sources",
 				].join("\n"));
 				return;
 			}
@@ -877,7 +887,7 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 			}
 			if (cmd === "ingest-docs") {
 				const r2 = ingestDocs();
-				notify(`ingested docs: ${r2.files} files \u2192 ${r2.blocks} blocks (configure ~/.config/pi-majordome/docs-sources.json)`);
+				notify(`docs pull \u2014 ingested: ${r2.files} files \u2192 ${r2.blocks} blocks (configure ~/.config/pi-majordome/docs-sources.json)`);
 				return;
 			}
 			if (cmd === "export") {
