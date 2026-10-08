@@ -1194,6 +1194,10 @@ if (process.argv.includes("--parity")) {
 			const line = grillOptionsLine([{ q: "pricing question" }, { q: "design question" }], 0.5);
 			const rolesTxt = await import("node:fs").then((fs) => fs.readFileSync(new URL("../docs/ROLES.md", import.meta.url), "utf8"));
 			check("grill discipline: ask names its silence-default; charter carries the router rule", line.includes("default = 1: pricing question") && rolesTxt.includes("## Router rule (grill discipline)") && rolesTxt.includes("Never ask what's readable"));
+			const { join: join3 } = await import("node:path");
+			const idx3 = await import("node:fs").then((fs) => fs.readFileSync(join3(process.cwd(), "index.ts"), "utf8"));
+			check("v1.1.0: aborted workers push an explicit deck line (cancelled ≠ still-working)", idx3.includes('pi.on("agent_settled"') && idx3.includes("?.aborted") && idx3.includes('MJDX_WORKER') && idx3.includes("run aborted (cancelled, not finished)"));
+			check("v1.1.0: tool-time telemetry rides the trail (nested + sub-50ms skipped), stats carries the tool-credit window", idx3.includes('pi.on("tool_execution_end"') && idx3.includes('trail("toolTime"') && idx3.includes("parentToolCallId") && idx3.includes("tool credit (trail window)"));
 			const { settleShape } = await import("./judges.ts");
 			const low = settleShape({ shape: { value: "diagram-first", confidence: 0.4 }, why: "structural" }, "selfcheck");
 			const high = settleShape({ shape: { value: "table", confidence: 0.92 }, why: "compare" }, "selfcheck");

@@ -362,6 +362,28 @@ export default function majordome(pi: ExtensionAPI): void {
 	// the housekeeping REPORT (apply:false — advisory lines surface, fixes still
 	// wait for an explicit /majordome housekeeping). One shot per compaction;
 	// subagent scratch sessions excluded like every sweep. Fail-open.
+	// v1.1.0 agent_settled.aborted: a CANCELLED worker run never fires turn_end,
+	// so the deck's completion push never ships and the orchestrator cannot tell
+	// aborted from still-working. Push an explicit aborted line. Fail-open.
+	pi.on("agent_settled", async (event) => {
+		if (!(event as any)?.aborted || !process.env.MJDX_WORKER || !st.on) return;
+		try {
+			pushInbox({ worker: process.env.MJDX_WORKER, note: "run aborted (cancelled, not finished)", sessionFile: st.sessionFile ?? undefined });
+		} catch { /* deck push is best-effort */ }
+	});
+
+	// v1.1.0 tool_execution_end.durationMs: tool-time telemetry rides the trail
+	// (j=toolTime). Nested calls roll up into their parent; sub-50ms calls are
+	// noise for cost purposes and stay unlogged.
+	pi.on("tool_execution_end", async (event) => {
+		try {
+			const e = event as any;
+			if (e?.parentToolCallId || typeof e?.durationMs !== "number" || typeof e?.toolName !== "string") return;
+			if (e.durationMs < 50) return;
+			trail("toolTime", { tool: e.toolName, ms: Math.max(0, Math.round(e.durationMs)) });
+		} catch { /* telemetry never breaks a tool */ }
+	});
+
 	pi.on("compaction_end", async () => {
 		if (!st.on) return;
 		if (!st.sessionFile || isSubagentSession(st.sessionFile)) return;
@@ -986,6 +1008,15 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 				const judge = judgeStatsLines(ag);
 				const health = judgeHealth(readTrailTail(40));
 				const healthLines = health.map((h) => `${h.engine}: ${h.calls} call(s) · ${h.ok} ok · fail ${(h.failRate * 100).toFixed(0)}%${h.degraded ? " ⚠ DEGRADED — judgments failing open" : ""}`);
+				const toolAgg = new Map<string, { n: number; ms: number }>();
+				for (const l of readTrailTail(4000)) {
+					if (l.j !== "toolTime" || typeof l.ms !== "number" || typeof l.tool !== "string") continue;
+					const a = toolAgg.get(l.tool) ?? { n: 0, ms: 0 };
+					a.n++;
+					a.ms += l.ms;
+					toolAgg.set(l.tool, a);
+				}
+				const toolLines = [...toolAgg.entries()].sort((a, b) => b[1].ms - a[1].ms).slice(0, 5).map(([tool, a]) => `${tool}: ${a.n} call(s) · ${(a.ms / 1000).toFixed(1)}s total · ${Math.round(a.ms / a.n)}ms avg`);
 				if (!all.length && !judge.length && !healthLines.length) return notify("no routing decisions logged yet");
 				const inj = all.filter((d) => d.injected);
 				const sup = all.filter((d) => !d.injected && d.winner);
@@ -1008,6 +1039,7 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 					`│ arms (injected) ${[...arms].map(([a2, n]) => `${a2} ${n}`).join(" · ") || "-"}`,
 					...(judge.length ? ["├─ judge cost (trail aggregate)", ...judge.map((l) => `│ ${l}`)] : []),
 					...(healthLines.length ? ["├─ judge credit (live window)", ...healthLines.map((l) => `│ ${l}`)] : []),
+					...(toolLines.length ? ["├─ tool credit (trail window)", ...toolLines.map((l) => `│ ${l}`)] : []),
 					...(recallLine ? ["├─ recall feedback (the self-improving loop)", `│ ${recallLine}`] : []),
 					"├─ reading the gate",
 					`│ gate gap: injected avg (${avg(inj)}) vs suppressed avg (${avg(sup)})`,

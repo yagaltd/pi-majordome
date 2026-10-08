@@ -78,3 +78,11 @@ turns N–M · date] …`), you can interleave repos in one session — ask abou
 mailbox-parser, then code-parser — and every injected block says which repo
 it came from. Add `@slug` when you want zero ambiguity; omit it and let the
 routers rank.
+
+
+## Program status (pi ≥ 1.1.0)
+
+Workers on pi 1.1.0+ emit OSC 7501 program-status escapes (working · blocked on
+dialog/login · done · failed). Any OSC-7501-aware terminal or dashboard — herdr
+panes included — sees worker state externally, with no deck messages involved.
+`PI_PROGRAM_STATUS=1|0` overrides detection on the worker side.
