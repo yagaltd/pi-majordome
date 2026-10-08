@@ -86,6 +86,7 @@ function factQuestions(facts: string[]): Record<string, unknown> {
 			{
 				type: "string",
 				enum: ["yes", "no"],
+				return_probabilities: true, // v0.6.6: permutation-averaged, order-debiased votes
 				instructions: `Does the answer state this fact — count it when the answer states it in ANY wording (different phrasing or synonyms still count); answer no only when the substance of the fact is omitted. Fact: "${f}". Answer yes or no.`,
 			},
 		]),
@@ -97,10 +98,13 @@ function factContext({ prompt, facts, output }: PanelGradeCtx): string {
 	return `A user asked a coding agent:\n${prompt}\n\nThe answer should state these facts:\n${list}\n\nAnswer to grade:\n${output.slice(0, 1600)}`;
 }
 
-function votesOf(res: Record<string, unknown>, n: number): boolean[] | null {
+/** Exported for selfcheck: both answer shapes vote identically. */
+export function votesOf(res: Record<string, unknown>, n: number): boolean[] | null {
 	const votes = Array.from({ length: n }, (_, i) => {
 		const v = res[`fact_${i + 1}`];
-		return typeof v === "string" ? v.trim().toLowerCase() === "yes" : null;
+		if (typeof v === "string") return v.trim().toLowerCase() === "yes";
+		const val = (v as any)?.value; // v0.6.6 probability answer {value, probabilities, confidence}
+		return typeof val === "string" ? val.trim().toLowerCase() === "yes" : null;
 	});
 	return votes.some((v) => v === null) ? null : (votes as boolean[]);
 }

@@ -619,11 +619,12 @@ export type OutputShape = (typeof OUTPUT_SHAPES)[number];
 export interface ShapeVerdict {
 	shape: OutputShape;
 	why: string; // one line, ≤80 chars
+	confidence?: number; // v0.6.6 return_probabilities — mechanical <0.6 → default downgrade
 }
 
 function shapeOf(v: unknown): OutputShape | null {
-	if (typeof v !== "string" && typeof (v as any)?.choice !== "string") return null;
-	const s = (typeof v === "string" ? v : (v as any).choice).trim().toLowerCase();
+	if (typeof v !== "string" && typeof (v as any)?.choice !== "string" && typeof (v as any)?.value !== "string") return null;
+	const s = (typeof v === "string" ? v : ((v as any).choice ?? (v as any).value)).trim().toLowerCase();
 	return (OUTPUT_SHAPES as readonly string[]).includes(s) ? (s as OutputShape) : null;
 }
 
@@ -637,15 +638,20 @@ const SHAPE_INSTRUCTIONS =
 	"walkthrough: a step-by-step procedure or cause-chain narrative (how do I get from A to B, why did X fail, walk me through a concrete how-to). " +
 	"When torn between shapes, choose default.";
 
-function settleShape(res: Record<string, unknown>, judge: string, usage?: unknown): ShapeVerdict | null {
+/** Exported for selfcheck: the v0.6.6 confidence downgrade is pure. */
+export function settleShape(res: Record<string, unknown>, judge: string, usage?: unknown): ShapeVerdict | null {
 	const shape = shapeOf(res.shape);
 	if (!shape) {
 		trail("shapeVerdict", { judge, ok: false, ...tkf({ usage }) }); // fail-open: unparseable is null, never a guessed shape
 		return null;
 	}
 	const whyRaw = typeof res.why === "string" ? res.why : typeof (res.why as any)?.choice === "string" ? (res.why as any).choice : "";
-	const out: ShapeVerdict = { shape, why: whyRaw.replace(/\s+/g, " ").trim().slice(0, 80) };
-	trail("shapeVerdict", { judge, ok: true, shape: out.shape, why: out.why, ...tkf({ usage }) }); // never message text
+	const conf = typeof (res.shape as any)?.confidence === "number" ? (res.shape as any).confidence : undefined;
+	// mechanical rung-1 fallback: low confidence lands on default, never a guessed shape
+	const final: OutputShape = conf !== undefined && conf < 0.6 ? "default" : shape;
+	const downgraded = final !== shape;
+	const out: ShapeVerdict = { shape: final, why: whyRaw.replace(/\s+/g, " ").trim().slice(0, 80), ...(conf !== undefined ? { confidence: conf } : {}) };
+	trail("shapeVerdict", { judge, ok: true, shape: out.shape, why: out.why, ...(conf !== undefined ? { confidence: conf } : {}), ...(downgraded ? { downgraded: true } : {}), ...tkf({ usage }) }); // never message text
 	return out;
 }
 
@@ -694,7 +700,7 @@ export async function shapeVerdict(userMessage: string, prefLines: string[] = us
 	const pref = prefLines.length ? `\n\n[user's standing output preferences]\n${prefLines.join("\n").slice(0, 800)}` : "";
 	if (loadKey()) {
 		const r = await generate(`[user message]\n${userMessage.slice(0, 1500)}${pref}`, {
-			shape: { type: "string", enum: [...OUTPUT_SHAPES], instructions: SHAPE_INSTRUCTIONS },
+			shape: { type: "string", enum: [...OUTPUT_SHAPES], instructions: SHAPE_INSTRUCTIONS, return_probabilities: true },
 			why: { type: "string", instructions: "One-line reason, max 12 words." },
 		});
 		if (!r?.result) {

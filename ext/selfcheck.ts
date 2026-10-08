@@ -1194,6 +1194,14 @@ if (process.argv.includes("--parity")) {
 			const line = grillOptionsLine([{ q: "pricing question" }, { q: "design question" }], 0.5);
 			const rolesTxt = await import("node:fs").then((fs) => fs.readFileSync(new URL("../docs/ROLES.md", import.meta.url), "utf8"));
 			check("grill discipline: ask names its silence-default; charter carries the router rule", line.includes("default = 1: pricing question") && rolesTxt.includes("## Router rule (grill discipline)") && rolesTxt.includes("Never ask what's readable"));
+			const { settleShape } = await import("./judges.ts");
+			const low = settleShape({ shape: { value: "diagram-first", confidence: 0.4 }, why: "structural" }, "selfcheck");
+			const high = settleShape({ shape: { value: "table", confidence: 0.92 }, why: "compare" }, "selfcheck");
+			const plain = settleShape({ shape: "default", why: "plain" }, "selfcheck");
+			check("v0.6.6 shape: confidence <0.6 downgrades to default (mechanical rung-1), >=0.6 passes, plain strings unchanged", low?.shape === "default" && low?.confidence === 0.4 && high?.shape === "table" && high?.confidence === 0.92 && plain?.shape === "default" && plain?.confidence === undefined);
+			const { votesOf } = await import("./panel.ts");
+			const vres = { fact_1: "yes", fact_2: { value: "no" }, fact_3: { value: "yes", confidence: 0.8 } };
+			check("v0.6.6 panel: votesOf reads plain strings and probability objects identically", JSON.stringify(votesOf(vres, 3)) === JSON.stringify([true, false, true]) && votesOf({ fact_1: 42 }, 1) === null);
 		}
 		}
 	}
