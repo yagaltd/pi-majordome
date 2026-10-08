@@ -136,7 +136,20 @@ export async function orch(arg?: string): Promise<string> {
 		conf.workers.push(w);
 		save(conf);
 		const n = slugBlocks(cwd);
-		return `registered ${w.name} → ${cwd} (${n} blocks ${n > 0 ? "[warm]" : "[cold — will init on first start]"})\n/majordome orch to start it`;
+		// eager init at link time (pending row): a cold repo is initialized NOW,
+		// so the ledger exists the moment you link — status/ledger @slug work
+		// immediately and first start pays nothing. The start path keeps its
+		// n===0 branch as a safety net (idempotent — warm repos skip).
+		let note = `${n} blocks [warm]`;
+		if (n === 0) {
+			try {
+				await initRepo({ cwd });
+				note = `cold → initialized now (${slugBlocks(cwd)} blocks)`;
+			} catch (e) {
+				note = `cold — init deferred to first start (init failed: ${(e as Error).message.slice(0, 60)})`;
+			}
+		}
+		return `registered ${w.name} → ${cwd} (${note})\n/majordome orch to start it`;
 	}
 	const rm = trim.match(/^remove (\d+)$/);
 	if (rm) {

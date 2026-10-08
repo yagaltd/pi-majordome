@@ -1,4 +1,5 @@
 ## 2026-10-05 — v2 branch: judge-cost telemetry (trail aggregate)
+- orch add eager init at link time: cold repos initRepo() immediately on add (ledger exists at link; status/ledger @slug instantly useful), start path keeps n===0 branch as idempotent safety net, init failure degrades to deferred note.
 - fold repair: compaction-hook built block had used a shortened item name, so the original long pending row never flipped (latest-wins matches exact item strings). Superseded with the exact string — pending 18, row built. Discipline noted in-block: superseding blocks must copy the exact original item string.
 - docs naming consolidation (ROLES charter §gaps #4) built: /majordome docs gen <kind> + docs pull; legacy bare docs <kind> and ingest-docs remain as unlisted aliases; help + description updated; pending row superseded to built.
 - ledger table pending rows: one bullet per item, one line per row (continuation segments 2-space aligned under the bullet); parked/built/dropped keep the packed flow.

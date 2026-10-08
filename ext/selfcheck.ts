@@ -1180,6 +1180,8 @@ if (process.argv.includes("--parity")) {
 		{
 			const idx2 = await import("node:fs").then((fs) => fs.readFileSync(new URL("../index.ts", import.meta.url), "utf8"));
 			check("docs naming: gen/pull verbs wired under docs, legacy aliases intact (ROLES charter \u00a7gaps #4)", idx2.includes('a?.startsWith("gen ")') && idx2.includes('a === "pull"') && idx2.includes('if (cmd === "ingest-docs")') && !idx2.includes("docs <kind> [tag|all]"));
+			const orchSrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("./orch.ts", import.meta.url), "utf8"));
+			check("orch add: eager init at link time — cold repos initRepo() on add, safety net stays at start", orchSrc.includes("cold \u2192 initialized now") && orchSrc.includes("await initRepo({ cwd })") && orchSrc.split("await initRepo").length >= 2);
 		}
 		}
 	}
