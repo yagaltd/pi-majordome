@@ -353,6 +353,25 @@ export default function majordome(pi: ExtensionAPI): void {
 		status();
 	});
 
+	// compaction_end (pi event): the freshness trigger — vcc compaction just
+	// rewrote the session (summary + kept N turns), so fresh decisions are
+	// exactly the material about to age out of the working window. Refresh the
+	// recall index (indexSession — append-only, guarded by indexedKeys) and run
+	// the housekeeping REPORT (apply:false — advisory lines surface, fixes still
+	// wait for an explicit /majordome housekeeping). One shot per compaction;
+	// subagent scratch sessions excluded like every sweep. Fail-open.
+	pi.on("compaction_end", async () => {
+		if (!st.on) return;
+		if (!st.sessionFile || isSubagentSession(st.sessionFile)) return;
+		try {
+			const added = await indexSession();
+			let report = "";
+			try { report = await housekeeping(process.cwd(), { apply: false }); } catch { /* report is advisory */ }
+			const needsYes = (report.match(/needs your yes/gi) ?? []).length;
+			st.uiCtx.ui.setStatus("majordome", `compaction absorbed: +${added} block(s) indexed · housekeeping: ${needsYes} item(s) need your yes (/majordome housekeeping)`);
+		} catch { /* compaction follow-up never breaks the session */ }
+	});
+
 	pi.on("turn_end", async () => {
 		if (!st.on) return;
 		try {

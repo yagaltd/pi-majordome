@@ -1158,6 +1158,10 @@ if (process.argv.includes("--parity")) {
 		check("shape: diagram-first reserved for structural content (Karpathy rung ladder, prose = rung 1)", jsrc.includes("RESERVED for genuinely structural content") && jsrc.includes("rung 1"));
 	}
 	{
+		const idx = await import("node:fs").then((fs) => fs.readFileSync(new URL("../index.ts", import.meta.url), "utf8"));
+		check("compaction hook: compaction_end → indexSession refresh + housekeeping REPORT-ONLY (apply:false — fixes still need your yes)", idx.includes('pi.on("compaction_end"') && idx.includes('housekeeping(process.cwd(), { apply: false })') && idx.includes("compaction absorbed"));
+	}
+	{
 		const { decomposedInjection } = await import("./router.ts");
 		const mk = (id: string, g: string) => ({ id, gist: g, head: g, session: "s", firstTurn: 1, lastTurn: 2, closedAt: "2026-10-07T00:00:00Z" });
 		const subs = [
