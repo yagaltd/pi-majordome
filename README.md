@@ -167,6 +167,40 @@ Digests are doc-worthy blocks **since that doc's cursor** — the exact
 undocumented work, traceable to a block. Generated docs are stamped
 `generated_by: majordome`; `verified:` is human-only.
 
+## Systems (October 2026)
+
+The consolidation-era build, one line each (full context in
+[docs/OVERVIEW.md](docs/OVERVIEW.md) + the changelog):
+
+- **Decision-block store** — the ledger is a fold of `blocks.jsonl`
+  (kind=decision, append-only, latest-wins); `STATUS.md` is a generated
+  export, never hand-edited. `/majordome status [--export md]`.
+- **Ledger views** — boxed table with topic grouping (families collapse in
+  pending/parked; built/dropped stay packed), full width; `ledger house`
+  (all repos) · `ledger @slug` (one worker repo).
+- **Proposals pipeline** — idea → ledger row → on-demand triage → proposal →
+  captain decision → build. `proposal list · show · decide · add`;
+  `triage <idea>` judges one idea (batched judging was reverted: per-row
+  focus beats throughput for captain-facing calls). Legacy `.md` proposals
+  migrate once, idempotent.
+- **Verbatim recall surface** — `verbatim:` lines cite `trail:N` originals
+  (append-only = stable citations) alongside the labeled block lines.
+- **Compaction hook** — pi `compaction_end` triggers consolidation refresh +
+  housekeeping report (report-only; fixes still need your yes).
+- **Correction canary + soft wall** — deterministic pushback tokens; ≥2
+  correction turns in 3 → the next response opens with a check-in.
+  Corrections SCORE agent quality (they are the precision proxy's ground
+  truth) — they never rewrite `user.md`; shape-preference pushbacks move
+  through proposals.
+- **Judge credit + tool credit** — degraded judges surface once in the UI
+  and clear on recovery; `stats` shows judge fail-open rates and tool-time
+  windows (pi ≥ 1.1.0 `durationMs`).
+- **Karpathy rung ladder (shape route)** — prose is rung 1; diagrams reserved
+  for genuinely structural content; v0.6.6 probabilities add a mechanical
+  confidence <0.6 → default downgrade.
+- **docs naming** — `docs gen <kind>` composes, `docs pull` ingests; the
+  legacy bare forms are unlisted aliases.
+
 ## Benchmarks
 
 `lifecyclebench` (see [bench/README.md](bench/README.md)) gates every change to
