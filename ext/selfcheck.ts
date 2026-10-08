@@ -1154,6 +1154,10 @@ if (process.argv.includes("--parity")) {
 		const storeSrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("./store.ts", import.meta.url), "utf8"));
 		check("store: appendBlock stamps session default at the write seam", storeSrc.includes('"(direct)"'));
 	{
+		const jsrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("./judges.ts", import.meta.url), "utf8"));
+		check("shape: diagram-first reserved for structural content (Karpathy rung ladder, prose = rung 1)", jsrc.includes("RESERVED for genuinely structural content") && jsrc.includes("rung 1"));
+	}
+	{
 		const { decomposedInjection } = await import("./router.ts");
 		const mk = (id: string, g: string) => ({ id, gist: g, head: g, session: "s", firstTurn: 1, lastTurn: 2, closedAt: "2026-10-07T00:00:00Z" });
 		const subs = [

@@ -630,7 +630,7 @@ const SHAPE_INSTRUCTIONS =
 	"Pick the OUTPUT SHAPE this user message calls for in a coding-agent chat, given the user's standing preferences. " +
 	"default: an ordinary mixed prose/code answer — including continuations (go, ok, continue), direct small tasks, and short factual questions. " +
 	"terse: the user explicitly wants it short (just tell me, one line, tl;dr, short, quick) — a few sentences at most. " +
-	"diagram-first: explains how something works — architecture, data/control flow, structure — the answer should LEAD with a graph (mermaid or ascii). " +
+	"diagram-first: RESERVED for genuinely structural content — multi-system architecture, state machines, decision graphs with real fan-in/fan-out. Prose explains sequential logic better (rung 1); when unsure, choose default. If chosen, lead with the graph but keep prose substantial. " +
 	"table: compares two or more options or attributes side by side (compare X and Y, pros and cons, which should we pick). " +
 	"artifact: a substantial self-contained deliverable the user will keep (design note, plan, doc). 'Walk me through the whole design' or 'the overall design of X' asks for exactly this — a full write-up of the whole thing — even when phrased as 'walk me through'. " +
 	"walkthrough: a step-by-step procedure or cause-chain narrative (how do I get from A to B, why did X fail, walk me through a concrete how-to). " +
