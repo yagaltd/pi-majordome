@@ -1,4 +1,5 @@
 ## 2026-10-05 — v2 branch: judge-cost telemetry (trail aggregate)
+- ledger table full-width sizing: formatLedgerTable detects stdout.columns (OR-chain — Number(undefined) is NaN, not nullish; NaN poisoned repeat() into empty borders), COLUMNS env, or 113 legacy default; width override param; clamped 40–240; behavioral fixture pins override + fallback borders.
 - typecheck gate on the unbound-identifier class (TS2304/2305) added to pre-push — closes the hole that shipped loadHouseRows undefined to a live session; two more latent unbound names fixed (filterBlocks in index.ts list path, BlockStatus in selfcheck fixture); check-only tsconfig.json added.
 - /majordome ledger views: bare = this repo, @slug = one worker repo (resolveWorkerRef, mirrors status), house = loadHouseRows global unfiltered fold. Solves the empty-in-code-parser surprise: decision blocks are repo-stamped; only pi-majordome carries them.
 - compaction_end hook live: vcc compaction now triggers consolidation refresh (indexSession, append-only) + housekeeping REPORT (apply:false — advisory only, fixes still need your yes). Pending row flipped to built with selfcheck pin.

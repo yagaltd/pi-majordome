@@ -1162,6 +1162,13 @@ if (process.argv.includes("--parity")) {
 		check("compaction hook: compaction_end → indexSession refresh + housekeeping REPORT-ONLY (apply:false — fixes still need your yes)", idx.includes('pi.on("compaction_end"') && idx.includes('housekeeping(process.cwd(), { apply: false })') && idx.includes("compaction absorbed"));
 		const ssrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("./status.ts", import.meta.url), "utf8"));
 		check("ledger table: formatLedgerTable renders the boxed fold; @slug + house views wired (loadHouseRows unfiltered fold)", ssrc.includes("export function formatLedgerTable") && ssrc.includes("export function loadHouseRows") && idx.includes('a === "house"') && idx.includes("formatLedgerTable(loadStatusRows(w.cwd))"));
+		{
+			const { formatLedgerTable } = await import("./status.ts");
+			const rows = [{ item: "x".repeat(200), status: "pending", evidence: "", substrate: "" }];
+			const w60 = formatLedgerTable(rows, 60);
+			const auto = formatLedgerTable(rows);
+			check("ledger table: full-width sizing — override respected, non-TTY fallback borders intact (NaN-proof OR-chain)", Math.max(...w60.split("\n").map((l) => l.length)) <= 60 && Math.max(...auto.split("\n").map((l) => l.length)) === 113 && auto.includes("┌"));
+		}
 	}
 	{
 		const { decomposedInjection } = await import("./router.ts");

@@ -296,8 +296,10 @@ export interface HouseWorkerStatus { name: string; cwd: string; rows: StatusRow[
 
 /** The boxed ledger table — the /majordome ledger view. Same fold as status,
  * presented as a status×items table: one row per status, items wrapped in the
- * cell. Pure formatting over rows (no I/O) like every renderer here. */
-export function formatLedgerTable(rows: StatusRow[]): string {
+ * cell, sized to the full terminal width (detected, or the `width` override;
+ * clamped so narrow terminals never break the border). Pure formatting over
+ * rows like every renderer here. */
+export function formatLedgerTable(rows: StatusRow[], width?: number): string {
 	const order = ["pending", "parked", "built", "dropped"];
 	const groups = new Map<string, string[]>();
 	for (const r of rows) {
@@ -306,7 +308,6 @@ export function formatLedgerTable(rows: StatusRow[]): string {
 		groups.set(r.status, g);
 	}
 	if (!groups.size) return "(no ledger — /majordome init to seed one)";
-	const cellW = 96;
 	const wrap = (items: string[]): string[] => {
 		// hard-wrap: items longer than the cell split across lines (a border that
 		// never breaks beats pretty joining — padEnd cannot truncate)
@@ -325,10 +326,18 @@ export function formatLedgerTable(rows: StatusRow[]): string {
 		if (cur) lines.push(cur);
 		return lines;
 	};
-	const body = order
+	const body0 = order
 		.filter((st) => groups.has(st))
-		.map((st) => ({ label: `${st} (${groups.get(st)!.length})`, lines: wrap(groups.get(st)!) }));
-	const labelW = Math.max(...body.map((b) => b.label.length)) + 2;
+		.map((st) => ({ label: `${st} (${groups.get(st)!.length})`, items: groups.get(st)! }));
+	const labelW = Math.max(...body0.map((b) => b.label.length)) + 2;
+	// full terminal width: detected TTY, COLUMNS env, or the 113-char legacy
+	// default; cell = width minus label column and the 3 border glyphs.
+	// OR-chain (not ??): Number(undefined) is NaN, not nullish — NaN poisons
+	// repeat() into empty borders.
+	const detected = width
+		|| Number(process.stdout?.columns) || Number.parseInt(process.env.COLUMNS ?? "", 10) || 113;
+	const cellW = Math.min(Math.max(detected - labelW - 3, 40), 240);
+	const body = body0.map((b) => ({ label: b.label, lines: wrap(b.items) }));
 	const top = `┌${"─".repeat(labelW)}┬${"─".repeat(cellW)}┐`;
 	const mid = `├${"─".repeat(labelW)}┼${"─".repeat(cellW)}┤`;
 	const bot = `└${"─".repeat(labelW)}┴${"─".repeat(cellW)}┘`;
