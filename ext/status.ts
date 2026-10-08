@@ -200,6 +200,13 @@ export function loadStatusRows(repoRoot: string = process.cwd()): StatusRow[] {
 	return foldDecisions(loadDecisions(repoRoot));
 }
 
+/** House fold: EVERY repo's decision blocks, unfiltered — the global ledger
+ * view (`/majordome ledger house`). Latest-wins across repos, contradicted
+ * flags preserved by the same fold. */
+export function loadHouseRows(): StatusRow[] {
+	return foldDecisions(loadBlocks().filter(isDecisionBlock));
+}
+
 // ── the md export (STATUS.md demoted to generated output) ───────────────────
 
 /** Render the fold as the canonical export text: generated-export banner +

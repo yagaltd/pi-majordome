@@ -1161,7 +1161,7 @@ if (process.argv.includes("--parity")) {
 		const idx = await import("node:fs").then((fs) => fs.readFileSync(new URL("../index.ts", import.meta.url), "utf8"));
 		check("compaction hook: compaction_end → indexSession refresh + housekeeping REPORT-ONLY (apply:false — fixes still need your yes)", idx.includes('pi.on("compaction_end"') && idx.includes('housekeeping(process.cwd(), { apply: false })') && idx.includes("compaction absorbed"));
 		const ssrc = await import("node:fs").then((fs) => fs.readFileSync(new URL("./status.ts", import.meta.url), "utf8"));
-		check("ledger table: formatLedgerTable renders the boxed fold and the ledger command is wired", ssrc.includes("export function formatLedgerTable") && idx.includes('cmd === "ledger"') && idx.includes("formatLedgerTable(loadStatusRows())"));
+		check("ledger table: formatLedgerTable renders the boxed fold; @slug + house views wired (loadHouseRows unfiltered fold)", ssrc.includes("export function formatLedgerTable") && ssrc.includes("export function loadHouseRows") && idx.includes('a === "house"') && idx.includes("formatLedgerTable(loadStatusRows(w.cwd))"));
 	}
 	{
 		const { decomposedInjection } = await import("./router.ts");

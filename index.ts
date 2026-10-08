@@ -648,7 +648,16 @@ export default function majordome(pi: ExtensionAPI): void {
 				return;
 			}
 			if (cmd === "ledger") {
-				// the boxed ledger table — same fold as status, table presentation
+				// the boxed ledger table — same fold as status, table presentation.
+				// `house` = every repo's blocks unfiltered; `@slug` = one worker's repo.
+				if (a === "house") return notify(formatLedgerTable(loadHouseRows()));
+				if (a) {
+					const slug = a.replace(/^@/, "");
+					const w = resolveWorkerRef(slug, listWorkers());
+					if (!w) return notify(`unknown worker "${slug}" — roster: ${listWorkers().map((x) => "@" + x.name).join(" · ") || "(empty)"} · or "house" for the global fold`);
+					return notify(`@${w.name} (${w.cwd})
+${formatLedgerTable(loadStatusRows(w.cwd))}`);
+				}
 				return notify(formatLedgerTable(loadStatusRows()));
 			}
 			if (cmd === "status") {
