@@ -751,7 +751,7 @@ export default function majordome(pi: ExtensionAPI): void {
 				// the boxed ledger table — same fold as status, table presentation.
 				// `house` = every repo's blocks unfiltered; `@slug` = one worker's repo.
 
-				if (a === "house") return notify(formatLedgerTable(loadHouseRows()));
+				if (a === "house") return notify(formatLedgerTable(loadHouseRows(), undefined, loadMeta().triage ?? {}));
 				if (a) {
 					const slug = a.replace(/^@/, "");
 					const w = resolveWorkerRef(slug, listWorkers());
@@ -759,9 +759,7 @@ export default function majordome(pi: ExtensionAPI): void {
 					return notify(`@${w.name} (${w.cwd})
 ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 				}
-				const metaS: Record<string, any> = loadMeta().triage ?? {};
-				const marks = Object.entries(metaS).filter(([, t]) => t.sieve && t.sieve.outcome !== "park").map(([item, t]) => { const s = t.sieve; return `ⓟ [V:${s.value} · R:${s.risk} · E:${s.effort} → ${s.outcome}] ${item.slice(0, 60)}`; });
-				return notify(formatLedgerTable(loadStatusRows()) + (marks.length ? `\ncandidate proposals (sieved):\n${marks.join("\n")}` : ""));
+				return notify(formatLedgerTable(loadStatusRows(), undefined, loadMeta().triage ?? {}));
 			}
 			if (cmd === "proposal") {
 				// store-backed proposals: list · show <id> · decide <id> approve|reject · add
@@ -787,7 +785,7 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 				}
 				return notify("proposal: list · show <id> · decide <id> approve|reject [reason] · add <kind> <title>");
 			}
-			if (cmd === "sieve") {
+			if (cmd === "sieve" || cmd === "score" || cmd === "assess" || cmd === "gates") {
 				// the full ledger pass: every pending+parked house row through the
 				// sieve, one focused call per idea, resumable (verdicts persist
 				// per-idea). Progress on the status line; the ledger renders the

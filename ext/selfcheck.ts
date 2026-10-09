@@ -1098,6 +1098,10 @@ if (process.argv.includes("--parity")) {
 			const tr2 = pr.parseTriage({ row_1: { worthy: false, path: "research", why: "small" } }, [{ item: "x" }]);
 			check("triage: parseTriage reads probability + plain shapes; unworthy coerces path to none; null fail-open", tri?.[0]?.worthy === true && tri?.[0]?.path === "grill" && tri?.[0]?.confidence === 0.9 && tr2?.[0]?.path === "none" && pr.parseTriage(null, []) === null);
 			check("sieve: forced-choice outcomes — nice-to-have parks, severe risk parks+flags, xs must-have builds direct, else proposes", pr.sieveOutcome({ ...sbase, value: "nice-to-have", risk: "trivial", effort: "xs" }).outcome === "park" && pr.sieveOutcome({ ...sbase, value: "must-have", risk: "severe", effort: "xs" }).outcome === "park" && pr.sieveOutcome({ ...sbase, value: "must-have", risk: "contained", effort: "xs" }).outcome === "build-direct" && pr.sieveOutcome({ ...sbase, value: "valuable", risk: "contained", effort: "m" }).outcome === "propose");
+			const tags = { "workflow library": { worthy: true, path: "research", why: "x", famSize: 4, at: "t", sieve: { value: "valuable", risk: "contained", effort: "m", outcome: "propose", path: "research" } } };
+			const { formatLedgerTable: flt } = await import("./status.ts");
+			const tsieve = flt([{ item: "workflow library", status: "pending", evidence: "x", substrate: "s" }], undefined, tags);
+			check("ledger: sieve verdicts render INLINE next to their bullets (ⓟ score tag, not a detached list)", tsieve.includes("ⓟ[V:valuable·R:contained·E:m→propose·research] workflow library") && !tsieve.includes("candidate proposals"));
 			const tRows = [{ item: "workflow library", status: "pending" }, { item: "workflow engine", status: "pending" }, { item: "sqlite engine", status: "pending" }, { item: "docs naming", status: "parked" }];
 			const fam = (it: string) => (it.includes("workflow") ? 3 : 1);
 		} finally {

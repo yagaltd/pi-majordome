@@ -393,7 +393,7 @@ export function topicOf(item: string): string {
  * cell, sized to the full terminal width (detected, or the `width` override;
  * clamped so narrow terminals never break the border). Pure formatting over
  * rows like every renderer here. */
-export function formatLedgerTable(rows: StatusRow[], width?: number): string {
+export function formatLedgerTable(rows: StatusRow[], width?: number, sieve?: Record<string, any>): string {
 	const order = ["pending", "parked", "built", "dropped"];
 	const groups = new Map<string, string[]>();
 	for (const r of rows) {
@@ -428,9 +428,17 @@ export function formatLedgerTable(rows: StatusRow[], width?: number): string {
 			for (let i = 0; i < it.length; i += cellW - 2) segs.push(it.slice(i, i + cellW - 2));
 			return segs.map((seg, i) => (i === 0 ? `· ${seg}` : `  ${seg}`));
 		});
+	// inline sieve verdicts: a sieved item renders its score tag before the
+	// text (the verdict belongs to its idea — never a detached list below)
+	const tag = (it: string): string => {
+		const sv = sieve?.[it]?.sieve;
+		if (!sv) return it;
+		const via = sv.path && sv.path !== "none" ? `·${sv.path}` : "";
+		return `ⓟ[V:${sv.value}·R:${sv.risk}·E:${sv.effort}→${sv.outcome}${via}] ${it}`;
+	};
 	const body0 = order
 		.filter((st) => groups.has(st))
-		.map((st) => ({ st, label: `${st} (${groups.get(st)!.length})`, items: groups.get(st)! }));
+		.map((st) => ({ st, label: `${st} (${groups.get(st)!.length})`, items: (groups.get(st) ?? []).map(tag) }));
 	const labelW = Math.max(...body0.map((b) => b.label.length)) + 2;
 	// full terminal width: detected TTY, COLUMNS env, or the 113-char legacy
 	// default; cell = width minus label column and the 3 border glyphs.
