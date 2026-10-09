@@ -702,7 +702,7 @@ export default function majordome(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("majordome", {
-		description: "Topic memory dashboard (bare) · list · show · forget · run-the-house (bare) · help · doctor · housekeeping · dash · status · ledger · user · orch · map · docs (gen/pull) · export · reindex · stats · log · on/off",
+		description: "Topic memory dashboard (bare) · list · show · forget · run-the-house (bare) · help · doctor · housekeeping · dash · status · ledger [house] [assess] · user · orch · map · docs (gen/pull) · export · reindex · stats · log · on/off",
 		handler: async (args, ctx) => {
 			const parts = (args ?? "").trim().split(/\s+/).filter(Boolean);
 			const cmd = parts[0];
@@ -751,6 +751,20 @@ export default function majordome(pi: ExtensionAPI): void {
 				// the boxed ledger table — same fold as status, table presentation.
 				// `house` = every repo's blocks unfiltered; `@slug` = one worker's repo.
 
+				if (a === "assess" || a === "house assess" || a === "assess house") {
+					// the assessment action, scoped like the render: ledger assess =
+					// this repo; ledger house assess = every attributed repo. Sieves
+					// the scope, then renders — inline tags appear from the store.
+					const scopeRows = a === "assess"
+						? loadStatusRows().filter((r) => r.status === "pending" || r.status === "parked")
+						: loadHouseRows().filter((r) => r.status === "pending" || r.status === "parked");
+					if (!scopeRows.length) return notify(formatLedgerTable(a === "assess" ? loadStatusRows() : loadHouseRows(), undefined, loadMeta().triage ?? {}) + "\nnothing to assess — no pending or parked rows in scope");
+					st.uiCtx.ui.setStatus("majordome", `assessing ${scopeRows.length} row(s) — one focused call each…`);
+					return void sieveLedger({ rows: scopeRows }).then((r) => {
+						st.uiCtx.ui.setStatus("majordome", "");
+						notify(`assessment pass: ${r.judged} judged · ${r.failed} failed\n${formatLedgerTable(a === "assess" ? loadStatusRows() : loadHouseRows(), undefined, loadMeta().triage ?? {})}`);
+					}).catch((e) => notify(`assessment failed (advisory): ${String((e as Error).message ?? e).slice(0, 80)}`));
+				}
 				if (a === "house") return notify(formatLedgerTable(loadHouseRows(), undefined, loadMeta().triage ?? {}));
 				if (a) {
 					const slug = a.replace(/^@/, "");
