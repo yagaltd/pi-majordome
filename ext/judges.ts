@@ -47,7 +47,10 @@ export async function generate(
 	context: string,
 	questions: Record<string, unknown>,
 	recent?: string,
+	timeoutMs: number = TIMEOUT_MS,
 ): Promise<{ result: Record<string, unknown>; usage?: unknown } | null> {
+	// timeoutMs override: permutation-heavy calls (sieve gates, probability
+	// batches) legitimately run past the 30s single-call default.
 	const key = loadKey();
 	if (!key) return null;
 	for (let attempt = 0; attempt < 2; attempt++) {
@@ -56,7 +59,7 @@ export async function generate(
 				method: "POST",
 				headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
 				body: JSON.stringify({ context, questions }),
-				signal: AbortSignal.timeout(TIMEOUT_MS),
+				signal: AbortSignal.timeout(timeoutMs),
 			});
 			const json: any = await resp.json().catch(() => null);
 			if (!resp.ok) throw new Error(json?.error?.message ?? `HTTP ${resp.status}`);

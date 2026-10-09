@@ -908,6 +908,7 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 				}
 				let da: string | undefined = a;
 				if (da === "gen" || da?.startsWith("gen ")) da = da === "gen" ? "" : da.slice(4);
+				const kinds = listKinds();
 				if (da === "kinds") {
 					notify([
 						"/majordome docs gen                bulk: survey + build all stale docs in one pass",

@@ -12,9 +12,13 @@ npx tsx tools/docsbench.ts > /tmp/prepush-docsbench.txt 2>&1 || fail=1
 #   TS2304/2305 = unbound identifiers / missing exports (the load-time class)
 # Narrowing/style noise (TS2339 etc.) stays parked.
 npx tsc --noEmit > /tmp/prepush-tsc.txt 2>&1
-if grep -qE "error TS(1[0-9]{3}|2304|2305)" /tmp/prepush-tsc.txt; then
+# inverted gate: ANY tsc error fails EXCEPT the explicitly parked noise set
+# (narrowing/excess-property/argument mismatch — TS2339/2353/2345/2307/2550/2322).
+# Lesson 2026-10-08: code-allowlists have holes (TS2552 "Cannot find name" is
+# the same failure as TS2304 with a different code) — park by code, gate by default.
+if grep -E "error TS" /tmp/prepush-tsc.txt | grep -vE "TS2339|TS2353|TS2345|TS2307|TS2550|TS2322|TS2559" > /tmp/prepush-tsc-gated.txt; then
   fail=1
-  echo "TYPECHECK: syntax/unbound error(s) found — see /tmp/prepush-tsc.txt" >&2
+  echo "TYPECHECK: non-parked error(s) found — see /tmp/prepush-tsc-gated.txt" >&2
 fi
 # load smoke: index.ts must IMPORT (parse + top-level evaluation) — the exact
 # failure mode of 2026-10-08: selfcheck never imports index.ts, so only a real
