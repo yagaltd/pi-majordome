@@ -29,7 +29,7 @@ import { ingestDocs } from "./ext/ingest_docs.ts";
 import { filterBlocks, listKinds, composeKind } from "./ext/docs.ts";
 import { initRepo } from "./ext/init.ts";
 import { agentsOffer } from "./ext/agentsmd.ts";
-import { writeOfferProposal, stampDecision, writeProposal, listProposals, triagePending, } from "./ext/proposals.ts";
+import { sieveLedger, writeOfferProposal, stampDecision, writeProposal, listProposals, triagePending, } from "./ext/proposals.ts";
 import { doctor } from "./ext/doctor.ts";
 import { orch, listWorkers, resolveWorkerRef } from "./ext/orch.ts";
 import { execFileSync } from "node:child_process";
@@ -759,7 +759,9 @@ export default function majordome(pi: ExtensionAPI): void {
 					return notify(`@${w.name} (${w.cwd})
 ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 				}
-				return notify(formatLedgerTable(loadStatusRows()));
+				const metaS: Record<string, any> = loadMeta().triage ?? {};
+				const marks = Object.entries(metaS).filter(([, t]) => t.sieve && t.sieve.outcome !== "park").map(([item, t]) => { const s = t.sieve; return `ⓟ [V:${s.value} · R:${s.risk} · E:${s.effort} → ${s.outcome}] ${item.slice(0, 60)}`; });
+				return notify(formatLedgerTable(loadStatusRows()) + (marks.length ? `\ncandidate proposals (sieved):\n${marks.join("\n")}` : ""));
 			}
 			if (cmd === "proposal") {
 				// store-backed proposals: list · show <id> · decide <id> approve|reject · add
@@ -784,6 +786,25 @@ ${formatLedgerTable(loadStatusRows(w.cwd))}`);
 					return notify(`proposal filed: ${writeProposal({ kind: rest[0], title: rest.slice(1).join(" "), body: rest.slice(1).join(" "), source: "captain" })}`);
 				}
 				return notify("proposal: list · show <id> · decide <id> approve|reject [reason] · add <kind> <title>");
+			}
+			if (cmd === "sieve") {
+				// the full ledger pass: every pending+parked house row through the
+				// sieve, one focused call per idea, resumable (verdicts persist
+				// per-idea). Progress on the status line; the ledger renders the
+				// score markers from the persisted tags.
+				const scope = a === "local"
+					? loadStatusRows().filter((r) => r.status === "pending" || r.status === "parked")
+					: loadHouseRows().filter((r) => r.status === "pending" || r.status === "parked");
+				if (!scope.length) return notify("nothing to sieve — the ledger has no pending or parked rows");
+				st.uiCtx.ui.setStatus("majordome", `sieving ${scope.length} row(s) — one focused call each, resumable…`);
+				sieveLedger({ rows: scope, onProgress: (done, total, item) => st.uiCtx.ui.setStatus("majordome", `sieving ${done + 1}/${total}: ${item.slice(0, 50)}…`) })
+					.then((r) => {
+						st.uiCtx.ui.setStatus("majordome", "");
+						const lines = Object.entries(r.tags).filter(([, t]) => (t as any).sieve).map(([item, t]) => { const s = (t as any).sieve; return `ⓟ [V:${s.value} · R:${s.risk} · E:${s.effort} → ${s.outcome}] ${item.slice(0, 60)}`; });
+						notify(`sieve pass: ${r.judged} judged · ${r.failed} failed (re-run /majordome sieve to retry) · targeted ${r.total}\n${lines.length ? lines.join("\n") : "(no verdicts)"}`);
+					})
+					.catch((e) => notify(`sieve failed: ${String((e as Error).message ?? e).slice(0, 80)}`));
+				return;
 			}
 			if (cmd === "triage") {
 				// per-item, on-demand: judge ONE idea (or its small family) in a

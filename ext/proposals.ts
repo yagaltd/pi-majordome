@@ -9,9 +9,9 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentsOffer } from "./agentsmd.ts";
-import { appendBlock, isProposalBlock, loadBlocks, type Block, type ProposalPayload } from "./store.ts";
+import { loadMeta, saveMeta, type Meta, appendBlock, isProposalBlock, loadBlocks, type Block, type ProposalPayload } from "./store.ts";
 import { loadKey } from "./judges.ts";
-import { loadStatusRows, topicOf } from "./status.ts";
+import { loadStatusRows, loadHouseRows, topicOf } from "./status.ts";
 import { generate } from "./judges.ts";
 import { trail } from "./trail.ts";
 
@@ -373,6 +373,45 @@ Run the three gates (value, risk, effort) and name the establishment path. Commi
 	const out: SieveVerdict = { item, value, risk, effort, path: finalPath, why, ...(confidence !== undefined ? { confidence } : {}), outcome, ...(note ? { note } : {}), ...(escalated ? { note: "split verdict — escalated to grill" } : {}) };
 	trail("sieveIdea", { ok: true, item: item.slice(0, 60), value, risk, effort, outcome, path: finalPath, ...(confidence !== undefined ? { confidence } : {}) });
 	return out;
+}
+
+export interface SieveTarget { item: string; status: string; familySize: number }
+
+/** Pure: which ledger rows still need a sieve verdict (untagged only —
+ * verdicts persist in meta.sieve, so interrupted passes resume). */
+export function sieveTargets(rows: { item: string; status: string }[], stored: NonNullable<Meta["triage"]> | undefined): SieveTarget[] {
+	const fams = new Map<string, number>();
+	rows.forEach((r) => { const f = topicOf(r.item); fams.set(f, (fams.get(f) ?? 0) + 1); });
+	return rows.filter((r) => !stored[r.item]).map((r) => ({ item: r.item, status: r.status, familySize: fams.get(topicOf(r.item)) ?? 1 }));
+}
+
+/** The full ledger pass: every pending+parked house row through the sieve,
+ * one focused call per idea, each verdict persisted to meta.sieve the moment
+ * it lands (resumable — an interrupted pass continues where it stopped).
+ * Fail-open per row: a row that exhausts retries stays untagged and the next
+ * pass retries it. */
+export async function sieveLedger(opts: { rows?: { item: string; status: string }[]; cwd?: string; onProgress?: (done: number, total: number, item: string) => void } = {}): Promise<{ tags: NonNullable<Meta["triage"]>; judged: number; failed: number; total: number }> {
+	const rows = opts.rows ?? loadHouseRows(process.cwd()).filter((r) => r.status === "pending" || r.status === "parked");
+	const stored = loadMeta().triage ?? {};
+	const targets = sieveTargets(rows, stored);
+	const tags: NonNullable<Meta["triage"]> = {};
+	Object.assign(tags, stored);
+	let judged = 0;
+	let failed = 0;
+	for (let i = 0; i < targets.length; i++) {
+		const t = targets[i];
+		opts.onProgress?.(i, targets.length, t.item);
+		const v = await sieveIdea(t.item, t.familySize);
+		if (v) {
+			tags[t.item] = { worthy: v.outcome !== "park", path: v.path, why: `${v.value}/${v.risk}/${v.effort} → ${v.outcome}${v.note ? ` (${v.note})` : ""}`, ...(v.confidence !== undefined ? { confidence: v.confidence } : {}), famSize: t.familySize, at: new Date().toISOString() };
+			(tags as any)[t.item].sieve = { value: v.value, risk: v.risk, effort: v.effort, outcome: v.outcome };
+			judged++;
+			saveMeta({ ...loadMeta(), triage: tags });
+		} else {
+			failed++;
+		}
+	}
+	return { tags, judged, failed, total: targets.length };
 }
 
 /** The marker line: compact score string, the verdict at a glance. */

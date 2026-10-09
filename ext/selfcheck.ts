@@ -1062,6 +1062,7 @@ if (process.argv.includes("--parity")) {
 
 	// ── proposals lifecycle (store-backed: kind=proposal blocks, fold = latest per id) ──
 	const pr = await import("./proposals.ts");
+			const sbase = { path: "research" as const, familySize: 1 };
 	const pRepo = join(tmp, "props-repo");
 	mkd(join(pRepo, ".majordome"), { recursive: true });
 	{
@@ -1096,6 +1097,9 @@ if (process.argv.includes("--parity")) {
 			const tri = pr.parseTriage({ row_1: { worthy: { value: true, confidence: 0.9 }, path: "grill", why: "multi-system scope" } }, [{ item: "x" }]);
 			const tr2 = pr.parseTriage({ row_1: { worthy: false, path: "research", why: "small" } }, [{ item: "x" }]);
 			check("triage: parseTriage reads probability + plain shapes; unworthy coerces path to none; null fail-open", tri?.[0]?.worthy === true && tri?.[0]?.path === "grill" && tri?.[0]?.confidence === 0.9 && tr2?.[0]?.path === "none" && pr.parseTriage(null, []) === null);
+			check("sieve: forced-choice outcomes — nice-to-have parks, severe risk parks+flags, xs must-have builds direct, else proposes", pr.sieveOutcome({ ...sbase, value: "nice-to-have", risk: "trivial", effort: "xs" }).outcome === "park" && pr.sieveOutcome({ ...sbase, value: "must-have", risk: "severe", effort: "xs" }).outcome === "park" && pr.sieveOutcome({ ...sbase, value: "must-have", risk: "contained", effort: "xs" }).outcome === "build-direct" && pr.sieveOutcome({ ...sbase, value: "valuable", risk: "contained", effort: "m" }).outcome === "propose");
+			const tRows = [{ item: "workflow library", status: "pending" }, { item: "workflow engine", status: "pending" }, { item: "sqlite engine", status: "pending" }, { item: "docs naming", status: "parked" }];
+			const fam = (it: string) => (it.includes("workflow") ? 3 : 1);
 		} finally {
 			if (prevDir === undefined) delete process.env.MAJORDOME_DIR;
 			else process.env.MAJORDOME_DIR = prevDir;
