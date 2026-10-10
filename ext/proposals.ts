@@ -293,7 +293,8 @@ export const EFFORT_LEVELS = ["xs", "s", "m", "l"] as const;
 export type ValueLevel = (typeof VALUE_LEVELS)[number];
 export type RiskLevel = (typeof RISK_LEVELS)[number];
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];
-export type SieveOutcomeKind = "drop" | "park" | "propose" | "build-direct";
+export const OUTCOME_LEVELS = ["drop", "park", "propose", "build-direct"] as const;
+export type SieveOutcomeKind = (typeof OUTCOME_LEVELS)[number];
 
 export interface SieveVerdict {
 	item: string;
@@ -301,8 +302,6 @@ export interface SieveVerdict {
 	risk: RiskLevel;
 	effort: EffortLevel;
 	path: TriagePath;
-	why: string;
-	confidence?: number;
 	outcome: SieveOutcomeKind;
 	note?: string;
 }
@@ -320,6 +319,20 @@ export function sieveOutcome(v: { value: ValueLevel; risk: RiskLevel; effort: Ef
 	return { outcome: "propose" };
 }
 
+/** The idea vector: [V:4 | R:4 | E:4 | path:4 | outcome:4] — one-hot blocks
+ * in flow order; position is the index (block order is canonical). Pure
+ * derivation from the verdict's cells — never stored, the cells already are. */
+export function ideaVector(v: { value: ValueLevel; risk: RiskLevel; effort: EffortLevel; path: TriagePath; outcome: SieveOutcomeKind }): number[] {
+	const pick = <T extends string>(levels: readonly T[], x: T): number[] => levels.map((l) => (l === x ? 1 : 0));
+	return [
+		...pick(VALUE_LEVELS, v.value),
+		...pick(RISK_LEVELS, v.risk),
+		...pick(EFFORT_LEVELS, v.effort),
+		...pick(PATH_LEVELS, v.path),
+		...pick(OUTCOME_LEVELS, v.outcome),
+	];
+}
+
 /** The sieve of ONE idea: a single focused generate call — 4 forced-choice
  * questions (value ← risk depends_on value ← effort/path depend on both),
  * permutation-averaged probabilities on every gate. Per-IDEA, never batched:
@@ -331,7 +344,6 @@ export async function sieveIdea(item: string, familySize = 1): Promise<SieveVerd
 		risk: { type: "string", choices: RISK_LEVELS.map((l, i) => ({ value: l, description: ["no meaningful blast radius", "refactors are local and reviewable", "touches load-bearing paths — needs careful review", "wrong implementation breaks other systems"][i] })), return_probabilities: true, depends_on: ["value"], instructions: "Risk gate: implementation risk + blast radius if this were built." },
 		effort: { type: "string", choices: EFFORT_LEVELS.map((l, i) => ({ value: l, description: ["an afternoon", "a day or two", "several days / multi-slice", "a project"][i] })), depends_on: ["value"], instructions: "Effort gate: honest cost to build it well." },
 		path: { type: "string", choices: [{ value: "research", description: "deeper research first" }, { value: "inspect", description: "codebase inspection first" }, { value: "grill", description: "known-unknowns session with the user" }, { value: "none", description: "no proposal needed" }], depends_on: ["value", "risk", "effort"], instructions: "If a proposal is warranted: how to establish it — research = deeper research first; inspect = codebase inspection first; grill = known-unknowns session with the user; none = no proposal needed." },
-		why: { type: "string", depends_on: ["value", "risk", "effort", "path"], instructions: "One line, max 14 words: the reason behind your value and risk calls." },
 	};
 	// upstream is transient under load (429/5xx) — the sieve retries with
 	// backoff before failing open; the trail records every miss.
@@ -364,14 +376,11 @@ Run the three gates (value, risk, effort) and name the establishment path. Commi
 	const risk = (res.risk?.value ?? "contained") as RiskLevel;
 	const effort = (res.effort?.value ?? "m") as EffortLevel;
 	const path = (typeof res.path === "string" ? res.path : res.path?.value ?? "none") as TriagePath;
-	const why = String(res.why ?? "").slice(0, 110);
-	const confidence = typeof res.value.confidence === "number" ? res.value.confidence : undefined;
 	const { outcome, note } = sieveOutcome({ value, risk, effort, path, familySize });
-	// split-verdict escalation: an ambivalent value gate forces the deeper path
-	const escalated = confidence !== undefined && confidence < 0.6 && outcome === "propose" && path === "none";
-	const finalPath: TriagePath = escalated ? "grill" : (outcome === "propose" && path === "none" ? "research" : path);
-	const out: SieveVerdict = { item, value, risk, effort, path: finalPath, why, ...(confidence !== undefined ? { confidence } : {}), outcome, ...(note ? { note } : {}), ...(escalated ? { note: "split verdict — escalated to grill" } : {}) };
-	trail("sieveIdea", { ok: true, item: item.slice(0, 60), value, risk, effort, outcome, path: finalPath, ...(confidence !== undefined ? { confidence } : {}) });
+	// unroutable propose falls to research — a cells-only rule, no scalar input
+	const finalPath: TriagePath = outcome === "propose" && path === "none" ? "research" : path;
+	const out: SieveVerdict = { item, value, risk, effort, path: finalPath, outcome, ...(note ? { note } : {}) };
+	trail("sieveIdea", { ok: true, item: item.slice(0, 60), value, risk, effort, outcome, path: finalPath });
 	return out;
 }
 
@@ -423,7 +432,8 @@ export function sieveMarker(v: SieveVerdict): string {
 
 // ── triage: the batched judgment over pending ledger rows ───────────────────
 
-export type TriagePath = "research" | "inspect" | "grill" | "none";
+export const PATH_LEVELS = ["research", "inspect", "grill", "none"] as const;
+export type TriagePath = (typeof PATH_LEVELS)[number];
 export interface TriageRow { item: string; worthy: boolean; path: TriagePath; why: string; confidence?: number }
 
 /** Pure: parse a generate() result into TriageRows against the asked rows.
