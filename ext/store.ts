@@ -52,6 +52,16 @@ export interface DecisionPayload {
  * views fold only that repo's decisions and cold repos stay honest. */
 export const DECISION_SESSION = "decision-ledger";
 
+/** Repos with attributed work in memory, first-seen order — the scope line
+ * judges need so cross-repo content is never misread as "another project". */
+export function knownRepos(blocks: { repo?: string }[]): string[] {
+	const out: string[] = [];
+	for (const b of blocks) {
+		if (b.repo && !out.includes(b.repo)) out.push(b.repo);
+	}
+	return out;
+}
+
 export interface Block {
 	id: string; // <slug>:<firstTurn>
 	session: string; // cwd slug

@@ -400,7 +400,7 @@ export function sieveTargets(rows: { item: string; status: string }[], stored: N
  * Fail-open per row: a row that exhausts retries stays untagged and the next
  * pass retries it. */
 export async function sieveLedger(opts: { rows?: { item: string; status: string }[]; cwd?: string; onProgress?: (done: number, total: number, item: string) => void } = {}): Promise<{ tags: NonNullable<Meta["triage"]>; judged: number; failed: number; total: number }> {
-	const rows = opts.rows ?? loadHouseRows(process.cwd()).filter((r) => r.status === "pending" || r.status === "parked");
+	const rows = opts.rows ?? loadHouseRows().filter((r) => r.status === "pending" || r.status === "parked");
 	const stored = loadMeta().triage ?? {};
 	const targets = sieveTargets(rows, stored);
 	const tags: NonNullable<Meta["triage"]> = {};
@@ -412,7 +412,7 @@ export async function sieveLedger(opts: { rows?: { item: string; status: string 
 		opts.onProgress?.(i, targets.length, t.item);
 		const v = await sieveIdea(t.item, t.familySize);
 		if (v) {
-			tags[t.item] = { worthy: v.outcome !== "park", path: v.path, why: `${v.value}/${v.risk}/${v.effort} → ${v.outcome}${v.note ? ` (${v.note})` : ""}`, ...(v.confidence !== undefined ? { confidence: v.confidence } : {}), famSize: t.familySize, at: new Date().toISOString() };
+			tags[t.item] = { worthy: v.outcome !== "park", path: v.path, why: `${v.value}/${v.risk}/${v.effort} → ${v.outcome}${v.note ? ` (${v.note})` : ""}`, famSize: t.familySize, at: new Date().toISOString() };
 			(tags as any)[t.item].sieve = { value: v.value, risk: v.risk, effort: v.effort, outcome: v.outcome };
 			judged++;
 			saveMeta({ ...loadMeta(), triage: tags });
@@ -426,8 +426,7 @@ export async function sieveLedger(opts: { rows?: { item: string; status: string 
 /** The marker line: compact score string, the verdict at a glance. */
 export function sieveMarker(v: SieveVerdict): string {
 	const mark = String.fromCharCode(0x24df); // ⓟ
-	const out = { park: "park", drop: "drop", propose: "propose", "build-direct": "build-direct" }[v.outcome];
-	return `${mark} [V:${v.value} · R:${v.risk} · E:${v.effort} → ${v.outcome}${v.path !== "none" ? ` via ${v.path}` : ""}] ${v.item.slice(0, 60)} — ${v.why}${v.note ? ` (${v.note})` : ""} ${out === "" ? "" : ""}`.replace(/\s+$/, "");
+	return `${mark} [V:${v.value} · R:${v.risk} · E:${v.effort} → ${v.outcome}${v.path !== "none" ? ` via ${v.path}` : ""}] ${v.item.slice(0, 60)}${v.note ? ` — ${v.note}` : ""}`.replace(/\s+$/, "");
 }
 
 // ── triage: the batched judgment over pending ledger rows ───────────────────

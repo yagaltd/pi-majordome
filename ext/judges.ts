@@ -18,6 +18,7 @@ import { homedir } from "node:os";
 import { createInterface } from "node:readline";
 import { dirname, join } from "node:path";
 import { trail } from "./trail.ts";
+import { knownRepos, loadBlocks } from "./store.ts";
 import { majordomeDir } from "./store.ts";
 import { loadUserPrefs, prefLines } from "./userprefs.ts";
 
@@ -704,9 +705,13 @@ export function userPrefLines(): string[] {
  * invokes tools. The verdict lands on the trail (shape + why), never message
  * text. */
 export async function shapeVerdict(userMessage: string, prefLines: string[] = userPrefLines()): Promise<ShapeVerdict | null> {
+	// session scope: the repos memory attributes work to — without it the judge
+	// reads cross-repo content (e.g. majordome work from this session) as
+	// "another project" and mislabels it out of scope
+	const repoCtx = (() => { try { const rs = knownRepos(loadBlocks()).slice(0, 6); return rs.length ? `\n\n[repos with attributed work in memory: ${rs.join(", ")}]` : ""; } catch { return ""; } })();
 	const pref = prefLines.length ? `\n\n[user's standing output preferences]\n${prefLines.join("\n").slice(0, 800)}` : "";
 	if (loadKey()) {
-		const r = await generate(`[user message]\n${userMessage.slice(0, 1500)}${pref}`, {
+		const r = await generate(`[session scope]${repoCtx}\n\n[user message]\n${userMessage.slice(0, 1500)}${pref}`, {
 			shape: { type: "string", enum: [...OUTPUT_SHAPES], instructions: SHAPE_INSTRUCTIONS, return_probabilities: true },
 			why: { type: "string", instructions: "One-line reason, max 12 words." },
 		});

@@ -302,7 +302,8 @@ export function shapeHintLine(shape: string, why = ""): string | null {
 }
 
 export function injectionText(w: Block, terms?: string, resume = false): string {
-	const slug = shortTag(w.session);
+	const wslug = w.repo ?? w.session; // work-repo label when attributed — cross-repo content is not "another project"
+	const slug = shortTag(wslug.includes("/") ? wslug.split("/").filter(Boolean).pop()! : wslug);
 	// validity date on every recall line — staleness must be visible to the reader
 	const when = w.closedAt ? w.closedAt.slice(0, 10) : "";
 	const bits = [`[majordome recall · ${slug} turns ${w.firstTurn}–${w.lastTurn}${when ? " · " + when : ""}]`];
@@ -384,7 +385,7 @@ export function decomposedInjection(subs: SubResult[], perSub = 2): string {
 				continue;
 			}
 			seen.set(b.id, lines.length);
-			lines.push(`· ${s.tag}: ${b.gist ?? b.head} (${shortTag(b.session)} turns ${b.firstTurn}–${b.lastTurn}${when})`);
+			lines.push(`· ${s.tag}: ${b.gist ?? b.head} (${shortTag((b.repo ?? b.session).includes("/") ? (b.repo ?? b.session).split("/").filter(Boolean).pop()! : (b.repo ?? b.session))} turns ${b.firstTurn}–${b.lastTurn}${when})`);
 		}
 	}
 	lines.push("Each line answers its labeled sub-question; if relevant, continue that thread, otherwise ignore.");

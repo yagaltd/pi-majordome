@@ -1099,7 +1099,12 @@ if (process.argv.includes("--parity")) {
 			check("triage: parseTriage reads probability + plain shapes; unworthy coerces path to none; null fail-open", tri?.[0]?.worthy === true && tri?.[0]?.path === "grill" && tri?.[0]?.confidence === 0.9 && tr2?.[0]?.path === "none" && pr.parseTriage(null, []) === null);
 			check("vector: [V:4|R:4|E:4|path:4|outcome:4] — one-hot blocks in flow order, position = index", JSON.stringify(pr.ideaVector({ value: "valuable", risk: "contained", effort: "m", path: "inspect", outcome: "propose" })) === JSON.stringify([0,0,1,0, 0,1,0,0, 0,0,1,0, 0,1,0,0, 0,0,1,0]));
 			check("vector: 20 cells, exactly one hot per block", (() => { const v = pr.ideaVector({ value: "must-have", risk: "severe", effort: "xs", path: "none", outcome: "build-direct" }); return v.length === 20 && v.reduce((a, b) => a + b, 0) === 5; })());
-			check("sieve: levels arrays are the one home — PATH/OUTCOME derived types stay 4-wide", pr.PATH_LEVELS.length === 4 && pr.OUTCOME_LEVELS.length === 4 && pr.PATH_LEVELS.join() === "research,inspect,grill,none" && pr.OUTCOME_LEVELS.join() === "drop,park,propose,build-direct");
+			const { knownRepos } = await import("./store.ts");
+			const { injectionText, decomposedInjection } = await import("./router.ts");
+			const xblk: any = { id: "x:1", session: "/home/aurel/Documents/current/code-parser", sessionFile: "/home/aurel/Documents/current/code-parser", firstTurn: 1, lastTurn: 2, gist: "g", intent: null, dims: {}, tokensHybrid: [], head: "h", closedAt: "2026-10-10", repo: "/home/aurel/Documents/current/pi-majordome" };
+			check("attribution: knownRepos = first-seen unique, skips repo-less", JSON.stringify(knownRepos([{ repo: "b" }, { repo: "a" }, {}, { repo: "b" } as any])) === JSON.stringify(["b", "a"]));
+			check("attribution: recall labels use the WORK repo, not the session cwd", injectionText(xblk).includes("[majordome recall · pi-majordome turns 1–2") && decomposedInjection([{ tag: "status", q: "q", result: { ranked: [{ block: xblk, score: 1 }] } } as any]).includes("pi-majordome turns 1–2"));
+check("sieve: levels arrays are the one home — PATH/OUTCOME derived types stay 4-wide", pr.PATH_LEVELS.length === 4 && pr.OUTCOME_LEVELS.length === 4 && pr.PATH_LEVELS.join() === "research,inspect,grill,none" && pr.OUTCOME_LEVELS.join() === "drop,park,propose,build-direct");
 check("sieve: forced-choice outcomes — nice-to-have parks, severe risk parks+flags, xs must-have builds direct, else proposes", pr.sieveOutcome({ ...sbase, value: "nice-to-have", risk: "trivial", effort: "xs" }).outcome === "park" && pr.sieveOutcome({ ...sbase, value: "must-have", risk: "severe", effort: "xs" }).outcome === "park" && pr.sieveOutcome({ ...sbase, value: "must-have", risk: "contained", effort: "xs" }).outcome === "build-direct" && pr.sieveOutcome({ ...sbase, value: "valuable", risk: "contained", effort: "m" }).outcome === "propose");
 			const tags = { "workflow library": { worthy: true, path: "research", why: "x", famSize: 4, at: "t", sieve: { value: "valuable", risk: "contained", effort: "m", outcome: "propose", path: "research" } } };
 			const { formatLedgerTable: flt } = await import("./status.ts");
@@ -1615,7 +1620,7 @@ check("sieve: forced-choice outcomes — nice-to-have parks, severe risk parks+f
 	check("housekeep: ledger line reads the fold (decisions folded, items out)", res.checkLines.some((l) => l.includes("status ledger: 2 decisions folded, 2 item(s)")) && res.rows.length === 2);
 
 	// SAFE class: exactly the README reword, to roadmap tense, allowlisted path
-	const rewords = res.proposals.filter((p) => p.safe && p.kind === "reword");
+	const rewords = res.proposals.filter((p): p is Extract<import("./housekeep.ts").Proposal, { kind: "reword" }> => p.safe && p.kind === "reword");
 	check("housekeep: drift signature → safe reword proposal on README.md", rewords.length === 1 && rewords[0].path === "README.md" && rewords[0].to.includes("planned sidecar in watch mode") && rewords[0].to.includes("not yet built"));
 
 	// DANGEROUS class: rm + git listed for explicit yes, never executed
